@@ -16,7 +16,7 @@ type PublicPage = {
   banner: string;
   logoUrl?: string | null;
   accent?: string | null;
-  overall: "operational" | "degraded" | "outage" | "empty";
+  overall: "operational" | "degraded" | "outage" | "empty" | "paused";
   groups: {
     name: string;
     items: {

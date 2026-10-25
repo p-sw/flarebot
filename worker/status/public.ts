@@ -2,6 +2,7 @@
 
 import { and, eq, gte, inArray } from "drizzle-orm";
 import { t, textLang } from "../../shared/copy";
+import { visibleStatus } from "../../shared/monitor-status";
 import { statusItemLabel } from "../../shared/status-layout";
 import { getDb } from "../db/client";
 import {
@@ -23,7 +24,7 @@ export type PublicStatus = {
   logoUrl: string | null;
   accent: string | null;
   serveAtRoot: boolean;
-  overall: "operational" | "degraded" | "outage" | "empty";
+  overall: "operational" | "degraded" | "outage" | "empty" | "paused";
   groups: {
     name: string;
     items: {
@@ -109,6 +110,7 @@ export async function loadPublicStatus(
   );
   const states = items.length ? await db.select().from(monitorState) : [];
   const stateById = new Map(states.map((row) => [row.monitorId, row.status]));
+  const pausedById = new Map(owned.map((row) => [row.id, row.paused]));
   const nameById = new Map(owned.map((row) => [row.id, row.name]));
   const groups = new Map<
     string,
@@ -159,21 +161,27 @@ export async function loadPublicStatus(
     bucket.items.push({
       id: item.id,
       name,
-      status: stateById.get(item.monitorId) ?? "unknown",
+      status: visibleStatus(
+        pausedById.get(item.monitorId) ?? false,
+        stateById.get(item.monitorId),
+      ),
       uptime90: percent(ok, fail),
       bars,
     });
     groups.set(groupKey, bucket);
   }
   const flat = [...groups.values()].flatMap((group) => group.items);
+  const active = flat.filter((item) => item.status !== "paused");
   const overall: PublicStatus["overall"] =
     flat.length === 0
       ? "empty"
-      : flat.some((item) => item.status === "down")
-        ? flat.every((item) => item.status === "down")
-          ? "outage"
-          : "degraded"
-        : "operational";
+      : active.length === 0
+        ? "paused"
+        : active.some((item) => item.status === "down")
+          ? active.every((item) => item.status === "down")
+            ? "outage"
+            : "degraded"
+          : "operational";
   return {
     slug: page.slug,
     title: page.title,

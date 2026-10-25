@@ -20,6 +20,7 @@ import {
   teamQuery,
   tokensQuery,
 } from "../lib/queries";
+import { refreshQueries } from "../lib/query-sync";
 import { useToggleLock } from "../lib/toggle-guard";
 import { useSubmitGuard } from "../lib/use-submit-guard";
 import { Stagger, StaggerItem } from "../motion/page";
@@ -40,12 +41,10 @@ export function StatusPagesPage() {
           method: "PUT",
           body: JSON.stringify({ serveAtRoot }),
         });
-        await client.invalidateQueries({ queryKey: ["pages"] });
-        await client.invalidateQueries({ queryKey: ["status-page"] });
+        await refreshQueries(client, [["pages"], ["status-page"]]);
       } catch (cause) {
         setError(rootToggleError(cause));
-        await client.invalidateQueries({ queryKey: ["pages"] });
-        await client.invalidateQueries({ queryKey: ["status-page"] });
+        await refreshQueries(client, [["pages"], ["status-page"]]);
       }
     });
   }
@@ -144,7 +143,7 @@ export function ChannelsPage() {
               method: "POST",
               body: JSON.stringify({ name, type: "email", config: { to } }),
             });
-            await client.invalidateQueries({ queryKey: ["channels"] });
+            await refreshQueries(client, [["channels"]]);
           });
         }}
       >
@@ -294,7 +293,7 @@ export function TokensPage() {
               body: JSON.stringify({ name, scopes: ["read"] }),
             });
             setRaw(created.token);
-            await client.invalidateQueries({ queryKey: ["tokens"] });
+            await refreshQueries(client, [["tokens"]]);
           });
         }}
       >
@@ -335,7 +334,7 @@ export function TokensPage() {
                       await api(`/api/tokens/${token.id}`, {
                         method: "DELETE",
                       });
-                      await client.invalidateQueries({ queryKey: ["tokens"] });
+                      await refreshQueries(client, [["tokens"]]);
                     });
                   }}
                 >
@@ -572,7 +571,7 @@ export function SettingsPage() {
                 method: "PUT",
                 body: JSON.stringify({ instanceName: shownName }),
               });
-              await client.invalidateQueries({ queryKey: ["settings"] });
+              await refreshQueries(client, [["settings"]]);
               report("ok", t("saved"));
             } catch (cause) {
               report("error", errorText(cause));
@@ -618,7 +617,7 @@ export function SettingsPage() {
                 body: JSON.stringify(body),
               });
               setDraft({ ...form, password: "", clearPassword: false });
-              await client.invalidateQueries({ queryKey: ["mail"] });
+              await refreshQueries(client, [["mail"]]);
               report("ok", t("saved"));
             } catch (cause) {
               report("error", errorText(cause));
@@ -800,7 +799,7 @@ export function SettingsPage() {
                         : {}),
                     }),
                   });
-                  await client.invalidateQueries({ queryKey: ["mail"] });
+                  await refreshQueries(client, [["mail"]]);
                   report(
                     "ok",
                     result.source === "secrets"
@@ -810,7 +809,7 @@ export function SettingsPage() {
                         : t("settings_test_ok"),
                   );
                 } catch (cause) {
-                  await client.invalidateQueries({ queryKey: ["mail"] });
+                  await refreshQueries(client, [["mail"]]);
                   report("error", errorText(cause));
                 }
               });

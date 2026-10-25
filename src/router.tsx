@@ -25,6 +25,7 @@ import {
   teamQuery,
   tokensQuery,
 } from "./lib/queries";
+import { loadQuery } from "./lib/query-sync";
 import {
   canReuseSession,
   sessionCacheEpoch,
@@ -228,8 +229,7 @@ const pending = {
 const indexRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/",
-  loader: () =>
-    queryClient.ensureQueryData(monitorsQuery).catch(() => undefined),
+  loader: () => loadQuery(queryClient, monitorsQuery).catch(() => undefined),
   ...pending,
   component: DashboardPage,
 });
@@ -243,9 +243,9 @@ const monitorRoute = createRoute({
   path: "/monitors/$id",
   loader: ({ params }) =>
     Promise.all([
-      queryClient.ensureQueryData(monitorQuery(params.id)),
-      queryClient.ensureQueryData(statsQuery(params.id)),
-      queryClient.ensureQueryData(outagesQuery(params.id)),
+      loadQuery(queryClient, monitorQuery(params.id)),
+      loadQuery(queryClient, statsQuery(params.id)),
+      loadQuery(queryClient, outagesQuery(params.id)),
     ]).catch(() => undefined),
   ...pending,
   component: MonitorDetailPage,
@@ -253,16 +253,14 @@ const monitorRoute = createRoute({
 const pagesRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/status-pages",
-  loader: () =>
-    queryClient.ensureQueryData(statusPagesQuery).catch(() => undefined),
+  loader: () => loadQuery(queryClient, statusPagesQuery).catch(() => undefined),
   ...pending,
   component: StatusPagesPage,
 });
 const newPageRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/status-pages/new",
-  loader: () =>
-    queryClient.ensureQueryData(monitorsQuery).catch(() => undefined),
+  loader: () => loadQuery(queryClient, monitorsQuery).catch(() => undefined),
   ...pending,
   component: StatusPageCreatePage,
 });
@@ -273,8 +271,8 @@ const editPageRoute = createRoute({
     search.created === 1 || search.created === "1" ? { created: 1 } : {},
   loader: ({ params }) =>
     Promise.all([
-      queryClient.ensureQueryData(statusPageQuery(params.id)),
-      queryClient.ensureQueryData(monitorsQuery),
+      loadQuery(queryClient, statusPageQuery(params.id)),
+      loadQuery(queryClient, monitorsQuery),
     ]).catch(() => undefined),
   ...pending,
   component: StatusPageEditPage,
@@ -282,29 +280,28 @@ const editPageRoute = createRoute({
 const channelsRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/channels",
-  loader: () =>
-    queryClient.ensureQueryData(channelsQuery).catch(() => undefined),
+  loader: () => loadQuery(queryClient, channelsQuery).catch(() => undefined),
   ...pending,
   component: ChannelsPage,
 });
 const teamRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/team",
-  loader: () => queryClient.ensureQueryData(teamQuery).catch(() => undefined),
+  loader: () => loadQuery(queryClient, teamQuery).catch(() => undefined),
   ...pending,
   component: TeamPage,
 });
 const tokensRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/tokens",
-  loader: () => queryClient.ensureQueryData(tokensQuery).catch(() => undefined),
+  loader: () => loadQuery(queryClient, tokensQuery).catch(() => undefined),
   ...pending,
   component: TokensPage,
 });
 const auditRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/audit",
-  loader: () => queryClient.ensureQueryData(auditQuery).catch(() => undefined),
+  loader: () => loadQuery(queryClient, auditQuery).catch(() => undefined),
   ...pending,
   component: AuditPage,
 });
@@ -313,8 +310,8 @@ const settingsRoute = createRoute({
   path: "/settings",
   loader: () =>
     Promise.all([
-      queryClient.ensureQueryData(settingsQuery),
-      queryClient.ensureQueryData(mailQuery),
+      loadQuery(queryClient, settingsQuery),
+      loadQuery(queryClient, mailQuery),
     ]).catch(() => undefined),
   ...pending,
   component: SettingsPage,
@@ -322,8 +319,7 @@ const settingsRoute = createRoute({
 const accountRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/account",
-  loader: () =>
-    queryClient.ensureQueryData(accountQuery).catch(() => undefined),
+  loader: () => loadQuery(queryClient, accountQuery).catch(() => undefined),
   ...pending,
   component: AccountPage,
 });

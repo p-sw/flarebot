@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: MIT
 
 import { describe, expect, it } from "vitest";
-import { applyOutcome, type CheckOutcome, initialState } from "./state-machine";
+import {
+  applyOutcome,
+  type CheckOutcome,
+  initialState,
+  runtimeForPause,
+} from "./state-machine";
 
 const fail = (error = "timeout"): CheckOutcome => ({
   ok: false,
@@ -141,6 +146,24 @@ describe("applyOutcome", () => {
     });
     expect(again.alert).toBeNull();
     expect(again.openedOutage).toBe(false);
+  });
+
+  it("accepts the next check after a resume clears paused", () => {
+    const paused = runtimeForPause(
+      { ...initialState(0), status: "up" },
+      true,
+      5,
+    );
+    expect(paused.status).toBe("paused");
+    const resumed = runtimeForPause(paused, false, 10);
+    expect(resumed.status).toBe("pending");
+    expect(resumed.consecutiveFailures).toBe(0);
+    const checked = applyOutcome(resumed, ok, {
+      retries: 2,
+      recoveryThreshold: 1,
+      now: 11,
+    });
+    expect(checked.state.status).toBe("up");
   });
 
   it("ignores checks while paused and drops old flap stamps", () => {

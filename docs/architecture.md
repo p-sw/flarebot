@@ -6,6 +6,8 @@ The Worker is a Hono app (`worker/app.ts`) plus two Durable Objects.
 
 The first failure sets the monitor to `pending` and retries in 10 seconds. After `retries` failures (default 2) the monitor is `down`, an outage row opens, and channels are notified. `recoveryThreshold` successes (default 1) close the outage. Internal errors (a CT log timeout, for example) become `unknown` and do not alert. Three state changes in 30 minutes send one "unstable" alert and then suppress further alerts until the monitor settles.
 
+Pausing a monitor sets `monitors.paused` and the runtime status to `paused`, and the shard skips it until resume. Resume sets the runtime to `pending` and schedules the next check immediately, so the badge reads "Checking" until that result. Public status items use the same rule. When every monitor on a page is paused, the hero says "All monitors are paused" instead of "All systems operational". Authenticated and public JSON under `/api/*` is `private, no-store`.
+
 D1 stores configuration, incidents, and hourly/daily rollups. Analytics Engine receives one point per check. The dashboard reads D1 plus the shard memory, so it works without the account-level Analytics Engine SQL API. Rollups flush about every five minutes and when the state changes.
 
 Authorization is `can(actor, action, resource)` in `shared/permissions.ts`. The resource argument is ignored in this version. API tokens are stored as SHA-256 hashes. At use time their scopes are intersected with the creator's current role. Viewers can mint only the `read` scope.

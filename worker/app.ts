@@ -10,6 +10,10 @@ import { registerMonitors } from "./routes/monitors";
 
 export function createApp(): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
+  app.use("/api/*", async (c, next) => {
+    await next();
+    c.header("cache-control", "private, no-store");
+  });
   app.onError((error, c) => {
     if (error instanceof ApiError) {
       return c.json(
