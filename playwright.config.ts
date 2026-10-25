@@ -16,7 +16,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      "node scripts/ensure-dev-vars.mjs && pnpm build && pnpm exec wrangler d1 migrations apply DB --local --persist-to .wrangler/e2e && FLAREBOT_E2E=1 pnpm exec vite preview --host 127.0.0.1 --port 4173 --strictPort",
+      "node scripts/ensure-dev-vars.mjs && pnpm build && node scripts/preview-dev-vars.mjs && pnpm exec wrangler d1 migrations apply DB --local --persist-to .wrangler/e2e && FLAREBOT_E2E=1 pnpm exec vite preview --host 127.0.0.1 --port 4173 --strictPort",
     url: `${origin}/api/health`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
