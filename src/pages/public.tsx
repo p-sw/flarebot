@@ -41,14 +41,18 @@ function statusLabel(status: string) {
 }
 
 export function PublicStatusPage() {
-  const { slug } = useParams({ strict: false }) as { slug: string };
+  const params = useParams({ strict: false }) as { slug?: string };
+  const slug = params.slug;
   const lang = new URLSearchParams(window.location.search).get("lang");
   const switching = useSubmitGuard();
+  const query = lang ? `?lang=${lang}` : "";
   const page = useQuery({
-    queryKey: ["public", slug, lang],
+    queryKey: ["public", slug ?? "root", lang],
     queryFn: () =>
       api<PublicPage>(
-        `/api/public/status/${slug}${lang ? `?lang=${lang}` : ""}`,
+        slug
+          ? `/api/public/status/${slug}${query}`
+          : `/api/public/root${query}`,
       ),
   });
   const data = page.data;

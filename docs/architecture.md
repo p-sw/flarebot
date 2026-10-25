@@ -10,6 +10,21 @@ D1 stores configuration, incidents, and hourly/daily rollups. Analytics Engine r
 
 Authorization is `can(actor, action, resource)` in `shared/permissions.ts`. The resource argument is ignored in this version. API tokens are stored as SHA-256 hashes. At use time their scopes are intersected with the creator's current role. Viewers can mint only the `read` scope.
 
-Status page text is per field: requested language, then the page default, then the source string. The public JSON does not include target URLs. `GET /s/:slug` injects `lang`, title, description, canonical, and `hreflang` into the SPA shell and sets `Vary: Accept-Language` when the language came from the header.
+Status page text is per field: requested language, then the page default, then the source string. The public JSON does not include target URLs. `GET /s/:slug` injects `lang`, title, description, canonical, and `hreflang` into the SPA shell and sets `Vary: Accept-Language` when the language came from the header. Responses that choose a page, including `/`, use `Cache-Control: private, no-store` so a shared cache cannot pin the wrong document.
+
+## URLs
+
+| Path                                                                                             | What it serves                                                                    |
+| ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `/`                                                                                              | The one published status page with `serve_at_root`, or a redirect to `/login`     |
+| `/s/:slug`                                                                                       | That status page. The slug keeps working when the page is also the root           |
+| `/login`                                                                                         | Sign-in. An existing session redirects to `/console`                              |
+| `/console` and `/console/*`                                                                      | Admin app. Signed-out requests redirect to `/login?next=` with a same-origin path |
+| `/setup`                                                                                         | First-run wizard. Once an owner exists, this redirects to `/login`                |
+| `/forgot`, `/reset/:token`, `/invite/:token`                                                     | Account recovery and invites                                                      |
+| `/api/*`, `/push/*`                                                                              | API and heartbeat ingest, unchanged                                               |
+| `/monitors`, `/status-pages`, `/channels`, `/team`, `/tokens`, `/audit`, `/settings`, `/account` | Redirect to the same path under `/console`                                        |
+
+The Worker handles those HTML routes before the asset SPA fallback, so the browser does not paint the admin shell for a public page or the public page for an admin URL. Only one `status_pages.serve_at_root` value can be `1`. The API clears the previous row in the same D1 batch that sets the new one.
 
 Maintenance windows and multi-region checks are extension points. `isInMaintenance` returns false. Only `regions[0]` is executed.

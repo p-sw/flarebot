@@ -240,6 +240,7 @@ const slugSchema = z
 export const statusPageWriteSchema = z.object({
   slug: slugSchema,
   published: z.boolean().default(true),
+  serveAtRoot: z.boolean().optional(),
   defaultLocale: localeCode,
   locales: z.array(localeCode).min(1).max(8),
   sourceLocale: localeCode,
@@ -267,6 +268,10 @@ export const statusPageWriteSchema = z.object({
       }),
     )
     .max(200),
+});
+
+export const statusPageRootSchema = z.object({
+  serveAtRoot: z.boolean(),
 });
 
 export const setupSchema = z.object({

@@ -6,9 +6,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button } from "@/ui/button";
-import { Card, CardContent } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { PendingButton } from "@/ui/pending-button";
+import { Switch } from "@/ui/switch";
 import { api, errorText } from "../lib/api";
 import { useSubmitGuard } from "../lib/use-submit-guard";
 import { PageEnter } from "../motion/page";
@@ -26,6 +26,7 @@ export function StatusPagesPage() {
           slug: string;
           title: string;
           published: boolean;
+          serveAtRoot: boolean;
           missing: number;
           itemCount: number;
         }[];
@@ -42,6 +43,22 @@ export function StatusPagesPage() {
   const [monitorId, setMonitorId] = useState("");
   const [error, setError] = useState("");
   const submit = useSubmitGuard();
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  async function setRoot(id: string, serveAtRoot: boolean) {
+    setError("");
+    setPendingId(id);
+    try {
+      await api(`/api/status-pages/${id}/root`, {
+        method: "PUT",
+        body: JSON.stringify({ serveAtRoot }),
+      });
+      await client.invalidateQueries({ queryKey: ["pages"] });
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setPendingId(null);
+    }
+  }
   return (
     <PageEnter>
       <AppHeader title={m.nav_status_pages()} />
@@ -125,17 +142,46 @@ export function StatusPagesPage() {
       </form>
       <div className="grid gap-3">
         {pages.data?.pages.map((page) => (
-          <Card key={page.id}>
-            <CardContent className="flex items-center justify-between p-4">
-              <div>
+          <article
+            key={page.id}
+            className="rounded-lg border border-border bg-card p-4"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
                 <p className="font-medium">{page.title}</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm break-all text-muted-foreground">
                   /s/{page.slug} · {m.missing_count({ count: page.missing })}
                 </p>
               </div>
-              <a href={`/s/${page.slug}`}>{m.page_public_link()}</a>
-            </CardContent>
-          </Card>
+              <a className="text-sm" href={`/s/${page.slug}`}>
+                {m.page_public_link()}
+              </a>
+            </div>
+            <div className="mt-4 grid gap-2 border-t border-border pt-4">
+              {/* biome-ignore lint/a11y/noLabelWithoutControl: Switch is the control */}
+              <label className="flex items-center gap-3 text-sm">
+                <Switch
+                  checked={page.serveAtRoot}
+                  disabled={
+                    pendingId !== null || (!page.published && !page.serveAtRoot)
+                  }
+                  onCheckedChange={(checked) => void setRoot(page.id, checked)}
+                />
+                <span>{m.page_root_label()}</span>
+              </label>
+              <p className="text-sm text-muted-foreground">
+                {m.page_root_note({ slug: page.slug })}
+              </p>
+              {page.serveAtRoot ? (
+                <p className="text-sm">{m.page_root_current()}</p>
+              ) : null}
+              {page.published ? null : (
+                <p className="text-sm text-muted-foreground">
+                  {m.page_root_unpublished()}
+                </p>
+              )}
+            </div>
+          </article>
         ))}
       </div>
     </PageEnter>
@@ -875,7 +921,7 @@ export function NotFoundPage() {
   return (
     <div className="p-10">
       <p>{m.error_not_found()}</p>
-      <Button className="mt-4" onClick={() => navigate({ to: "/" })}>
+      <Button className="mt-4" onClick={() => navigate({ to: "/console" })}>
         {m.nav_dashboard()}
       </Button>
       <Link to="/login" className="ml-3 text-sm">

@@ -8,6 +8,8 @@ cp .dev.vars.example .dev.vars
 pnpm dev
 ```
 
+The dev server is http://127.0.0.1:5173. Create the owner at `/setup`, sign in at `/login`, and use the admin UI at `/console`.
+
 Useful scripts:
 
 | Script                  | What it does                                                                                                                                                   |

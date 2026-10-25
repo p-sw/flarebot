@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+import { safeReturnPath } from "@shared/front-door";
 import { isSupportedLocale } from "@shared/locales";
 import { QueryClient } from "@tanstack/react-query";
 import {
@@ -9,7 +10,7 @@ import {
   Outlet,
   redirect,
 } from "@tanstack/react-router";
-import { api } from "./lib/api";
+import { ApiClientError, api } from "./lib/api";
 import {
   ForgotPage,
   InvitePage,
@@ -72,7 +73,7 @@ const setupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/setup",
   beforeLoad: async () => {
-    if (!(await meta()).setupRequired) throw redirect({ to: "/" });
+    if (!(await meta()).setupRequired) throw redirect({ to: "/login" });
   },
   component: SetupPage,
 });
@@ -80,9 +81,13 @@ const setupRoute = createRoute({
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
+  validateSearch: (search: Record<string, unknown>): { next?: string } => {
+    const next = typeof search.next === "string" ? search.next : undefined;
+    return next ? { next } : {};
+  },
   beforeLoad: async () => {
     if ((await meta()).setupRequired) throw redirect({ to: "/setup" });
-    if ((await session()).user) throw redirect({ to: "/" });
+    if ((await session()).user) throw redirect({ to: "/console" });
   },
   component: LoginPage,
 });
@@ -112,69 +117,96 @@ const publicRoute = createRoute({
   component: PublicStatusPage,
 });
 
-const appRoute = createRoute({
+const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
-  id: "app",
+  path: "/",
   beforeLoad: async () => {
+    const lang = new URLSearchParams(window.location.search).get("lang");
+    await applyExplicitLocale(lang);
+    try {
+      await queryClient.fetchQuery({
+        queryKey: ["public-root"],
+        staleTime: 0,
+        queryFn: () => api("/api/public/root"),
+      });
+    } catch (error) {
+      if (error instanceof ApiClientError && error.status === 404)
+        throw redirect({ to: "/login" });
+      throw error;
+    }
+  },
+  component: PublicStatusPage,
+});
+
+const consoleRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/console",
+  beforeLoad: async ({ location }) => {
     if ((await meta()).setupRequired) throw redirect({ to: "/setup" });
     const current = await session();
-    if (!current.user) throw redirect({ to: "/login" });
+    if (!current.user) {
+      const next = safeReturnPath(`${location.pathname}${location.searchStr}`);
+      throw redirect({
+        to: "/login",
+        search: next ? { next } : {},
+      });
+    }
     await applyExplicitLocale(current.user.locale);
     return { user: current.user };
   },
   component: function AppShell() {
-    const { user } = appRoute.useRouteContext();
+    const { user } = consoleRoute.useRouteContext();
     return <Shell user={user} />;
   },
 });
 
 const indexRoute = createRoute({
-  getParentRoute: () => appRoute,
+  getParentRoute: () => consoleRoute,
   path: "/",
   component: DashboardPage,
 });
 const newMonitorRoute = createRoute({
-  getParentRoute: () => appRoute,
+  getParentRoute: () => consoleRoute,
   path: "/monitors/new",
   component: MonitorFormPage,
 });
 const monitorRoute = createRoute({
-  getParentRoute: () => appRoute,
+  getParentRoute: () => consoleRoute,
   path: "/monitors/$id",
   component: MonitorDetailPage,
 });
 const pagesRoute = createRoute({
-  getParentRoute: () => appRoute,
+  getParentRoute: () => consoleRoute,
   path: "/status-pages",
   component: StatusPagesPage,
 });
 const channelsRoute = createRoute({
-  getParentRoute: () => appRoute,
+  getParentRoute: () => consoleRoute,
   path: "/channels",
   component: ChannelsPage,
 });
 const teamRoute = createRoute({
-  getParentRoute: () => appRoute,
+  getParentRoute: () => consoleRoute,
   path: "/team",
   component: TeamPage,
 });
 const tokensRoute = createRoute({
-  getParentRoute: () => appRoute,
+  getParentRoute: () => consoleRoute,
   path: "/tokens",
   component: TokensPage,
 });
 const auditRoute = createRoute({
-  getParentRoute: () => appRoute,
+  getParentRoute: () => consoleRoute,
   path: "/audit",
   component: AuditPage,
 });
 const settingsRoute = createRoute({
-  getParentRoute: () => appRoute,
+  getParentRoute: () => consoleRoute,
   path: "/settings",
   component: SettingsPage,
 });
 const accountRoute = createRoute({
-  getParentRoute: () => appRoute,
+  getParentRoute: () => consoleRoute,
   path: "/account",
   component: AccountPage,
 });
@@ -186,7 +218,8 @@ const routeTree = rootRoute.addChildren([
   resetRoute,
   inviteRoute,
   publicRoute,
-  appRoute.addChildren([
+  homeRoute,
+  consoleRoute.addChildren([
     indexRoute,
     newMonitorRoute,
     monitorRoute,

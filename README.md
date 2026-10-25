@@ -38,7 +38,7 @@ npx wrangler secret put SETUP_SECRET
 npx wrangler secret put ENCRYPTION_KEY
 ```
 
-`ENCRYPTION_KEY` is 32 bytes of base64 (`openssl rand -base64 32`). Open `/setup`, enter the setup secret, and create the Owner. Mail can wait. See [docs/deployment.md](docs/deployment.md) for the manual path and for SMTP secrets.
+`ENCRYPTION_KEY` is 32 bytes of base64 (`openssl rand -base64 32`). Open `/setup`, enter the setup secret, and create the Owner. After that, sign in at `/login`. The admin UI is `/console`. Mail can wait. See [docs/deployment.md](docs/deployment.md) for the manual path and for SMTP secrets.
 
 Nothing in this repository is deployed for you. The Wrangler config has no account id.
 
@@ -53,7 +53,19 @@ pnpm exec playwright install chromium   # only for end-to-end tests
 pnpm dev
 ```
 
-Open http://127.0.0.1:5173/setup. The sample setup secret is `change-me-setup-secret`. Replace it before you expose the dev server.
+Open http://127.0.0.1:5173/setup. The sample setup secret is `change-me-setup-secret`. Replace it before you expose the dev server. Sign in at `/login`. The admin UI is `/console`.
+
+## URLs
+
+| URL         | Purpose                                                               |
+| ----------- | --------------------------------------------------------------------- |
+| `/`         | Public status page chosen as the site root, or a redirect to `/login` |
+| `/s/<slug>` | Public status page. Still works for the page served at `/`            |
+| `/login`    | Sign in. A signed-in visit redirects to `/console`                    |
+| `/console`  | Admin dashboard and the rest of the admin UI                          |
+| `/setup`    | Create the first owner. Redirects to `/login` once setup is done      |
+
+Bookmarks under the old admin paths (`/monitors/...`, `/status-pages`, `/settings`, and the other console sections) redirect to `/console/...`. A status page setting, "Serve at the site root", chooses which published page answers `/`. Only one page can hold that setting. Turning it on for one page turns it off for the other.
 
 ## Configuration
 
