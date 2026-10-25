@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
 
+import { t } from "@shared/copy";
 import { Loader2 } from "lucide-react";
 import { ApiClientError } from "../lib/api";
-import { m } from "../paraglide/messages.js";
 import { Switch } from "../ui/switch";
 
 export function rootToggleError(error: unknown): string {
   if (error instanceof ApiClientError) {
-    if (error.status === 400) return m.page_root_unpublished();
-    if (error.status === 403) return m.error_forbidden();
-    if (error.status === 409) return m.page_root_conflict();
+    if (error.status === 400) return t("page_root_unpublished");
+    if (error.status === 403) return t("error_forbidden");
+    if (error.status === 409) return t("page_root_conflict");
   }
-  return m.page_root_failed();
+  return t("page_root_failed");
 }
 
 export function RootSwitch({
@@ -42,14 +42,14 @@ export function RootSwitch({
           onCheckedChange(next);
         }}
       />
-      <span className="min-w-0">{m.page_root_label()}</span>
+      <span className="min-w-0">{t("page_root_label")}</span>
       {pending ? (
         <span
           role="status"
           className="inline-flex shrink-0 items-center text-muted-foreground"
         >
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          <span className="sr-only">{m.page_root_busy()}</span>
+          <span className="sr-only">{t("page_root_busy")}</span>
         </span>
       ) : null}
     </label>

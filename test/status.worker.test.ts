@@ -143,9 +143,6 @@ describe("status pages", () => {
         body: JSON.stringify({
           slug,
           published: true,
-          defaultLocale: "en",
-          locales: ["en"],
-          sourceLocale: "en",
           title: "Names",
           description: "",
           items: [
@@ -154,8 +151,6 @@ describe("status pages", () => {
               position: 0,
               groupName: "Core",
               displayName: "",
-              sourceLocale: "en",
-              i18n: {},
             },
           ],
         }),
@@ -195,9 +190,6 @@ describe("status pages", () => {
         body: JSON.stringify({
           slug: "Not A Slug",
           published: true,
-          defaultLocale: "en",
-          locales: ["en"],
-          sourceLocale: "en",
           title: "Nope",
           items: [
             {
@@ -205,7 +197,6 @@ describe("status pages", () => {
               position: 0,
               groupName: "Core",
               displayName: "",
-              sourceLocale: "en",
             },
           ],
         }),
@@ -220,9 +211,6 @@ describe("status pages", () => {
         body: JSON.stringify({
           slug,
           published: true,
-          defaultLocale: "en",
-          locales: ["en"],
-          sourceLocale: "en",
           title: "Nope",
           items: [
             {
@@ -230,7 +218,6 @@ describe("status pages", () => {
               position: 0,
               groupName: "Core",
               displayName: "",
-              sourceLocale: "en",
             },
           ],
         }),
@@ -275,9 +262,6 @@ describe("status pages", () => {
         body: JSON.stringify({
           slug,
           published: true,
-          defaultLocale: "en",
-          locales: ["en"],
-          sourceLocale: "en",
           title: "Rollback",
           items: [
             {
@@ -286,7 +270,6 @@ describe("status pages", () => {
               position: 0,
               groupName: "Edge",
               displayName: "",
-              sourceLocale: "en",
             },
             {
               id: sharedId,
@@ -294,7 +277,6 @@ describe("status pages", () => {
               position: 1,
               groupName: "Core",
               displayName: "",
-              sourceLocale: "en",
             },
           ],
         }),
@@ -315,9 +297,6 @@ describe("status pages", () => {
         body: JSON.stringify({
           slug,
           published: true,
-          defaultLocale: "en",
-          locales: ["en"],
-          sourceLocale: "en",
           title: "Ordered",
           description: "Ready",
           items: [
@@ -326,14 +305,12 @@ describe("status pages", () => {
               position: 0,
               groupName: "Core",
               displayName: "",
-              sourceLocale: "en",
             },
             {
               monitorId: alpha,
               position: 1,
               groupName: "Edge",
               displayName: "Edge API",
-              sourceLocale: "en",
             },
           ],
         }),
@@ -349,9 +326,6 @@ describe("status pages", () => {
         body: JSON.stringify({
           slug,
           published: true,
-          defaultLocale: "en",
-          locales: ["en"],
-          sourceLocale: "en",
           title: "Ordered",
           description: "Ready",
           items: [
@@ -360,14 +334,12 @@ describe("status pages", () => {
               position: 0,
               groupName: "Edge",
               displayName: "",
-              sourceLocale: "en",
             },
             {
               monitorId: beta,
               position: 1,
               groupName: "Core",
               displayName: "",
-              sourceLocale: "en",
             },
           ],
         }),

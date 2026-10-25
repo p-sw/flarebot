@@ -116,10 +116,8 @@ export async function loadPublicStatus(
   >();
   for (const item of items) {
     const name =
-      statusItemLabel(
-        item.displayName,
-        nameById.get(item.monitorId) ?? "",
-      ) || t("monitor_fallback_name");
+      statusItemLabel(item.displayName, nameById.get(item.monitorId) ?? "") ||
+      t("monitor_fallback_name");
     const groupKey = item.groupName;
     const groupName = item.groupName.trim();
     const rows = daily.filter((row) => row.monitorId === item.monitorId);

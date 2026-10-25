@@ -84,10 +84,6 @@ export type StatusPageDetail = {
   banner: string;
   published: boolean;
   serveAtRoot: boolean;
-  defaultLocale: string;
-  sourceLocale: string;
-  locales: string[];
-  i18n: Record<string, Record<string, string>>;
   logoUrl: string | null;
   accent: string | null;
   items: {
@@ -97,8 +93,6 @@ export type StatusPageDetail = {
     position: number;
     groupName: string;
     displayName: string;
-    sourceLocale: string;
-    i18n: Record<string, Record<string, string>>;
   }[];
 };
 

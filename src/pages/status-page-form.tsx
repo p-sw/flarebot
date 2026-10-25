@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import AppHeader from "@brand/overrides/AppHeader";
+import { t } from "@shared/copy";
 import {
   duplicateSectionNames,
   isStatusSlug,
@@ -9,7 +10,6 @@ import {
   sectionsFromItems,
   slugFromTitle,
   statusItemLabel,
-  type TextMap,
 } from "@shared/status-layout";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -30,7 +30,6 @@ import {
 import { useToggleLock } from "../lib/toggle-guard";
 import { useSubmitGuard } from "../lib/use-submit-guard";
 import { useMotionPrefs } from "../motion/page";
-import { m } from "../paraglide/messages.js";
 import { Button } from "../ui/button";
 import { ConfirmDialog } from "../ui/confirm-dialog";
 import { Input } from "../ui/input";
@@ -52,10 +51,6 @@ type Draft = {
   serveAtRoot: boolean;
   logoUrl: string;
   accent: string;
-  defaultLocale: string;
-  sourceLocale: string;
-  locales: string[];
-  i18n: TextMap;
   sections: LayoutSection[];
 };
 
@@ -78,10 +73,6 @@ function emptyDraft(): Draft {
     serveAtRoot: false,
     logoUrl: "",
     accent: "",
-    defaultLocale: "en",
-    sourceLocale: "en",
-    locales: ["en"],
-    i18n: {},
     sections: [],
   };
 }
@@ -97,10 +88,6 @@ function draftFromPage(page: StatusPageDetail): Draft {
     serveAtRoot: page.serveAtRoot,
     logoUrl: page.logoUrl ?? "",
     accent: page.accent ?? "",
-    defaultLocale: page.defaultLocale,
-    sourceLocale: page.sourceLocale,
-    locales: page.locales,
-    i18n: page.i18n ?? {},
     sections: sectionsFromItems(page.items),
   };
 }
@@ -116,15 +103,15 @@ function isHttpUrl(value: string): boolean {
 
 function validate(draft: Draft): FieldErrors {
   const errors: FieldErrors = {};
-  if (!draft.title.trim()) errors.title = m.page_title_required();
+  if (!draft.title.trim()) errors.title = t("page_title_required");
   if (!isStatusSlug(draft.slug.trim().toLowerCase()))
-    errors.slug = m.page_slug_invalid();
+    errors.slug = t("page_slug_invalid");
   if (draft.logoUrl.trim() && !isHttpUrl(draft.logoUrl.trim()))
-    errors.logoUrl = m.page_logo_invalid();
+    errors.logoUrl = t("page_logo_invalid");
   if (draft.accent.trim() && !/^#[0-9a-fA-F]{6}$/.test(draft.accent.trim()))
-    errors.accent = m.page_accent_invalid();
+    errors.accent = t("page_accent_invalid");
   if (duplicateSectionNames(draft.sections))
-    errors.sections = m.page_sections_duplicate();
+    errors.sections = t("page_sections_duplicate");
   return errors;
 }
 
@@ -257,17 +244,13 @@ function StatusPageForm({
           ...(mode === "create"
             ? { serveAtRoot: saved.published && saved.serveAtRoot }
             : {}),
-          defaultLocale: saved.defaultLocale,
-          locales: saved.locales,
-          sourceLocale: saved.sourceLocale,
           title: saved.title,
           description: saved.description,
           footer: saved.footer,
           banner: saved.banner,
-          i18n: saved.i18n,
           logoUrl: saved.logoUrl,
           accent: saved.accent,
-          items: itemsFromSections(saved.sections, saved.sourceLocale),
+          items: itemsFromSections(saved.sections),
         };
         if (mode === "create") {
           const createdPage = await api<{ id: string }>("/api/status-pages", {
@@ -291,7 +274,9 @@ function StatusPageForm({
         setDraft(saved);
         setBaseline(JSON.stringify(saved));
         setNotice(
-          emptyRemoved ? `${m.saved()} ${m.page_empty_sections()}` : m.saved(),
+          emptyRemoved
+            ? `${t("saved")} ${t("page_empty_sections")}`
+            : t("saved"),
         );
         await client.invalidateQueries({ queryKey: ["pages"] });
         await client.invalidateQueries({ queryKey: ["status-page", page.id] });
@@ -299,12 +284,12 @@ function StatusPageForm({
         if (cause instanceof ApiClientError && cause.status === 409) {
           setErrors((current) => ({
             ...current,
-            slug: m.page_slug_conflict(),
+            slug: t("page_slug_conflict"),
           }));
           return;
         }
         setFormError(
-          cause instanceof ApiClientError ? cause.message : m.error_generic(),
+          cause instanceof ApiClientError ? cause.message : t("error_generic"),
         );
       }
     });
@@ -335,7 +320,9 @@ function StatusPageForm({
   return (
     <>
       <AppHeader
-        title={mode === "create" ? m.page_new() : draft.title || m.page_edit()}
+        title={
+          mode === "create" ? t("page_new") : draft.title || t("page_edit")
+        }
         actions={
           <PendingButton
             type="button"
@@ -343,7 +330,7 @@ function StatusPageForm({
             disabled={!dirty}
             onClick={() => void save()}
           >
-            {mode === "create" ? m.page_create() : m.action_save()}
+            {mode === "create" ? t("page_create") : t("action_save")}
           </PendingButton>
         }
       />
@@ -351,10 +338,10 @@ function StatusPageForm({
         to="/console/status-pages"
         className="mb-4 inline-block text-sm text-muted-foreground"
       >
-        {m.page_back()}
+        {t("page_back")}
       </Link>
       <p className="mb-4 max-w-2xl text-sm text-muted-foreground">
-        {mode === "create" ? m.page_create_intro() : m.page_edit_intro()}
+        {mode === "create" ? t("page_create_intro") : t("page_edit_intro")}
       </p>
       {created ? (
         <motion.p
@@ -366,7 +353,7 @@ function StatusPageForm({
           animate={{ opacity: 1, y: 0 }}
           transition={motionPrefs.snappy}
         >
-          {m.page_created()}
+          {t("page_created")}
         </motion.p>
       ) : null}
       <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
@@ -378,8 +365,8 @@ function StatusPageForm({
           }}
         >
           <Described
-            label={m.page_title()}
-            hint={m.page_title_hint()}
+            label={t("page_title")}
+            hint={t("page_title_hint")}
             error={errors.title}
           >
             {(describedBy) => (
@@ -402,8 +389,8 @@ function StatusPageForm({
             )}
           </Described>
           <Described
-            label={m.page_slug()}
-            hint={m.page_slug_hint()}
+            label={t("page_slug")}
+            hint={t("page_slug_hint")}
             error={errors.slug}
           >
             {(describedBy) => (
@@ -422,8 +409,8 @@ function StatusPageForm({
             )}
           </Described>
           <Described
-            label={m.page_description()}
-            hint={m.page_description_hint()}
+            label={t("page_description")}
+            hint={t("page_description_hint")}
           >
             {(describedBy) => (
               <Textarea
@@ -438,8 +425,8 @@ function StatusPageForm({
             )}
           </Described>
           <Described
-            label={m.page_announcement()}
-            hint={m.page_announcement_hint()}
+            label={t("page_announcement")}
+            hint={t("page_announcement_hint")}
           >
             {(describedBy) => (
               <Textarea
@@ -451,7 +438,7 @@ function StatusPageForm({
               />
             )}
           </Described>
-          <Described label={m.page_footer()} hint={m.page_footer_hint()}>
+          <Described label={t("page_footer")} hint={t("page_footer_hint")}>
             {(describedBy) => (
               <Textarea
                 name="footer"
@@ -463,8 +450,8 @@ function StatusPageForm({
             )}
           </Described>
           <Described
-            label={m.page_logo()}
-            hint={m.page_logo_hint()}
+            label={t("page_logo")}
+            hint={t("page_logo_hint")}
             error={errors.logoUrl}
           >
             {(describedBy) => (
@@ -472,7 +459,7 @@ function StatusPageForm({
                 name="logoUrl"
                 value={draft.logoUrl}
                 maxLength={2000}
-                placeholder="https://"
+                placeholder={t("page_logo_placeholder")}
                 aria-describedby={describedBy}
                 aria-invalid={Boolean(errors.logoUrl)}
                 onChange={(event) => {
@@ -483,8 +470,8 @@ function StatusPageForm({
             )}
           </Described>
           <Described
-            label={m.page_accent()}
-            hint={m.page_accent_hint()}
+            label={t("page_accent")}
+            hint={t("page_accent_hint")}
             error={errors.accent}
           >
             {(describedBy) => (
@@ -492,7 +479,7 @@ function StatusPageForm({
                 name="accent"
                 value={draft.accent}
                 maxLength={7}
-                placeholder="#2563eb"
+                placeholder={t("page_accent_placeholder")}
                 aria-describedby={describedBy}
                 aria-invalid={Boolean(errors.accent)}
                 onChange={(event) => {
@@ -515,10 +502,10 @@ function StatusPageForm({
                   })
                 }
               />
-              <span>{m.page_published()}</span>
+              <span>{t("page_published")}</span>
             </label>
             <p className="text-xs text-muted-foreground">
-              {m.page_published_hint()}
+              {t("page_published_hint")}
             </p>
             {mode === "create" ? (
               <>
@@ -531,10 +518,10 @@ function StatusPageForm({
                       update({ serveAtRoot: checked })
                     }
                   />
-                  <span>{m.page_root_label()}</span>
+                  <span>{t("page_root_label")}</span>
                 </label>
                 <p className="text-xs text-muted-foreground">
-                  {m.page_root_create_hint()}
+                  {t("page_root_create_hint")}
                 </p>
               </>
             ) : page ? (
@@ -551,11 +538,11 @@ function StatusPageForm({
                   onCheckedChange={(checked) => void setRoot(checked)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  {m.page_root_note({ slug: page.slug })}
+                  {t("page_root_note", { slug: page.slug })}
                 </p>
                 {!draft.published && page.serveAtRoot ? (
                   <p className="text-xs text-muted-foreground">
-                    {m.page_root_unpublish_hint()}
+                    {t("page_root_unpublish_hint")}
                   </p>
                 ) : null}
                 {rootError ? (
@@ -582,7 +569,7 @@ function StatusPageForm({
           ) : null}
           {droppedEmpty ? (
             <p className="text-xs text-muted-foreground">
-              {m.page_empty_sections()}
+              {t("page_empty_sections")}
             </p>
           ) : null}
           {formError ? (
@@ -597,14 +584,14 @@ function StatusPageForm({
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
             <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-              {dirty ? m.page_unsaved() : m.page_saved_clean()}
+              {dirty ? t("page_unsaved") : t("page_saved_clean")}
             </p>
             <PendingButton
               type="submit"
               pending={submit.pending}
               disabled={!dirty}
             >
-              {mode === "create" ? m.page_create() : m.action_save()}
+              {mode === "create" ? t("page_create") : t("action_save")}
             </PendingButton>
             {mode === "edit" && page ? (
               <Button
@@ -613,15 +600,15 @@ function StatusPageForm({
                 disabled={submit.pending}
                 onClick={() => setConfirmDelete(true)}
               >
-                {m.page_delete()}
+                {t("page_delete")}
               </Button>
             ) : null}
           </div>
         </form>
         <aside className="min-w-0 rounded-lg border border-border bg-card p-4 lg:sticky lg:top-20 lg:self-start">
-          <h2 className="font-medium">{m.page_preview()}</h2>
+          <h2 className="font-medium">{t("page_preview")}</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            {m.page_preview_hint()}
+            {t("page_preview_hint")}
           </p>
           {draft.logoUrl.trim() && isHttpUrl(draft.logoUrl.trim()) ? (
             <img
@@ -637,7 +624,7 @@ function StatusPageForm({
             />
           ) : null}
           <h3 className="mt-4 break-words text-xl font-medium">
-            {draft.title.trim() || m.page_title()}
+            {draft.title.trim() || t("page_title")}
           </h3>
           {draft.description.trim() ? (
             <p className="mt-2 break-words text-sm text-muted-foreground">
@@ -661,7 +648,7 @@ function StatusPageForm({
                   {section.items.map((item) => (
                     <li key={item.key} className="break-words text-sm">
                       {statusItemLabel(item.displayName, item.monitorName) ||
-                        m.page_name_fallback()}
+                        t("monitor_fallback_name")}
                     </li>
                   ))}
                 </ol>
@@ -676,20 +663,20 @@ function StatusPageForm({
           <div className="mt-4">
             {mode === "create" ? (
               <p className="text-sm text-muted-foreground">
-                {m.page_public_after_create()}
+                {t("page_public_after_create")}
               </p>
             ) : !page?.published ? (
               <p className="text-sm text-muted-foreground">
-                {m.page_public_unpublished()}
+                {t("page_public_unpublished")}
               </p>
             ) : (
               <>
                 <a className="text-sm" href={publicHref}>
-                  {m.page_view_public()}
+                  {t("page_view_public")}
                 </a>
                 {slugDirty ? (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {m.page_public_slug_dirty()}
+                    {t("page_public_slug_dirty")}
                   </p>
                 ) : null}
               </>
@@ -702,10 +689,10 @@ function StatusPageForm({
         onOpenChange={(open) => {
           if (!open && blocker.status === "blocked") blocker.reset();
         }}
-        title={m.page_leave_title()}
-        description={m.page_leave_body()}
-        confirmLabel={m.page_leave_confirm()}
-        cancelLabel={m.page_stay()}
+        title={t("page_leave_title")}
+        description={t("page_leave_body")}
+        confirmLabel={t("page_leave_confirm")}
+        cancelLabel={t("page_stay")}
         onConfirm={() => {
           if (blocker.status === "blocked") blocker.proceed();
         }}
@@ -713,10 +700,10 @@ function StatusPageForm({
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
-        title={m.page_delete_title()}
-        description={m.page_delete_body()}
-        confirmLabel={m.action_delete()}
-        cancelLabel={m.action_cancel()}
+        title={t("page_delete_title")}
+        description={t("page_delete_body")}
+        confirmLabel={t("action_delete")}
+        cancelLabel={t("action_cancel")}
         pending={submit.pending}
         onConfirm={() => {
           if (!page) return;
@@ -747,7 +734,7 @@ export function StatusPageEditPage() {
   const monitors = useQuery(monitorsQuery);
   if (detail.isPending || monitors.isPending) return <ContentSkeleton />;
   if (!detail.data) {
-    return <p className="text-sm">{m.error_not_found()}</p>;
+    return <p className="text-sm">{t("error_not_found")}</p>;
   }
   return (
     <StatusPageForm
