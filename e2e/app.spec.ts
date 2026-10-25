@@ -26,9 +26,6 @@ test("a status page renders the monitor title", async ({ page }) => {
     data: {
       slug,
       published: true,
-      defaultLocale: "en",
-      locales: ["en", "ko"],
-      sourceLocale: "en",
       title: "Public status",
       description: "API smoke",
       items: [
@@ -37,7 +34,6 @@ test("a status page renders the monitor title", async ({ page }) => {
           position: 0,
           groupName: "",
           displayName: name,
-          sourceLocale: "en",
         },
       ],
     },
@@ -51,7 +47,7 @@ test("a status page renders the monitor title", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Public status" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Korean" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Korean" })).toHaveCount(0);
   await expect(page.getByText(name)).toBeVisible();
 });
 

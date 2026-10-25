@@ -10,7 +10,6 @@ describe("deliverChannel", () => {
     const discord = await deliverChannel(
       {
         type: "discord",
-        locale: "en",
         config: { webhookUrl: "https://discord.example/hook" },
       },
       { kind: "down", monitorName: "API", reason: "timeout" },
@@ -22,7 +21,7 @@ describe("deliverChannel", () => {
       },
     );
     const email = await deliverChannel(
-      { type: "email", locale: "ko", config: { to: "ops@example.com" } },
+      { type: "email", config: { to: "ops@example.com" } },
       { kind: "up", monitorName: "API", reason: "" },
       {
         enqueueEmail: async (input) => {
@@ -52,7 +51,6 @@ describe("deliverChannel", () => {
     const slack = await deliverChannel(
       {
         type: "slack",
-        locale: "en",
         config: { webhookUrl: "https://hooks.slack.test/a" },
       },
       { kind: "down", monitorName: "API", reason: "status" },
@@ -61,7 +59,6 @@ describe("deliverChannel", () => {
     const telegram = await deliverChannel(
       {
         type: "telegram",
-        locale: "en",
         config: { botToken: "token", chatId: "42" },
       },
       { kind: "unstable", monitorName: "API", reason: "flap" },
@@ -70,7 +67,6 @@ describe("deliverChannel", () => {
     const hook = await deliverChannel(
       {
         type: "webhook",
-        locale: null,
         config: {
           url: "https://ops.test/hook",
           headers: [{ name: "authorization", value: "Bearer t" }],
@@ -82,7 +78,6 @@ describe("deliverChannel", () => {
     const failed = await deliverChannel(
       {
         type: "discord",
-        locale: "en",
         config: { webhookUrl: "https://fail.test/hook" },
       },
       { kind: "down", monitorName: "API", reason: "x" },

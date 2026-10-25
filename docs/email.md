@@ -1,6 +1,6 @@
 # Email
 
-Flarebot sends mail through a `MailTransport` interface.
+Flarebot sends mail through a `MailTransport` interface. Invitation, password-reset, alert, and test messages are sentences in `brand/locale.json`.
 
 - **SMTP** uses Workers TCP sockets and the pinned `worker-mailer@1.3.0` package. Port 587 starts TLS after the greeting. Port 465 is implicit TLS. Port 25, private hosts, and hosts that are not publicly dialable are rejected before connect, with a stage of `config`.
 - **Cloudflare Email Service** uses the optional `EMAIL` binding. It is not in the committed Wrangler config.

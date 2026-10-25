@@ -11,6 +11,7 @@ import {
   verifyRegistrationResponse,
 } from "@simplewebauthn/server";
 import { and, eq, gt } from "drizzle-orm";
+import { t } from "../../shared/copy";
 import { b64ToBytes, bytesToB64 } from "../crypto/secret";
 import { getDb } from "../db/client";
 import { credentials, webauthnChallenges } from "../db/schema";
@@ -105,10 +106,11 @@ export async function verifyRegistration(
     new TextDecoder().decode(b64UrlToBytes(challenge)),
   ) as { challenge?: string };
   const expected = client.challenge;
-  if (!expected) throw new ApiError(400, "webauthn", "Missing challenge");
+  if (!expected)
+    throw new ApiError(400, "webauthn", t("error_challenge_missing"));
   const stored = await takeChallenge(c.env, expected, "registration");
   if (!stored || stored.userId !== userId)
-    throw new ApiError(400, "webauthn", "Challenge expired");
+    throw new ApiError(400, "webauthn", t("error_challenge_expired"));
   const verified = await verifyRegistrationResponse({
     response,
     expectedChallenge: expected,
@@ -117,7 +119,7 @@ export async function verifyRegistration(
     requireUserVerification: false,
   });
   if (!verified.verified)
-    throw new ApiError(400, "webauthn", "Passkey was not accepted");
+    throw new ApiError(400, "webauthn", t("error_passkey_rejected"));
   const credential = verified.registrationInfo.credential;
   const db = getDb(c.env.DB);
   await db.insert(credentials).values({
@@ -126,7 +128,7 @@ export async function verifyRegistration(
     credentialId: credential.id,
     publicKey: bytesToB64(credential.publicKey),
     counter: credential.counter,
-    deviceName: deviceName?.slice(0, 80) ?? "Passkey",
+    deviceName: deviceName?.slice(0, 80) ?? t("passkey_default_name"),
     transportsJson: credential.transports
       ? JSON.stringify(credential.transports)
       : null,
@@ -154,16 +156,19 @@ export async function verifyAuthentication(
     new TextDecoder().decode(b64UrlToBytes(response.response.clientDataJSON)),
   ) as { challenge?: string };
   const expected = client.challenge;
-  if (!expected) throw new ApiError(400, "webauthn", "Missing challenge");
+  if (!expected)
+    throw new ApiError(400, "webauthn", t("error_challenge_missing"));
   const stored = await takeChallenge(c.env, expected, "authentication");
-  if (!stored) throw new ApiError(400, "webauthn", "Challenge expired");
+  if (!stored)
+    throw new ApiError(400, "webauthn", t("error_challenge_expired"));
   const db = getDb(c.env.DB);
   const credential = await db
     .select()
     .from(credentials)
     .where(eq(credentials.credentialId, response.id))
     .get();
-  if (!credential) throw new ApiError(401, "unauthorized", "Unknown passkey");
+  if (!credential)
+    throw new ApiError(401, "unauthorized", t("error_unknown_passkey"));
   const verified = await verifyAuthenticationResponse({
     response,
     expectedChallenge: expected,
@@ -180,7 +185,7 @@ export async function verifyAuthentication(
     },
   });
   if (!verified.verified)
-    throw new ApiError(401, "unauthorized", "Passkey was not accepted");
+    throw new ApiError(401, "unauthorized", t("error_passkey_rejected"));
   await db
     .update(credentials)
     .set({ counter: verified.authenticationInfo.newCounter })

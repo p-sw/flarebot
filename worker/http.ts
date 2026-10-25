@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { z } from "zod";
-import { isSupportedLocale, LOCALE_COOKIE } from "../shared/locales";
+import { t } from "../shared/copy";
 import type { Action, Role, Scope } from "../shared/permissions";
 import { can, isRole, isScope, scopesForRole } from "../shared/permissions";
 import { sha256Hex, timingSafeEqual } from "./crypto/secret";
@@ -28,7 +28,6 @@ export type Actor = {
   userId: string;
   email: string;
   name: string;
-  locale: string | null;
   organizationId: string;
   role: Role;
   tokenScopes: Scope[] | null;
@@ -62,7 +61,7 @@ export function assertMutationOrigin(c: AppContext, actor: Actor): void {
   if (actor.tokenId) return;
   const origin = c.req.header("origin");
   if (!origin || origin !== requestOrigin(c)) {
-    throw new ApiError(403, "origin", "Cross-origin request rejected");
+    throw new ApiError(403, "origin", t("error_origin"));
   }
 }
 
@@ -84,23 +83,6 @@ export function clearSessionCookie(c: AppContext): void {
   deleteCookie(c, SESSION_COOKIE, { path: "/" });
 }
 
-const LOCALE_MAX_AGE = 60 * 60 * 24 * 400;
-
-export function writeLocaleCookie(c: AppContext, locale: string): void {
-  if (!isSupportedLocale(locale)) return;
-  setCookie(c, LOCALE_COOKIE, locale, {
-    httpOnly: false,
-    sameSite: "Lax",
-    path: "/",
-    secure: cookieSecure(c),
-    maxAge: LOCALE_MAX_AGE,
-  });
-}
-
-export function clearLocaleCookie(c: AppContext): void {
-  deleteCookie(c, LOCALE_COOKIE, { path: "/" });
-}
-
 export async function createSession(
   c: AppContext,
   userId: string,
@@ -119,12 +101,6 @@ export async function createSession(
     createdAt: now,
   });
   writeSessionCookie(c, token);
-  const user = await db
-    .select({ locale: users.locale })
-    .from(users)
-    .where(eq(users.id, userId))
-    .get();
-  if (user?.locale) writeLocaleCookie(c, user.locale);
 }
 
 async function actorFromUser(
@@ -152,7 +128,6 @@ async function actorFromUser(
     userId: user.id,
     email: user.email,
     name: user.name,
-    locale: user.locale,
     organizationId: membership.organizationId,
     role: membership.role,
     tokenScopes: scopes,
@@ -208,18 +183,14 @@ export async function requireActor(c: AppContext): Promise<Actor> {
   const existing = c.get("actor");
   if (existing) return existing;
   const actor = await loadActor(c);
-  if (!actor) throw new ApiError(401, "unauthorized", "Sign in to continue.");
+  if (!actor) throw new ApiError(401, "unauthorized", t("error_unauthorized"));
   c.set("actor", actor);
   return actor;
 }
 
 export function requireCan(actor: Actor, action: Action): void {
   if (!can(actor, action))
-    throw new ApiError(
-      403,
-      "forbidden",
-      "You do not have permission to do that.",
-    );
+    throw new ApiError(403, "forbidden", t("error_forbidden"));
 }
 
 export async function verifyTurnstile(
@@ -228,7 +199,8 @@ export async function verifyTurnstile(
   ip: string | null,
 ): Promise<void> {
   if (!env.TURNSTILE_SECRET_KEY) return;
-  if (!token) throw new ApiError(400, "turnstile", "Complete the bot check.");
+  if (!token)
+    throw new ApiError(400, "turnstile", t("error_turnstile_required"));
   const body = new URLSearchParams();
   body.set("secret", env.TURNSTILE_SECRET_KEY);
   body.set("response", token);
@@ -238,7 +210,8 @@ export async function verifyTurnstile(
     { method: "POST", body },
   );
   const data = (await response.json()) as { success?: boolean };
-  if (!data.success) throw new ApiError(400, "turnstile", "Bot check failed.");
+  if (!data.success)
+    throw new ApiError(400, "turnstile", t("error_turnstile_failed"));
 }
 
 export async function audit(
@@ -279,11 +252,7 @@ export async function parseBody<T extends z.ZodType>(
   const body = await c.req.json().catch(() => null);
   const result = schema.safeParse(body);
   if (!result.success) {
-    throw new ApiError(
-      400,
-      "validation",
-      result.error.issues[0]?.message ?? "Invalid request",
-    );
+    throw new ApiError(400, "validation", t("error_validation"));
   }
   return result.data;
 }
@@ -293,7 +262,6 @@ export function publicUser(actor: Actor) {
     id: actor.userId,
     email: actor.email,
     name: actor.name,
-    locale: actor.locale,
     role: actor.role,
     organizationId: actor.organizationId,
   };

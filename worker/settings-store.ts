@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { eq } from "drizzle-orm";
-import brand from "../brand/brand.config";
+import { t } from "../shared/copy";
 import { getDb } from "./db/client";
 import { settings } from "./db/schema";
 
@@ -35,5 +35,5 @@ export async function writeSetting(
 }
 
 export async function instanceName(env: Env): Promise<string> {
-  return readSetting(env, "instance_name", brand.name);
+  return readSetting(env, "instance_name", t("app_name"));
 }

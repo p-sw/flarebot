@@ -2,10 +2,8 @@
 
 import { and, desc, eq, ne } from "drizzle-orm";
 import type { Hono } from "hono";
-import { getCookie } from "hono/cookie";
 import { z } from "zod";
-import { missingTranslationCount } from "../../shared/content";
-import { LOCALE_COOKIE } from "../../shared/locales";
+import { t, textLang } from "../../shared/copy";
 import { describeMailSource } from "../../shared/mail-source";
 import {
   assertScopesWithinRole,
@@ -59,13 +57,11 @@ import {
   type AppEnv,
   assertMutationOrigin,
   audit,
-  clearLocaleCookie,
   clientIp,
   parseBody,
   requestOrigin,
   requireActor,
   requireCan,
-  writeLocaleCookie,
 } from "../http";
 import { enqueueMail } from "../mail/mailer";
 import { deliverWith, resolveMail } from "../mail/resolve";
@@ -77,9 +73,17 @@ import { setServeAtRoot } from "../status/root";
 
 const settingsSchema = z.object({
   instanceName: z.string().min(1).max(80).optional(),
-  defaultLocale: z.enum(["en", "ko"]).optional(),
   authMode: z.enum(["local", "access"]).optional(),
 });
+
+function legacyLocaleColumns() {
+  return {
+    defaultLocale: textLang,
+    localesJson: JSON.stringify([textLang]),
+    sourceLocale: textLang,
+    i18nJson: "{}",
+  };
+}
 
 async function ownerCount(env: Env, organizationId: string): Promise<number> {
   const rows = await getDb(env.DB)
@@ -115,7 +119,6 @@ export function registerManage(app: Hono<AppEnv>): void {
         id: row.id,
         name: row.name,
         type: row.type,
-        locale: row.locale,
         config,
       });
     }
@@ -140,7 +143,7 @@ export function registerManage(app: Hono<AppEnv>): void {
           requireEncryptionKey(c.env),
           JSON.stringify(body.config),
         ),
-        locale: body.locale ?? null,
+        locale: null,
         createdAt: now,
         updatedAt: now,
       });
@@ -168,13 +171,12 @@ export function registerManage(app: Hono<AppEnv>): void {
       .where(eq(notificationChannels.id, c.req.param("id")))
       .get();
     if (!row || row.organizationId !== actor.organizationId)
-      throw new ApiError(404, "not_found", "Channel not found.");
+      throw new ApiError(404, "not_found", t("error_channel_not_found"));
     await db
       .update(notificationChannels)
       .set({
         name: body.name,
         type: body.type,
-        locale: body.locale ?? null,
         configEncrypted: await encryptString(
           requireEncryptionKey(c.env),
           JSON.stringify(body.config),
@@ -205,7 +207,7 @@ export function registerManage(app: Hono<AppEnv>): void {
       .where(eq(notificationChannels.id, c.req.param("id")))
       .get();
     if (!row || row.organizationId !== actor.organizationId)
-      throw new ApiError(404, "not_found", "Channel not found.");
+      throw new ApiError(404, "not_found", t("error_channel_not_found"));
     await db
       .delete(notificationChannels)
       .where(eq(notificationChannels.id, row.id));
@@ -232,11 +234,11 @@ export function registerManage(app: Hono<AppEnv>): void {
       .where(eq(notificationChannels.id, c.req.param("id")))
       .get();
     if (!row || row.organizationId !== actor.organizationId)
-      throw new ApiError(404, "not_found", "Channel not found.");
+      throw new ApiError(404, "not_found", t("error_channel_not_found"));
     const config = JSON.parse(
       await decryptString(requireEncryptionKey(c.env), row.configEncrypted),
     ) as Record<string, unknown>;
-    const sample = sampleChannelText(row.locale, row.name);
+    const sample = sampleChannelText(row.name);
     if (row.type === "email") {
       const settings = await db
         .select()
@@ -255,7 +257,7 @@ export function registerManage(app: Hono<AppEnv>): void {
           {
             error: {
               code: "mail",
-              message: result.message ?? "Email failed",
+              message: result.message ?? t("error_email_failed"),
               stage: result.stage,
             },
           },
@@ -266,15 +268,19 @@ export function registerManage(app: Hono<AppEnv>): void {
     const result = await deliverChannel(
       {
         type: row.type as "discord" | "slack" | "telegram" | "webhook",
-        locale: row.locale,
         config,
       },
-      { kind: "down", monitorName: row.name, reason: "test" },
+      { kind: "down", monitorName: row.name, reason: t("notify_reason_test") },
       {},
     );
     if (!result.ok)
       return c.json(
-        { error: { code: "mail", message: result.error ?? "Delivery failed" } },
+        {
+          error: {
+            code: "mail",
+            message: result.error ?? t("error_delivery_failed"),
+          },
+        },
         400,
       );
     return c.json({ ok: true });
@@ -296,19 +302,6 @@ export function registerManage(app: Hono<AppEnv>): void {
         title: page.title,
         published: page.published,
         serveAtRoot: page.serveAtRoot,
-        locales: JSON.parse(page.localesJson) as string[],
-        missing: missingTranslationCount(
-          ["title", "description", "footer", "banner"],
-          JSON.parse(page.localesJson) as string[],
-          page.sourceLocale,
-          JSON.parse(page.i18nJson),
-          {
-            title: page.title,
-            description: page.description,
-            footer: page.footer,
-            banner: page.banner,
-          },
-        ),
         itemCount: items.filter((item) => item.pageId === page.id).length,
       })),
     });
@@ -320,11 +313,7 @@ export function registerManage(app: Hono<AppEnv>): void {
     requireCan(actor, "status_pages.write");
     const body = await parseBody(c, statusPageWriteSchema);
     if (body.serveAtRoot && !body.published) {
-      throw new ApiError(
-        400,
-        "validation",
-        "Publish the page before serving it at the site root.",
-      );
+      throw new ApiError(400, "validation", t("error_page_publish_root"));
     }
     await assertMonitors(
       c.env,
@@ -337,8 +326,7 @@ export function registerManage(app: Hono<AppEnv>): void {
       .from(statusPages)
       .where(eq(statusPages.slug, body.slug))
       .get();
-    if (clash)
-      throw new ApiError(409, "conflict", "That address is already used.");
+    if (clash) throw new ApiError(409, "conflict", t("error_slug_taken"));
     const id = crypto.randomUUID();
     const now = Date.now();
     await db.insert(statusPages).values({
@@ -346,14 +334,11 @@ export function registerManage(app: Hono<AppEnv>): void {
       organizationId: actor.organizationId,
       slug: body.slug,
       published: body.published,
-      defaultLocale: body.defaultLocale,
-      localesJson: JSON.stringify(body.locales),
-      sourceLocale: body.sourceLocale,
+      ...legacyLocaleColumns(),
       title: body.title,
       description: body.description,
       footer: body.footer,
       banner: body.banner,
-      i18nJson: JSON.stringify(body.i18n),
       logoUrl: body.logoUrl || null,
       accent: body.accent || null,
       createdAt: now,
@@ -367,8 +352,8 @@ export function registerManage(app: Hono<AppEnv>): void {
         position: item.position,
         groupName: item.groupName,
         displayName: item.displayName,
-        sourceLocale: item.sourceLocale,
-        i18nJson: JSON.stringify(item.i18n),
+        sourceLocale: textLang,
+        i18nJson: "{}",
       });
     }
     if (body.serveAtRoot) await setServeAtRoot(c.env, id, true);
@@ -398,12 +383,22 @@ export function registerManage(app: Hono<AppEnv>): void {
       .where(eq(statusPageItems.pageId, page.id));
     items.sort((a, b) => a.position - b.position);
     return c.json({
-      ...page,
-      locales: JSON.parse(page.localesJson),
-      i18n: JSON.parse(page.i18nJson),
+      id: page.id,
+      slug: page.slug,
+      published: page.published,
+      serveAtRoot: page.serveAtRoot,
+      title: page.title,
+      description: page.description,
+      footer: page.footer,
+      banner: page.banner,
+      logoUrl: page.logoUrl,
+      accent: page.accent,
       items: items.map((item) => ({
-        ...item,
-        i18n: JSON.parse(item.i18nJson),
+        id: item.id,
+        monitorId: item.monitorId,
+        position: item.position,
+        groupName: item.groupName,
+        displayName: item.displayName,
       })),
     });
   });
@@ -419,11 +414,7 @@ export function registerManage(app: Hono<AppEnv>): void {
     );
     const body = await parseBody(c, statusPageWriteSchema);
     if (body.serveAtRoot && !body.published) {
-      throw new ApiError(
-        400,
-        "validation",
-        "Publish the page before serving it at the site root.",
-      );
+      throw new ApiError(400, "validation", t("error_page_publish_root"));
     }
     await assertMonitors(
       c.env,
@@ -438,21 +429,16 @@ export function registerManage(app: Hono<AppEnv>): void {
         and(eq(statusPages.slug, body.slug), ne(statusPages.id, current.id)),
       )
       .get();
-    if (clash)
-      throw new ApiError(409, "conflict", "That address is already used.");
+    if (clash) throw new ApiError(409, "conflict", t("error_slug_taken"));
     await db
       .update(statusPages)
       .set({
         slug: body.slug,
         published: body.published,
-        defaultLocale: body.defaultLocale,
-        localesJson: JSON.stringify(body.locales),
-        sourceLocale: body.sourceLocale,
         title: body.title,
         description: body.description,
         footer: body.footer,
         banner: body.banner,
-        i18nJson: JSON.stringify(body.i18n),
         logoUrl: body.logoUrl || null,
         accent: body.accent || null,
         updatedAt: Date.now(),
@@ -469,8 +455,8 @@ export function registerManage(app: Hono<AppEnv>): void {
         position: item.position,
         groupName: item.groupName,
         displayName: item.displayName,
-        sourceLocale: item.sourceLocale,
-        i18nJson: JSON.stringify(item.i18n),
+        sourceLocale: textLang,
+        i18nJson: "{}",
       });
     }
     const serveAtRoot = body.published
@@ -504,11 +490,7 @@ export function registerManage(app: Hono<AppEnv>): void {
     );
     const body = await parseBody(c, statusPageRootSchema);
     if (body.serveAtRoot && !current.published) {
-      throw new ApiError(
-        400,
-        "validation",
-        "Publish the page before serving it at the site root.",
-      );
+      throw new ApiError(400, "validation", t("error_page_publish_root"));
     }
     await setServeAtRoot(c.env, current.id, body.serveAtRoot);
     await audit(
@@ -548,36 +530,15 @@ export function registerManage(app: Hono<AppEnv>): void {
   });
 
   app.get("/api/public/status/:slug", async (c) => {
-    const page = await loadPublicStatus(
-      c.env,
-      c.req.param("slug"),
-      c.req.header("accept-language") ?? null,
-      c.req.query("lang") ?? null,
-      getCookie(c, LOCALE_COOKIE) ?? null,
-    );
-    if (!page) throw new ApiError(404, "not_found", "Status page not found.");
-    const headers: Record<string, string> = {
-      "cache-control": "private, no-store",
-    };
-    if (page.localeSource === "header") headers.vary = "Accept-Language";
-    if (page.localeSource === "cookie") headers.vary = "Cookie";
-    return c.json(page, 200, headers);
+    const page = await loadPublicStatus(c.env, c.req.param("slug"));
+    if (!page) throw new ApiError(404, "not_found", t("error_page_not_found"));
+    return c.json(page, 200, { "cache-control": "private, no-store" });
   });
 
   app.get("/api/public/root", async (c) => {
-    const page = await loadRootPublicStatus(
-      c.env,
-      c.req.header("accept-language") ?? null,
-      c.req.query("lang") ?? null,
-      getCookie(c, LOCALE_COOKIE) ?? null,
-    );
-    if (!page) throw new ApiError(404, "not_found", "Status page not found.");
-    const headers: Record<string, string> = {
-      "cache-control": "private, no-store",
-    };
-    if (page.localeSource === "header") headers.vary = "Accept-Language";
-    if (page.localeSource === "cookie") headers.vary = "Cookie";
-    return c.json(page, 200, headers);
+    const page = await loadRootPublicStatus(c.env);
+    if (!page) throw new ApiError(404, "not_found", t("error_page_not_found"));
+    return c.json(page, 200, { "cache-control": "private, no-store" });
   });
 
   app.get("/api/team", async (c) => {
@@ -638,7 +599,7 @@ export function registerManage(app: Hono<AppEnv>): void {
       });
     const link = `${requestOrigin(c)}/invite/${token}`;
     if (body.email) {
-      const copy = inviteMail(actor.locale, {
+      const copy = inviteMail({
         name: body.email,
         instance: await instanceName(c.env),
         role: body.role,
@@ -669,11 +630,7 @@ export function registerManage(app: Hono<AppEnv>): void {
     requireCan(actor, "users.role");
     const body = await parseBody(c, roleChangeSchema);
     if (body.role === "owner")
-      throw new ApiError(
-        403,
-        "forbidden",
-        "Transfer ownership instead of assigning the owner role.",
-      );
+      throw new ApiError(403, "forbidden", t("error_role_transfer"));
     const db = getDb(c.env.DB);
     const target = await db
       .select()
@@ -686,18 +643,14 @@ export function registerManage(app: Hono<AppEnv>): void {
       )
       .get();
     if (!target || !isRole(target.role))
-      throw new ApiError(404, "not_found", "Member not found.");
+      throw new ApiError(404, "not_found", t("error_member_not_found"));
     if (target.role === "owner" && actor.role !== "owner")
-      throw new ApiError(
-        403,
-        "forbidden",
-        "Only an owner can change another owner.",
-      );
+      throw new ApiError(403, "forbidden", t("error_owner_only"));
     if (
       target.role === "owner" &&
       (await ownerCount(c.env, actor.organizationId)) <= 1
     ) {
-      throw new ApiError(409, "conflict", "Keep at least one owner.");
+      throw new ApiError(409, "conflict", t("error_keep_owner"));
     }
     await db
       .update(memberships)
@@ -731,16 +684,13 @@ export function registerManage(app: Hono<AppEnv>): void {
         ),
       )
       .get();
-    if (!target) throw new ApiError(404, "not_found", "Member not found.");
+    if (!target)
+      throw new ApiError(404, "not_found", t("error_member_not_found"));
     if (target.role === "owner") {
       if (actor.role !== "owner")
-        throw new ApiError(
-          403,
-          "forbidden",
-          "Only an owner can change another owner.",
-        );
+        throw new ApiError(403, "forbidden", t("error_owner_only"));
       if (body.disabled && (await ownerCount(c.env, actor.organizationId)) <= 1)
-        throw new ApiError(409, "conflict", "Keep at least one owner.");
+        throw new ApiError(409, "conflict", t("error_keep_owner"));
     }
     await db
       .update(users)
@@ -766,7 +716,7 @@ export function registerManage(app: Hono<AppEnv>): void {
     requireCan(actor, "instance.transfer");
     const body = await parseBody(c, z.object({ userId: z.string().uuid() }));
     if (body.userId === actor.userId)
-      throw new ApiError(400, "validation", "Pick a different member.");
+      throw new ApiError(400, "validation", t("error_pick_member"));
     const db = getDb(c.env.DB);
     const target = await db
       .select()
@@ -778,18 +728,15 @@ export function registerManage(app: Hono<AppEnv>): void {
         ),
       )
       .get();
-    if (!target) throw new ApiError(404, "not_found", "Member not found.");
+    if (!target)
+      throw new ApiError(404, "not_found", t("error_member_not_found"));
     const user = await db
       .select()
       .from(users)
       .where(eq(users.id, target.userId))
       .get();
     if (!user || user.disabled)
-      throw new ApiError(
-        400,
-        "validation",
-        "That member cannot become the owner.",
-      );
+      throw new ApiError(400, "validation", t("error_cannot_own"));
     const mine = await db
       .select()
       .from(memberships)
@@ -800,8 +747,7 @@ export function registerManage(app: Hono<AppEnv>): void {
         ),
       )
       .get();
-    if (!mine)
-      throw new ApiError(403, "forbidden", "Owner membership is missing.");
+    if (!mine) throw new ApiError(403, "forbidden", t("error_owner_missing"));
     await db
       .update(memberships)
       .set({ role: "owner" })
@@ -837,13 +783,15 @@ export function registerManage(app: Hono<AppEnv>): void {
         ),
       )
       .get();
-    if (!target) throw new ApiError(404, "not_found", "Member not found.");
+    if (!target)
+      throw new ApiError(404, "not_found", t("error_member_not_found"));
     const user = await db
       .select()
       .from(users)
       .where(eq(users.id, target.userId))
       .get();
-    if (!user) throw new ApiError(404, "not_found", "Member not found.");
+    if (!user)
+      throw new ApiError(404, "not_found", t("error_member_not_found"));
     const token = randomToken();
     await db.insert(emailTokens).values({
       id: crypto.randomUUID(),
@@ -855,7 +803,7 @@ export function registerManage(app: Hono<AppEnv>): void {
       attempts: 0,
     });
     const link = `${requestOrigin(c)}/reset/${token}`;
-    const copy = resetMail(user.locale, {
+    const copy = resetMail({
       instance: await instanceName(c.env),
       link,
     });
@@ -900,11 +848,7 @@ export function registerManage(app: Hono<AppEnv>): void {
     requireCan(actor, "tokens.write");
     const body = await parseBody(c, tokenCreateSchema);
     if (!assertScopesWithinRole(actor.role, body.scopes)) {
-      throw new ApiError(
-        403,
-        "forbidden",
-        "Those scopes are wider than your role.",
-      );
+      throw new ApiError(403, "forbidden", t("error_scopes"));
     }
     const raw = randomToken("flb_");
     const id = crypto.randomUUID();
@@ -944,13 +888,9 @@ export function registerManage(app: Hono<AppEnv>): void {
       .where(eq(apiTokens.id, c.req.param("id")))
       .get();
     if (!row || row.organizationId !== actor.organizationId)
-      throw new ApiError(404, "not_found", "Token not found.");
+      throw new ApiError(404, "not_found", t("error_token_not_found"));
     if (row.createdBy !== actor.userId && !can(actor, "users.role"))
-      throw new ApiError(
-        403,
-        "forbidden",
-        "You can only revoke your own tokens.",
-      );
+      throw new ApiError(403, "forbidden", t("error_token_revoke"));
     await db
       .update(apiTokens)
       .set({ revokedAt: Date.now() })
@@ -991,7 +931,6 @@ export function registerManage(app: Hono<AppEnv>): void {
     requireCan(actor, "instance.settings");
     return c.json({
       instanceName: await instanceName(c.env),
-      defaultLocale: await readSetting(c.env, "default_locale", "en"),
       authMode: await readSetting(c.env, "auth_mode", "local"),
       turnstile: Boolean(c.env.TURNSTILE_SITE_KEY),
     });
@@ -1003,16 +942,10 @@ export function registerManage(app: Hono<AppEnv>): void {
     requireCan(actor, "instance.settings");
     const body = await parseBody(c, settingsSchema);
     if (body.authMode === "access") {
-      throw new ApiError(
-        501,
-        "not_implemented",
-        "Cloudflare Access mode is stored for later and is not enforced in this version.",
-      );
+      throw new ApiError(501, "not_implemented", t("error_access_later"));
     }
     if (body.instanceName)
       await writeSetting(c.env, "instance_name", body.instanceName);
-    if (body.defaultLocale)
-      await writeSetting(c.env, "default_locale", body.defaultLocale);
     if (body.authMode) await writeSetting(c.env, "auth_mode", body.authMode);
     await audit(
       c.env,
@@ -1112,7 +1045,8 @@ export function registerManage(app: Hono<AppEnv>): void {
     const parsed = z
       .object({ email: z.string().email().optional() })
       .safeParse(raw ?? {});
-    if (!parsed.success) throw new ApiError(400, "validation", "Invalid email");
+    if (!parsed.success)
+      throw new ApiError(400, "validation", t("error_invalid_email"));
     const body = parsed.data;
     const db = getDb(c.env.DB);
     const row = await db
@@ -1121,7 +1055,7 @@ export function registerManage(app: Hono<AppEnv>): void {
       .where(eq(mailSettings.id, 1))
       .get();
     const resolved = await resolveMail(c.env, row ?? null);
-    const copy = testMail(actor.locale, await instanceName(c.env));
+    const copy = testMail(await instanceName(c.env));
     const result = await deliverWith(c.env, resolved, {
       to: body.email ?? actor.email,
       subject: copy.subject,
@@ -1143,7 +1077,7 @@ export function registerManage(app: Hono<AppEnv>): void {
         {
           error: {
             code: "mail",
-            message: result.message ?? "Email failed",
+            message: result.message ?? t("error_email_failed"),
             stage: result.stage ?? "send",
           },
         },
@@ -1168,7 +1102,6 @@ export function registerManage(app: Hono<AppEnv>): void {
       id: actor.userId,
       name: actor.name,
       email: actor.email,
-      locale: actor.locale,
       role: actor.role,
       totpEnabled: user?.totpEnabled ?? false,
       hasPassword: Boolean(user?.passwordHash),
@@ -1184,15 +1117,12 @@ export function registerManage(app: Hono<AppEnv>): void {
     const actor = await requireActor(c);
     assertMutationOrigin(c, actor);
     const body = await parseBody(c, accountPatchSchema);
-    const patch: { name?: string; locale?: string | null } = {};
-    if (body.name) patch.name = body.name;
-    if (body.locale !== undefined) patch.locale = body.locale;
-    await getDb(c.env.DB)
-      .update(users)
-      .set(patch)
-      .where(eq(users.id, actor.userId));
-    if (body.locale) writeLocaleCookie(c, body.locale);
-    else if (body.locale === null) clearLocaleCookie(c);
+    if (body.name) {
+      await getDb(c.env.DB)
+        .update(users)
+        .set({ name: body.name })
+        .where(eq(users.id, actor.userId));
+    }
     return c.json({ ok: true });
   });
 
@@ -1210,7 +1140,7 @@ export function registerManage(app: Hono<AppEnv>): void {
       !user?.passwordHash ||
       !(await verifyPassword(body.currentPassword, user.passwordHash))
     ) {
-      throw new ApiError(401, "unauthorized", "Current password is incorrect.");
+      throw new ApiError(401, "unauthorized", t("error_password_current"));
     }
     await db
       .update(users)
@@ -1250,12 +1180,12 @@ export function registerManage(app: Hono<AppEnv>): void {
       .where(eq(users.id, actor.userId))
       .get();
     if (!user?.totpPending)
-      throw new ApiError(400, "validation", "Start authenticator setup first.");
+      throw new ApiError(400, "validation", t("error_totp_start"));
     const secret = b64ToBytes(
       await decryptString(requireEncryptionKey(c.env), user.totpPending),
     );
     if (!(await verifyTotp(secret, body.code, Date.now())))
-      throw new ApiError(401, "totp_invalid", "That code was not accepted.");
+      throw new ApiError(401, "totp_invalid", t("error_totp_invalid"));
     await db
       .update(users)
       .set({
@@ -1310,11 +1240,7 @@ export function registerManage(app: Hono<AppEnv>): void {
           )
         : false;
     if (!passwordOk && !totpOk)
-      throw new ApiError(
-        401,
-        "unauthorized",
-        "Confirm with your password or authenticator code.",
-      );
+      throw new ApiError(401, "unauthorized", t("error_passkey_confirm"));
     await db
       .update(users)
       .set({ totpEnabled: false, totpSecret: null, totpPending: null })
@@ -1332,7 +1258,7 @@ export function registerManage(app: Hono<AppEnv>): void {
       .where(eq(credentials.id, c.req.param("id")))
       .get();
     if (!key || key.userId !== actor.userId)
-      throw new ApiError(404, "not_found", "Passkey not found.");
+      throw new ApiError(404, "not_found", t("error_passkey_not_found"));
     await db.delete(credentials).where(eq(credentials.id, key.id));
     return c.json({ ok: true });
   });
@@ -1349,7 +1275,7 @@ async function ownedPage(env: Env, organizationId: string, id: string) {
       ),
     )
     .get();
-  if (!page) throw new ApiError(404, "not_found", "Status page not found.");
+  if (!page) throw new ApiError(404, "not_found", t("error_page_not_found"));
   return page;
 }
 
@@ -1361,5 +1287,5 @@ async function assertMonitors(env: Env, organizationId: string, ids: string[]) {
     .where(eq(monitors.organizationId, organizationId));
   const known = new Set(rows.map((row) => row.id));
   if (ids.some((id) => !known.has(id)))
-    throw new ApiError(400, "validation", "Unknown monitor.");
+    throw new ApiError(400, "validation", t("error_unknown_monitor"));
 }

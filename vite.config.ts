@@ -1,9 +1,30 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
+
+function localeHtml(): Plugin {
+  return {
+    name: "flarebot-locale-html",
+    transformIndexHtml(html) {
+      const locale = JSON.parse(
+        readFileSync(
+          path.resolve(import.meta.dirname, "brand/locale.json"),
+          "utf8",
+        ),
+      ) as { lang: string; messages: { app_name: string } };
+      const title = locale.messages.app_name
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+      return html
+        .replaceAll("%locale.lang%", locale.lang)
+        .replaceAll("%locale.app_name%", title);
+    },
+  };
+}
 
 function brandUi(): Plugin {
   return {
@@ -25,6 +46,7 @@ function brandUi(): Plugin {
 
 export default defineConfig({
   plugins: [
+    localeHtml(),
     brandUi(),
     react(),
     tailwindcss(),

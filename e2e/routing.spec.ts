@@ -99,9 +99,6 @@ async function createPage(
     data: {
       slug,
       published: true,
-      defaultLocale: "en",
-      locales: ["en"],
-      sourceLocale: "en",
       title,
       description: "",
       items: [],

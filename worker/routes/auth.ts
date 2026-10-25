@@ -7,7 +7,7 @@ import type {
 import { and, eq, isNull } from "drizzle-orm";
 import type { Hono } from "hono";
 import { z } from "zod";
-import brand from "../../brand/brand.config";
+import { t } from "../../shared/copy";
 import {
   acceptInviteSchema,
   forgotSchema,
@@ -87,10 +87,9 @@ export function registerAuth(app: Hono<AppEnv>): void {
     const db = getDb(c.env.DB);
     const owner = await db.select({ id: users.id }).from(users).limit(1).get();
     return c.json({
-      name: brand.name,
+      name: t("app_name"),
       setupRequired: !owner,
       turnstileSiteKey: c.env.TURNSTILE_SITE_KEY ?? null,
-      defaultLocale: brand.defaultLocale,
     });
   });
 
@@ -100,11 +99,11 @@ export function registerAuth(app: Hono<AppEnv>): void {
       throw new ApiError(
         503,
         "setup_unavailable",
-        "SETUP_SECRET is not configured.",
+        t("error_setup_unavailable"),
       );
     await verifyTurnstile(c.env, body.turnstileToken, clientIp(c));
     if (!timingSafeSecret(body.setupSecret, c.env.SETUP_SECRET)) {
-      throw new ApiError(401, "bad_secret", "The setup secret does not match.");
+      throw new ApiError(401, "bad_secret", t("error_bad_secret"));
     }
     const db = getDb(c.env.DB);
     const existing = await db
@@ -113,18 +112,14 @@ export function registerAuth(app: Hono<AppEnv>): void {
       .limit(1)
       .get();
     if (existing)
-      throw new ApiError(
-        409,
-        "setup_closed",
-        "This instance already has an owner.",
-      );
+      throw new ApiError(409, "setup_closed", t("error_setup_closed"));
     const now = Date.now();
     const orgId = crypto.randomUUID();
     const userId = crypto.randomUUID();
     const email = body.email.toLowerCase();
     await db
       .insert(organizations)
-      .values({ id: orgId, name: brand.name, createdAt: now });
+      .values({ id: orgId, name: t("app_name"), createdAt: now });
     await db.insert(users).values({
       id: userId,
       email,
@@ -134,7 +129,7 @@ export function registerAuth(app: Hono<AppEnv>): void {
       totpPending: null,
       totpEnabled: false,
       disabled: false,
-      locale: body.locale ?? brand.defaultLocale,
+      locale: null,
       createdAt: now,
     });
     await db.insert(memberships).values({
@@ -146,7 +141,8 @@ export function registerAuth(app: Hono<AppEnv>): void {
     });
     await createSession(c, userId, "setup");
     const actor = await actorForUser(c.env, userId);
-    if (!actor) throw new ApiError(500, "internal", "Session was not stored.");
+    if (!actor)
+      throw new ApiError(500, "internal", t("error_session_not_stored"));
     await audit(
       c.env,
       actor,
@@ -170,11 +166,7 @@ export function registerAuth(app: Hono<AppEnv>): void {
       .where(eq(loginAttempts.email, email))
       .get();
     if (attempt?.lockedUntil && attempt.lockedUntil > Date.now()) {
-      throw new ApiError(
-        429,
-        "locked",
-        "This account is locked after too many sign-in attempts.",
-      );
+      throw new ApiError(429, "locked", t("error_locked"));
     }
     const user = await db
       .select()
@@ -186,27 +178,19 @@ export function registerAuth(app: Hono<AppEnv>): void {
       : false;
     if (!user || user.disabled || !passwordOk) {
       await noteFailure(c.env, email);
-      throw new ApiError(
-        401,
-        "unauthorized",
-        "Email or password is incorrect.",
-      );
+      throw new ApiError(401, "unauthorized", t("error_bad_credentials"));
     }
     if (user.totpEnabled) {
       if (!body.totp)
-        throw new ApiError(
-          401,
-          "totp_required",
-          "Enter the 6-digit code from your authenticator.",
-        );
+        throw new ApiError(401, "totp_required", t("error_totp_required"));
       if (!user.totpSecret)
-        throw new ApiError(401, "totp_invalid", "That code was not accepted.");
+        throw new ApiError(401, "totp_invalid", t("error_totp_invalid"));
       const secret = b64ToBytes(
         await decryptString(requireEncryptionKey(c.env), user.totpSecret),
       );
       if (!(await verifyTotp(secret, body.totp, Date.now()))) {
         await noteFailure(c.env, email);
-        throw new ApiError(401, "totp_invalid", "That code was not accepted.");
+        throw new ApiError(401, "totp_invalid", t("error_totp_invalid"));
       }
     }
     await db.delete(loginAttempts).where(eq(loginAttempts.email, email));
@@ -216,7 +200,8 @@ export function registerAuth(app: Hono<AppEnv>): void {
       user.totpEnabled ? "password+totp" : "password",
     );
     const actor = await actorForUser(c.env, user.id);
-    if (!actor) throw new ApiError(500, "internal", "Session was not stored.");
+    if (!actor)
+      throw new ApiError(500, "internal", t("error_session_not_stored"));
     return c.json({ user: publicUser(actor) });
   });
 
@@ -246,7 +231,7 @@ export function registerAuth(app: Hono<AppEnv>): void {
       response?: AuthenticationResponseJSON;
     };
     if (!body.response)
-      throw new ApiError(400, "validation", "Missing passkey response");
+      throw new ApiError(400, "validation", t("error_passkey_missing"));
     const userId = await verifyAuthentication(c, body.response);
     const user = await getDb(c.env.DB)
       .select()
@@ -254,10 +239,11 @@ export function registerAuth(app: Hono<AppEnv>): void {
       .where(eq(users.id, userId))
       .get();
     if (!user || user.disabled)
-      throw new ApiError(401, "unauthorized", "This account cannot sign in.");
+      throw new ApiError(401, "unauthorized", t("error_account_disabled"));
     await createSession(c, user.id, "passkey");
     const actor = await actorForUser(c.env, user.id);
-    if (!actor) throw new ApiError(500, "internal", "Session was not stored.");
+    if (!actor)
+      throw new ApiError(500, "internal", t("error_session_not_stored"));
     return c.json({ user: publicUser(actor) });
   });
 
@@ -279,7 +265,7 @@ export function registerAuth(app: Hono<AppEnv>): void {
       deviceName?: string;
     };
     if (!body.response)
-      throw new ApiError(400, "validation", "Missing passkey response");
+      throw new ApiError(400, "validation", t("error_passkey_missing"));
     const created = await verifyRegistration(
       c,
       actor.userId,
@@ -292,7 +278,7 @@ export function registerAuth(app: Hono<AppEnv>): void {
       "account.passkey",
       created.id,
       null,
-      { deviceName: body.deviceName ?? "Passkey" },
+      { deviceName: body.deviceName ?? t("passkey_default_name") },
       clientIp(c),
     );
     return c.json(created, 201);
@@ -320,7 +306,7 @@ export function registerAuth(app: Hono<AppEnv>): void {
         attempts: 0,
       });
       const link = `${requestOrigin(c)}/reset/${token}`;
-      const copy = resetMail(user.locale, {
+      const copy = resetMail({
         instance: await instanceName(c.env),
         link,
       });
@@ -353,11 +339,7 @@ export function registerAuth(app: Hono<AppEnv>): void {
           .update(emailTokens)
           .set({ attempts: row.attempts + 1 })
           .where(eq(emailTokens.id, row.id));
-      throw new ApiError(
-        400,
-        "validation",
-        "This reset link is no longer valid.",
-      );
+      throw new ApiError(400, "validation", t("error_reset_invalid"));
     }
     await db
       .update(users)
@@ -385,7 +367,7 @@ export function registerAuth(app: Hono<AppEnv>): void {
       )
       .get();
     if (!invite || invite.expiresAt < Date.now())
-      throw new ApiError(404, "not_found", "This invite is no longer valid.");
+      throw new ApiError(404, "not_found", t("error_invite_invalid"));
     return c.json({ role: invite.role, email: invite.email });
   });
 
@@ -398,29 +380,20 @@ export function registerAuth(app: Hono<AppEnv>): void {
       .where(eq(invites.tokenHash, await sha256Hex(body.token)))
       .get();
     if (!invite || invite.usedAt || invite.expiresAt < Date.now()) {
-      throw new ApiError(404, "not_found", "This invite is no longer valid.");
+      throw new ApiError(404, "not_found", t("error_invite_invalid"));
     }
     if (invite.role === "owner")
-      throw new ApiError(400, "validation", "Invites cannot create an owner.");
+      throw new ApiError(400, "validation", t("error_invite_owner"));
     const email = body.email.toLowerCase();
     if (invite.email && invite.email.toLowerCase() !== email) {
-      throw new ApiError(
-        400,
-        "validation",
-        "Use the email address this invite was sent to.",
-      );
+      throw new ApiError(400, "validation", t("error_invite_email"));
     }
     const existing = await db
       .select()
       .from(users)
       .where(eq(users.email, email))
       .get();
-    if (existing)
-      throw new ApiError(
-        409,
-        "conflict",
-        "An account with that email already exists.",
-      );
+    if (existing) throw new ApiError(409, "conflict", t("error_email_taken"));
     const now = Date.now();
     const userId = crypto.randomUUID();
     await db.insert(users).values({
@@ -432,7 +405,7 @@ export function registerAuth(app: Hono<AppEnv>): void {
       totpPending: null,
       totpEnabled: false,
       disabled: false,
-      locale: brand.defaultLocale,
+      locale: null,
       createdAt: now,
     });
     await db.insert(memberships).values({

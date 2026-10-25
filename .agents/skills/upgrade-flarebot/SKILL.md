@@ -21,10 +21,10 @@ During the merge, keep the deployer's `brand/` tree. Resolve conflicts in `brand
 ## Verification
 
 ```bash
-pnpm i18n:check
+pnpm copy:check
 pnpm typecheck
 pnpm test
 pnpm brand:check
 ```
 
-Do not commit `.dev.vars`, `src/paraglide/`, or `worker-configuration.d.ts`.
+Do not commit `.dev.vars` or `worker-configuration.d.ts`. Keep the deployer's `brand/locale.json` when upstream only changes English wording you have already translated.

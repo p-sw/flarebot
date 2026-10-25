@@ -2,6 +2,7 @@
 
 import { and, desc, eq, gte } from "drizzle-orm";
 import type { Hono } from "hono";
+import { t } from "../../shared/copy";
 import { can } from "../../shared/permissions";
 import { monitorWriteSchema, parseMonitorConfig } from "../../shared/schemas";
 import { sha256Hex } from "../crypto/secret";
@@ -130,11 +131,7 @@ export function registerMonitors(app: Hono<AppEnv>): void {
     const body = await parseBody(c, monitorWriteSchema);
     const parsed = parseMonitorConfig(body.type, body.config);
     if (!parsed.success)
-      throw new ApiError(
-        400,
-        "validation",
-        parsed.error.issues[0]?.message ?? "Invalid monitor",
-      );
+      throw new ApiError(400, "validation", t("error_invalid_monitor"));
     const db = getDb(c.env.DB);
     await assertChannels(c.env, actor.organizationId, body.channelIds);
     const now = Date.now();
@@ -172,7 +169,8 @@ export function registerMonitors(app: Hono<AppEnv>): void {
       .from(monitors)
       .where(eq(monitors.id, id))
       .get();
-    if (!row) throw new ApiError(500, "internal", "Monitor was not stored.");
+    if (!row)
+      throw new ApiError(500, "internal", t("error_monitor_not_stored"));
     if (body.paused) {
       const state = { ...initialState(now), status: "paused" as const };
       await saveRuntime(c.env.DB, id, state);
@@ -253,11 +251,7 @@ export function registerMonitors(app: Hono<AppEnv>): void {
     const body = await parseBody(c, monitorWriteSchema);
     const parsed = parseMonitorConfig(body.type, body.config);
     if (!parsed.success)
-      throw new ApiError(
-        400,
-        "validation",
-        parsed.error.issues[0]?.message ?? "Invalid monitor",
-      );
+      throw new ApiError(400, "validation", t("error_invalid_monitor"));
     await assertChannels(c.env, actor.organizationId, body.channelIds);
     const db = getDb(c.env.DB);
     let pushHash = current.pushTokenHash;
@@ -302,7 +296,8 @@ export function registerMonitors(app: Hono<AppEnv>): void {
       .from(monitors)
       .where(eq(monitors.id, current.id))
       .get();
-    if (!row) throw new ApiError(500, "internal", "Monitor was not stored.");
+    if (!row)
+      throw new ApiError(500, "internal", t("error_monitor_not_stored"));
     const live = await schedulerStub(c.env, row.shardId)
       .getOne(row.id)
       .catch(() => null);
@@ -487,7 +482,8 @@ export function registerMonitors(app: Hono<AppEnv>): void {
       .from(outages)
       .where(eq(outages.id, c.req.param("id")))
       .get();
-    if (!outage) throw new ApiError(404, "not_found", "Outage not found.");
+    if (!outage)
+      throw new ApiError(404, "not_found", t("error_outage_not_found"));
     await ownedMonitor(c.env, actor.organizationId, outage.monitorId);
     await db
       .update(outages)
@@ -568,7 +564,7 @@ async function ownedMonitor(env: Env, organizationId: string, id: string) {
       and(eq(monitors.id, id), eq(monitors.organizationId, organizationId)),
     )
     .get();
-  if (!row) throw new ApiError(404, "not_found", "Monitor not found.");
+  if (!row) throw new ApiError(404, "not_found", t("error_monitor_not_found"));
   return row;
 }
 
@@ -581,5 +577,5 @@ async function assertChannels(env: Env, organizationId: string, ids: string[]) {
     .where(eq(notificationChannels.organizationId, organizationId));
   const known = new Set(rows.map((row) => row.id));
   if (ids.some((id) => !known.has(id)))
-    throw new ApiError(400, "validation", "Unknown notification channel.");
+    throw new ApiError(400, "validation", t("error_unknown_channel"));
 }

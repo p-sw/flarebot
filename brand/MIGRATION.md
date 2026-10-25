@@ -4,7 +4,8 @@
 
 Current contract:
 
-- `defineBrand` fields: `brandApi`, `name`, `logo.light`, `logo.dark`, `defaultLocale` (`en` or `ko`), `motion` (`calm`, `crisp`, `playful`, `none`), optional `links.home`, `links.source`, and `links.docs`. The stock config sets `links.source` to the GitHub repository, and the footer shows that link. Omit `links.source` to hide it.
+- `defineBrand` fields: `brandApi`, `name`, `logo.light`, `logo.dark`, `motion` (`calm`, `crisp`, `playful`, `none`), optional `links.home`, `links.source`, and `links.docs`. `defaultLocale` was removed. Delete it from a local config or typecheck fails. The stock config sets `links.source` to the GitHub repository, and the footer shows that link. Omit `links.source` to hide it. The name on screen and in mail is `messages.app_name` in `brand/locale.json`, not `name`.
+- `brand/locale.json` is the only copy file. `lang` is a BCP 47 tag. `brand/copy/` and `locales/` are gone. Translate `brand/locale.json` in place. Do not add a second language file.
 - `defineMotion` fields: `spring.soft`, `spring.snappy`, optional `spring.drawer`, `page` (`slide-up`, `fade`, `none`), `stagger`, `distance`, optional `sidebarMs`. Omitted `spring.drawer` and `sidebarMs` receive defaults (`420/40` and `180`). `page: "none"` also skips sidebar movement. `brandApi` stays `1`.
 - Slot props:
   - `AppHeader({ title, actions })`

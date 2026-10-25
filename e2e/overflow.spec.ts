@@ -32,9 +32,6 @@ test("key pages do not overflow at mobile widths", async ({ page }) => {
     data: {
       slug,
       published: true,
-      defaultLocale: "en",
-      locales: ["en", "ko"],
-      sourceLocale: "en",
       title: "Mobile status",
       description: "Narrow layout",
       items: [
@@ -43,7 +40,6 @@ test("key pages do not overflow at mobile widths", async ({ page }) => {
           position: 0,
           groupName: "Core",
           displayName: "Mobile heartbeat with a long public name",
-          sourceLocale: "en",
         },
       ],
     },

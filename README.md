@@ -17,10 +17,10 @@ Flarebot checks HTTP, TCP, DNS, certificate expiry, and heartbeat endpoints, con
 - HTTP, TCP, DNS, SSL expiry (CT-log estimate), and heartbeat monitors
 - Pending, then down, so a single blip does not page anyone
 - Email (SMTP or Cloudflare Email Service), Discord, Slack, Telegram, and webhooks
-- Status pages with per-field translations and a language switcher
+- Public status pages with a title, description, banner, and footer
 - Uptime and response charts from local rollups
 - Owner, Admin, Editor, and Viewer roles, passkeys, passwords, optional TOTP, and scoped API tokens
-- Admin UI in English and Korean
+- One English copy file. A fork translates `brand/locale.json` to switch the whole product language
 - Rebrand by editing `brand/` and asking your own coding agent
 
 <p align="center">
@@ -82,7 +82,7 @@ Details: [docs/configuration.md](docs/configuration.md). Email behavior: [docs/e
 
 The files a deployer is meant to change live in [`brand/`](brand/). Colors, type, motion, copy, logos, and a few slot components are there so a later `git pull` of Flarebot does not fight your theme.
 
-Ask your agent to follow [AGENTS.md](AGENTS.md). The skills in [`.agents/skills/`](.agents/skills/) cover a rebrand, ejecting a component, upgrading, adding a language, a notification channel, a monitor type, or a mail driver. `pnpm brand:check` fails if a rebrand spills outside `brand/`.
+Ask your agent to follow [AGENTS.md](AGENTS.md). The skills in [`.agents/skills/`](.agents/skills/) cover a rebrand, translating the UI, ejecting a component, upgrading, a notification channel, a monitor type, or a mail driver. `pnpm brand:check` fails if a rebrand spills outside `brand/`.
 
 ## Updating
 

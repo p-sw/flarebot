@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Fails when public repository text contains a non-Latin script.
-// Locale catalogs other than English, and optional translated READMEs, are exempt.
+// Fails when repository text contains a non-Latin script.
+// brand/locale.json is the one file a deployment may translate.
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
@@ -13,7 +13,6 @@ const skipDir = new Set([
   "node_modules",
   "dist",
   ".wrangler",
-  "src/paraglide",
   ".generated",
   ".brand-preview",
   "playwright-report",
@@ -39,20 +38,7 @@ const textExt = new Set([
 
 export function exempt(file) {
   const normalized = file.split(path.sep).join("/");
-  if (normalized === "locales/en.json") return false;
-  if (normalized.startsWith("locales/") && normalized.endsWith(".json"))
-    return true;
-  if (
-    normalized.startsWith("brand/copy/") &&
-    normalized !== "brand/copy/en.json"
-  )
-    return true;
-  if (
-    /^README\.[a-z]{2}(-[A-Za-z]+)?\.md$/.test(path.basename(normalized)) &&
-    normalized !== "README.md"
-  )
-    return true;
-  return false;
+  return normalized === "brand/locale.json";
 }
 
 export function scanText(label, text) {
@@ -98,9 +84,7 @@ function main() {
   }
 
   if (problems.length > 0) {
-    console.error(
-      "Non-Latin text is only allowed in locale catalogs and translated READMEs:",
-    );
+    console.error("Non-Latin text is only allowed in brand/locale.json:");
     for (const problem of problems.slice(0, 40)) console.error(`  ${problem}`);
     process.exit(1);
   }

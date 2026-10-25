@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { Hono } from "hono";
+import { t } from "../shared/copy";
 import { registerFrontDoor } from "./front-door";
 import { ApiError, type AppEnv } from "./http";
 import { registerAuth } from "./routes/auth";
@@ -18,7 +19,7 @@ export function createApp(): Hono<AppEnv> {
     }
     console.error(error);
     return c.json(
-      { error: { code: "internal", message: "Something went wrong." } },
+      { error: { code: "internal", message: t("error_internal") } },
       500,
     );
   });
@@ -27,7 +28,10 @@ export function createApp(): Hono<AppEnv> {
   registerManage(app);
   registerFrontDoor(app);
   app.all("/api/*", (c) =>
-    c.json({ error: { code: "not_found", message: "Not found." } }, 404),
+    c.json(
+      { error: { code: "not_found", message: t("error_api_not_found") } },
+      404,
+    ),
   );
   app.all("*", async (c) => c.env.ASSETS.fetch(c.req.raw));
   return app;

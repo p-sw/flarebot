@@ -14,6 +14,6 @@ Secrets and variables live in `.dev.vars` locally and in Worker secrets in produ
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | no         | When the secret is set, setup and login require a Turnstile token.                                                  |
 | `ALLOW_TEST_MAIL`                            | tests only | Set to `1` to allow the in-memory `test` mail driver. Do not set this in production.                                |
 
-`DEFAULT_LOCALE` in `wrangler.jsonc` is `en`. The Owner can change the instance name in Settings. That name is used in invitation, password-reset, and test email. Each person's language is stored on the account and overrides the browser's `Accept-Language` and `navigator.languages`. Sign-in is the built-in account form. The API rejects `authMode: "access"`.
+The product language is `lang` in `brand/locale.json`. That value is the document language and the `Intl` locale for dates and numbers. There is no `DEFAULT_LOCALE` binding, no account language setting, and no `Accept-Language` detection. The Owner can change the instance name in Settings. That name is used in invitation, password-reset, and test email. When it is empty, those messages use `app_name` from the locale file. Sign-in is the built-in account form. The API rejects `authMode: "access"`.
 
 Minimum monitor interval is 60 seconds. Faster intervals are rejected until a later release.

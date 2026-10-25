@@ -18,7 +18,11 @@ async function api(
 ): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("origin", origin);
-  if (cookie) headers.set("cookie", `flarebot_session=${cookie}`);
+  if (cookie) {
+    const existing = headers.get("cookie");
+    const session = `flarebot_session=${cookie}`;
+    headers.set("cookie", existing ? `${existing}; ${session}` : session);
+  }
   if (init.body && !headers.has("content-type"))
     headers.set("content-type", "application/json");
   return app.request(`${origin}${path}`, { ...init, headers }, env);
@@ -219,20 +223,14 @@ describe("flarebot API", () => {
         body: JSON.stringify({
           slug: "main",
           published: true,
-          defaultLocale: "en",
-          locales: ["en", "ko"],
-          sourceLocale: "en",
           title: "Status",
           description: "All services",
-          i18n: { ko: { title: "Status KO" } },
           items: [
             {
               monitorId: id,
               position: 0,
               groupName: "Core",
               displayName: "Heartbeat",
-              sourceLocale: "en",
-              i18n: {},
             },
           ],
         }),
@@ -240,13 +238,18 @@ describe("flarebot API", () => {
       owner,
     );
     expect(page.status).toBe(201);
-    const pub = await api("/api/public/status/main?lang=ko");
+    const pub = await api("/api/public/status/main?lang=ko", {
+      headers: {
+        "accept-language": "ko-KR,ko;q=0.9",
+        cookie: "locale=ko",
+      },
+    });
     expect(pub.status).toBe(200);
     const body = (await pub.json()) as {
       title: string;
       groups: { items: { status: string }[] }[];
     };
-    expect(body.title).toBe("Status KO");
+    expect(body.title).toBe("Status");
     expect(JSON.stringify(body)).not.toContain("push");
     expect(body.groups[0]?.items[0]?.status).toBe("up");
   });
@@ -355,7 +358,7 @@ describe("flarebot API", () => {
     );
   });
 
-  it("persists the account language and returns it after reload", async () => {
+  it("leaves a stored user locale unused and does not set a locale cookie", async () => {
     const owner = await (async () => {
       const login = await api("/api/auth/login", {
         method: "POST",
@@ -371,20 +374,28 @@ describe("flarebot API", () => {
       if (!match?.[1]) throw new Error("missing session");
       return match[1];
     })();
+    await env.DB.prepare("UPDATE users SET locale = ? WHERE email = ?")
+      .bind("ko", "ada@example.com")
+      .run();
+    const account = await api(
+      "/api/account",
+      { headers: { "accept-language": "ko", cookie: "locale=ko" } },
+      owner,
+    );
+    expect(account.status).toBe(200);
+    expect(await account.json()).not.toHaveProperty("locale");
     const patched = await api(
       "/api/account",
-      { method: "PATCH", body: JSON.stringify({ locale: "ko" }) },
+      { method: "PATCH", body: JSON.stringify({ locale: "ja" }) },
       owner,
     );
     expect(patched.status).toBe(200);
     expect(
-      patched.headers
-        .getSetCookie()
-        .some((item) => item.startsWith("locale=ko")),
-    ).toBe(true);
-    const account = (await (await api("/api/account", {}, owner)).json()) as {
-      locale: string;
-    };
-    expect(account.locale).toBe("ko");
+      patched.headers.getSetCookie().some((item) => item.startsWith("locale=")),
+    ).toBe(false);
+    const row = await env.DB.prepare("SELECT locale FROM users WHERE email = ?")
+      .bind("ada@example.com")
+      .first<{ locale: string }>();
+    expect(row?.locale).toBe("ko");
   });
 });

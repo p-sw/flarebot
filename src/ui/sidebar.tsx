@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import * as Dialog from "@radix-ui/react-dialog";
+import { t } from "@shared/copy";
 import { useRouterState } from "@tanstack/react-router";
 import { Menu, PanelLeft, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
@@ -13,7 +14,6 @@ import {
 } from "react";
 import { cn } from "../lib/cn";
 import { useMotionPrefs } from "../motion/page";
-import { m } from "../paraglide/messages.js";
 import { Button } from "./button";
 
 const STORAGE_KEY = "sidebar-open";
@@ -175,7 +175,7 @@ export function Sidebar({ children }: { children: ReactNode }) {
                   transition={motionPrefs.drawer}
                 >
                   <Dialog.Title className="sr-only">
-                    {m.nav_main()}
+                    {t("nav_main")}
                   </Dialog.Title>
                   {children}
                 </motion.div>
@@ -219,7 +219,7 @@ export function SidebarHeader({ children }: { children: ReactNode }) {
             size="icon"
             variant="ghost"
             className="text-sidebar-foreground hover:bg-white/10"
-            aria-label={m.nav_close_menu()}
+            aria-label={t("nav_close_menu")}
           >
             <X className="h-4 w-4" />
           </Button>
@@ -255,11 +255,11 @@ export function SidebarTrigger() {
   const { isMobile, open, openMobile, toggle } = useSidebar();
   const label = isMobile
     ? openMobile
-      ? m.nav_close_menu()
-      : m.nav_open_menu()
+      ? t("nav_close_menu")
+      : t("nav_open_menu")
     : open
-      ? m.nav_collapse()
-      : m.nav_expand();
+      ? t("nav_collapse")
+      : t("nav_expand");
   return (
     <Button
       type="button"

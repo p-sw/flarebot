@@ -1,19 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { z } from "zod";
-import { LOCALE_CODES } from "./locales";
 import { ROLES, SCOPES } from "./permissions";
-
-const localeCode = z
-  .string()
-  .refine((value) => LOCALE_CODES.includes(value as "en" | "ko"), {
-    message: "Unsupported locale",
-  });
-
-export const i18nMapSchema = z.record(
-  localeCode,
-  z.record(z.string().max(40), z.string().max(4000)),
-);
 
 const privateHost =
   /^(localhost|.*\.local|.*\.internal|metadata\.google\.internal|0\.0\.0\.0|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+|\[?::1\]?|\[?f[cd][0-9a-f:]*\]?|\[?fe80:)/i;
@@ -185,7 +173,6 @@ export const channelWriteSchema = z
   .object({
     name: z.string().min(1).max(80),
     type: channelTypeSchema,
-    locale: localeCode.optional(),
     config: z.unknown(),
   })
   .superRefine((value, ctx) => {
@@ -241,14 +228,10 @@ export const statusPageWriteSchema = z.object({
   slug: slugSchema,
   published: z.boolean().default(true),
   serveAtRoot: z.boolean().optional(),
-  defaultLocale: localeCode,
-  locales: z.array(localeCode).min(1).max(8),
-  sourceLocale: localeCode,
   title: z.string().min(1).max(160),
   description: z.string().max(2000).default(""),
   footer: z.string().max(2000).default(""),
   banner: z.string().max(500).default(""),
-  i18n: i18nMapSchema.default({}),
   logoUrl: z.string().url().max(2000).optional().or(z.literal("")),
   accent: z
     .string()
@@ -263,8 +246,6 @@ export const statusPageWriteSchema = z.object({
         position: z.number().int().min(0).max(500),
         groupName: z.string().max(80).default(""),
         displayName: z.string().max(120).default(""),
-        sourceLocale: localeCode,
-        i18n: i18nMapSchema.default({}),
       }),
     )
     .max(200),
@@ -280,7 +261,6 @@ export const setupSchema = z.object({
   name: z.string().min(1).max(80),
   email: z.string().email(),
   password: z.string().min(10).max(200),
-  locale: localeCode.optional(),
 });
 
 export const loginSchema = z.object({
@@ -341,7 +321,6 @@ export const passwordChangeSchema = z.object({
 
 export const accountPatchSchema = z.object({
   name: z.string().min(1).max(80).optional(),
-  locale: localeCode.nullable().optional(),
 });
 
 export const resetSchema = z.object({

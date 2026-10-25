@@ -1,71 +1,65 @@
 // SPDX-License-Identifier: MIT
 
-import { m } from "../../src/paraglide/messages.js";
+import { t } from "../../shared/copy";
 
 export type NoticeKind = "down" | "up" | "unstable";
 
-function localeOf(locale: string | null | undefined): "en" | "ko" {
-  return locale === "ko" ? "ko" : "en";
-}
+export type CopyFn = typeof t;
 
 export function notificationText(
-  locale: string | null | undefined,
   kind: NoticeKind,
   name: string,
   reason: string,
+  copy: CopyFn = t,
 ) {
-  const options = { locale: localeOf(locale) };
   if (kind === "up") {
     return {
-      subject: m.notify_up_subject({ name }, options),
-      body: m.notify_up_body({ name }, options),
+      subject: copy("notify_up_subject", { name }),
+      body: copy("notify_up_body", { name }),
     };
   }
   if (kind === "unstable") {
     return {
-      subject: m.notify_unstable_subject({ name }, options),
-      body: m.notify_unstable_body({ name }, options),
+      subject: copy("notify_unstable_subject", { name }),
+      body: copy("notify_unstable_body", { name }),
     };
   }
   return {
-    subject: m.notify_down_subject({ name }, options),
-    body: m.notify_down_body({ name, reason: reason || "unknown" }, options),
+    subject: copy("notify_down_subject", { name }),
+    body: copy("notify_down_body", {
+      name,
+      reason: reason || copy("notify_reason_unknown"),
+    }),
   };
 }
 
 export function inviteMail(
-  locale: string | null | undefined,
   input: { name: string; instance: string; role: string; link: string },
+  copy: CopyFn = t,
 ) {
-  const options = { locale: localeOf(locale) };
   return {
-    subject: m.mail_invite_subject({ instance: input.instance }, options),
-    text: m.mail_invite_body(input, options),
+    subject: copy("mail_invite_subject", { instance: input.instance }),
+    text: copy("mail_invite_body", input),
   };
 }
 
 export function resetMail(
-  locale: string | null | undefined,
   input: { instance: string; link: string },
+  copy: CopyFn = t,
 ) {
-  const options = { locale: localeOf(locale) };
   return {
-    subject: m.mail_reset_subject({ instance: input.instance }, options),
-    text: m.mail_reset_body(input, options),
+    subject: copy("mail_reset_subject", { instance: input.instance }),
+    text: copy("mail_reset_body", input),
   };
 }
 
-export function testMail(locale: string | null | undefined, instance: string) {
-  const options = { locale: localeOf(locale) };
+export function testMail(instance: string, copy: CopyFn = t) {
   return {
-    subject: m.mail_test_subject({ instance }, options),
-    text: m.mail_test_body({ instance }, options),
+    subject: copy("mail_test_subject", { instance }),
+    text: copy("mail_test_body", { instance }),
   };
 }
 
-export function channelTestText(
-  locale: string | null | undefined,
-  name: string,
-) {
-  return m.channel_test_body({ name }, { locale: localeOf(locale) });
+export function channelTestText(name: string, copy: CopyFn = t) {
+  return copy("channel_test_body", { name });
 }

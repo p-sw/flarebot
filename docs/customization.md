@@ -8,6 +8,6 @@ Motion is centralized in `brand/motion.ts`. Page transitions read `spring.soft`,
 
 Slots in `brand/overrides/` are the supported places for layout changes that tokens cannot express. Eject a control with `pnpm eject button` when you need to replace the markup. Ejected components live in `brand/ui/` and win over `src/ui/` at build time.
 
-Copy overrides in `brand/copy/<locale>.json` replace catalog strings after the locale file is loaded. Missing keys fall through to `locales/<locale>.json`.
+Every user-facing sentence lives in `brand/locale.json`. Translate that file to change the product language. Keep the keys, `{placeholders}`, and plural forms, and set `lang` to the BCP 47 tag the fork should use for `<html lang>` and `Intl`. The `translate-ui` skill is the checklist. `brand/brand.config.ts` `name` is not what the UI or mail shows; keep it aligned with `messages.app_name` if you still set it.
 
 Pulling a newer Flarebot is the `upgrade-flarebot` skill. Read `brand/MIGRATION.md` first.

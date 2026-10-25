@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 import logo from "@brand/assets/logo.svg";
-import brand from "@brand/brand.config";
 import AppFooter from "@brand/overrides/AppFooter";
-import { isSupportedLocale } from "@shared/locales";
+import { t } from "@shared/copy";
 import { can, type Role } from "@shared/permissions";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -28,20 +27,16 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
-import { api, errorText } from "./lib/api";
+import { api } from "./lib/api";
 import { cn } from "./lib/cn";
 import { dropCachedSession } from "./lib/session-cache";
 import { useSubmitGuard } from "./lib/use-submit-guard";
 import { useMotionPrefs } from "./motion/page";
-import { m } from "./paraglide/messages.js";
-import { getLocale, setLocale } from "./paraglide/runtime.js";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
@@ -66,7 +61,6 @@ export type SessionUser = {
   id: string;
   email: string;
   name: string;
-  locale: string | null;
   role: Role;
   organizationId: string;
 };
@@ -95,49 +89,49 @@ const links: {
 }[] = [
   {
     to: "/console",
-    label: () => m.nav_dashboard(),
+    label: () => t("nav_dashboard"),
     action: "dashboard.read",
     icon: LayoutDashboard,
   },
   {
     to: "/console/monitors/new",
-    label: () => m.monitor_new(),
+    label: () => t("monitor_new"),
     action: "monitors.write",
     icon: Plus,
   },
   {
     to: "/console/status-pages",
-    label: () => m.nav_status_pages(),
+    label: () => t("nav_status_pages"),
     action: "status_pages.read",
     icon: Globe,
   },
   {
     to: "/console/channels",
-    label: () => m.nav_channels(),
+    label: () => t("nav_channels"),
     action: "channels.read",
     icon: Bell,
   },
   {
     to: "/console/team",
-    label: () => m.nav_team(),
+    label: () => t("nav_team"),
     action: "users.read",
     icon: Users,
   },
   {
     to: "/console/tokens",
-    label: () => m.nav_tokens(),
+    label: () => t("nav_tokens"),
     action: "tokens.read",
     icon: KeyRound,
   },
   {
     to: "/console/audit",
-    label: () => m.nav_audit(),
+    label: () => t("nav_audit"),
     action: "audit.read",
     icon: ScrollText,
   },
   {
     to: "/console/settings",
-    label: () => m.nav_settings(),
+    label: () => t("nav_settings"),
     action: "instance.settings",
     icon: Settings,
   },
@@ -152,7 +146,7 @@ function NavigationProgress() {
   return (
     <div
       role="progressbar"
-      aria-label={m.loading()}
+      aria-label={t("loading")}
       className="pointer-events-none fixed inset-x-0 top-0 z-[80] h-1 overflow-hidden bg-primary/20"
     >
       <motion.div
@@ -203,7 +197,7 @@ function NavLinks({ user }: { user: SessionUser }) {
   });
   const here = pending ? resolved : (resolved ?? path);
   return (
-    <nav aria-label={m.nav_main()} className="grid gap-1">
+    <nav aria-label={t("nav_main")} className="grid gap-1">
       {links
         .filter((link) => can({ role: user.role }, link.action))
         .map((link) => {
@@ -248,30 +242,11 @@ function AccountMenu({ user }: { user: SessionUser }) {
   const collapsed = !open && !isMobile;
   const client = useQueryClient();
   const navigate = useNavigate();
-  const language = useSubmitGuard();
   const signOut = useSubmitGuard();
-  const [languageError, setLanguageError] = useState("");
   const [dark, setDark] = useState(() =>
     document.documentElement.classList.contains("dark"),
   );
   const initial = user.name.slice(0, 1).toUpperCase();
-
-  function changeLocale(next: string) {
-    if (!isSupportedLocale(next) || next === getLocale()) return;
-    setLanguageError("");
-    void language.run(async () => {
-      try {
-        await api("/api/account", {
-          method: "PATCH",
-          body: JSON.stringify({ locale: next }),
-        });
-        await setLocale(next);
-        window.location.reload();
-      } catch (cause) {
-        setLanguageError(errorText(cause));
-      }
-    });
-  }
 
   return (
     <div className="grid gap-1">
@@ -283,9 +258,9 @@ function AccountMenu({ user }: { user: SessionUser }) {
               "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm hover:bg-white/5",
               collapsed && "justify-center px-0",
             )}
-            aria-busy={language.pending || signOut.pending || undefined}
+            aria-busy={signOut.pending || undefined}
           >
-            <span className="sr-only">{m.nav_account_menu()}</span>
+            <span className="sr-only">{t("nav_account_menu")}</span>
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs">
               {initial}
             </span>
@@ -307,21 +282,9 @@ function AccountMenu({ user }: { user: SessionUser }) {
           <DropdownMenuItem asChild>
             <Link to="/console/account" onClick={() => setOpenMobile(false)}>
               <CircleUser className="mr-2 h-4 w-4" aria-hidden />
-              {m.nav_account()}
+              {t("nav_account")}
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuLabel>{m.language()}</DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={getLocale()}
-            onValueChange={(value) => changeLocale(value)}
-          >
-            <DropdownMenuRadioItem value="en" disabled={language.pending}>
-              {m.language_en()}
-            </DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="ko" disabled={language.pending}>
-              {m.language_ko()}
-            </DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() => {
@@ -335,7 +298,7 @@ function AccountMenu({ user }: { user: SessionUser }) {
             }}
           >
             <Sun className="mr-2 h-4 w-4" aria-hidden />
-            {dark ? m.theme_light() : m.theme_dark()}
+            {dark ? t("theme_light") : t("theme_dark")}
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={signOut.pending}
@@ -349,15 +312,10 @@ function AccountMenu({ user }: { user: SessionUser }) {
             }}
           >
             <LogOut className="mr-2 h-4 w-4" aria-hidden />
-            {signOut.pending ? m.action_working() : m.action_sign_out()}
+            {signOut.pending ? t("action_working") : t("action_sign_out")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {languageError ? (
-        <p className="px-2 text-xs text-destructive" role="alert">
-          {languageError}
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -391,7 +349,7 @@ function ShellFrame({ user }: { user: SessionUser }) {
             <span
               className={cn("truncate font-medium", collapsed && "sr-only")}
             >
-              {brand.name}
+              {t("app_name")}
             </span>
           </Link>
         </SidebarHeader>
@@ -407,7 +365,7 @@ function ShellFrame({ user }: { user: SessionUser }) {
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background/85 px-3 backdrop-blur md:px-4">
           <SidebarTrigger />
           <span className="truncate text-sm font-medium md:hidden">
-            {brand.name}
+            {t("app_name")}
           </span>
         </header>
         <main className="relative flex-1 px-4 py-6 md:px-6" aria-busy={pending}>

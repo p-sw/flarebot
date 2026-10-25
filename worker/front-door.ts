@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { Hono } from "hono";
-import { getCookie } from "hono/cookie";
 import { decideFrontDoor, normalizePathname } from "../shared/front-door";
-import { LOCALE_COOKIE } from "../shared/locales";
 import { getDb } from "./db/client";
 import { users } from "./db/schema";
 import { type AppContext, type AppEnv, loadActor } from "./http";
@@ -79,25 +77,14 @@ async function applyDecision(
 
 export function registerFrontDoor(app: Hono<AppEnv>): void {
   app.on(["GET", "HEAD"], "/s/:slug", async (c) => {
-    const page = await loadPublicStatus(
-      c.env,
-      c.req.param("slug"),
-      c.req.header("accept-language") ?? null,
-      c.req.query("lang") ?? null,
-      getCookie(c, LOCALE_COOKIE) ?? null,
-    );
+    const page = await loadPublicStatus(c.env, c.req.param("slug"));
     if (!page) return c.notFound();
     return headSafe(c, await statusDocument(c.env, c.req.raw, page));
   });
 
   app.on(["GET", "HEAD"], "/", async (c) => {
     const url = new URL(c.req.url);
-    const page = await loadRootPublicStatus(
-      c.env,
-      c.req.header("accept-language") ?? null,
-      c.req.query("lang") ?? null,
-      getCookie(c, LOCALE_COOKIE) ?? null,
-    );
+    const page = await loadRootPublicStatus(c.env);
     return applyDecision(
       c,
       decideFrontDoor({

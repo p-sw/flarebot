@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
+import { t } from "@shared/copy";
 import { cn } from "../lib/cn";
-import { m } from "../paraglide/messages.js";
 
 export function Skeleton({ className }: { className?: string }) {
   return (
@@ -17,7 +17,7 @@ export function Skeleton({ className }: { className?: string }) {
 export function ContentSkeleton() {
   return (
     <div className="grid gap-3" aria-busy="true">
-      <span className="sr-only">{m.loading()}</span>
+      <span className="sr-only">{t("loading")}</span>
       <Skeleton className="h-8 w-48" />
       <Skeleton className="h-24 w-full" />
       <Skeleton className="h-24 w-full" />
