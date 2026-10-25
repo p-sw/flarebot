@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { decryptString } from "../crypto/secret";
+import { mailReasonMessage } from "../notify/copy";
 import { sendCfEmail } from "./cf-email";
 import type { MailResult, SmtpSettings } from "./smtp";
 import { sendSmtp, smtpSecurity } from "./smtp";
@@ -25,6 +26,7 @@ export async function resolveMail(
     fromName: string | null;
     fromAddress: string | null;
   } | null,
+  options?: { password?: string },
 ): Promise<ResolvedMail> {
   if (env.SMTP_HOST && env.MAIL_FROM) {
     const security = smtpSecurity(env.SMTP_SECURE);
@@ -69,9 +71,11 @@ export async function resolveMail(
     };
   }
   const password =
-    row.passwordEncrypted && env.ENCRYPTION_KEY
-      ? await decryptString(env.ENCRYPTION_KEY, row.passwordEncrypted)
-      : "";
+    options?.password !== undefined
+      ? options.password
+      : row.passwordEncrypted && env.ENCRYPTION_KEY
+        ? await decryptString(env.ENCRYPTION_KEY, row.passwordEncrypted)
+        : "";
   return {
     driver: "smtp",
     fromName: row.fromName || "Flarebot",
@@ -99,7 +103,10 @@ export async function deliverWith(
     return {
       ok: false,
       stage: "config",
-      message: "Email is not configured",
+      reason: resolved.driver === "none" ? "not_configured" : "missing_from",
+      message: mailReasonMessage(
+        resolved.driver === "none" ? "not_configured" : "missing_from",
+      ),
       permanent: true,
     };
   }
@@ -114,7 +121,8 @@ export async function deliverWith(
     return {
       ok: false,
       stage: "config",
-      message: "SMTP settings are incomplete",
+      reason: "incomplete_smtp",
+      message: mailReasonMessage("incomplete_smtp"),
       permanent: true,
     };
   return sendSmtp(resolved.smtp, message, {

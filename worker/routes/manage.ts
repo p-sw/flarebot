@@ -65,6 +65,11 @@ import {
 } from "../http";
 import { enqueueMail } from "../mail/mailer";
 import { deliverWith, resolveMail } from "../mail/resolve";
+import {
+  executeMailTest,
+  mailConfigChanged,
+  publicMailFailure,
+} from "../mail/test-request";
 import { inviteMail, resetMail, testMail } from "../notify/copy";
 import { deliverChannel, sampleChannelText } from "../notify/dispatch";
 import { instanceName, readSetting, writeSetting } from "../settings-store";
@@ -255,11 +260,10 @@ export function registerManage(app: Hono<AppEnv>): void {
       if (!result.ok)
         return c.json(
           {
-            error: {
-              code: "mail",
-              message: result.message ?? t("error_email_failed"),
-              stage: result.stage,
-            },
+            error: publicMailFailure(result, [
+              c.env.SMTP_PASSWORD,
+              c.env.ENCRYPTION_KEY,
+            ]),
           },
           400,
         );
@@ -980,6 +984,7 @@ export function registerManage(app: Hono<AppEnv>): void {
       activeSource: describeMailSource(c.env, row?.driver),
       emailBinding: Boolean(c.env.EMAIL),
       lastTestOk: row?.lastTestOk ?? null,
+      lastTestAt: row?.lastTestAt ?? null,
       lastTestError: row?.lastTestError ?? null,
     });
   });
@@ -1016,15 +1021,19 @@ export function registerManage(app: Hono<AppEnv>): void {
       passwordEncrypted: body.driver === "smtp" ? passwordEncrypted : null,
       fromName: body.driver === "none" ? null : body.fromName,
       fromAddress: body.driver === "none" ? null : body.fromAddress,
-      lastTestOk: existing?.lastTestOk ?? null,
-      lastTestAt: existing?.lastTestAt ?? null,
-      lastTestError: existing?.lastTestError ?? null,
       updatedAt: Date.now(),
+    };
+    const changed = mailConfigChanged(existing, value);
+    const stored = {
+      ...value,
+      lastTestOk: changed ? null : (existing?.lastTestOk ?? null),
+      lastTestAt: changed ? null : (existing?.lastTestAt ?? null),
+      lastTestError: changed ? null : (existing?.lastTestError ?? null),
     };
     await db
       .insert(mailSettings)
-      .values(value)
-      .onConflictDoUpdate({ target: mailSettings.id, set: value });
+      .values(stored)
+      .onConflictDoUpdate({ target: mailSettings.id, set: stored });
     await audit(
       c.env,
       actor,
@@ -1042,48 +1051,14 @@ export function registerManage(app: Hono<AppEnv>): void {
     assertMutationOrigin(c, actor);
     requireCan(actor, "mail.write");
     const raw = await c.req.json().catch(() => ({}));
-    const parsed = z
-      .object({ email: z.string().email().optional() })
-      .safeParse(raw ?? {});
-    if (!parsed.success)
-      throw new ApiError(400, "validation", t("error_invalid_email"));
-    const body = parsed.data;
-    const db = getDb(c.env.DB);
-    const row = await db
-      .select()
-      .from(mailSettings)
-      .where(eq(mailSettings.id, 1))
-      .get();
-    const resolved = await resolveMail(c.env, row ?? null);
     const copy = testMail(await instanceName(c.env));
-    const result = await deliverWith(c.env, resolved, {
-      to: body.email ?? actor.email,
+    const result = await executeMailTest(c.env, raw, {
+      toFallback: actor.email,
       subject: copy.subject,
       text: copy.text,
-      messageId: `<${crypto.randomUUID()}@flarebot.local>`,
     });
-    await db
-      .update(mailSettings)
-      .set({
-        lastTestOk: result.ok,
-        lastTestAt: Date.now(),
-        lastTestError: result.ok
-          ? null
-          : `${result.stage ?? "send"}: ${result.message ?? "failed"}`,
-      })
-      .where(eq(mailSettings.id, 1));
-    if (!result.ok)
-      return c.json(
-        {
-          error: {
-            code: "mail",
-            message: result.message ?? t("error_email_failed"),
-            stage: result.stage ?? "send",
-          },
-        },
-        400,
-      );
-    return c.json({ ok: true });
+    if (!result.ok) return c.json(result, 400);
+    return c.json(result);
   });
 
   app.get("/api/account", async (c) => {

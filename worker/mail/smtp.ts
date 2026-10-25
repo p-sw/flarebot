@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 
 import { LogLevel, WorkerMailer } from "worker-mailer";
+import type { MailConfigReason } from "../../shared/mail-test";
 import { isBlockedHost } from "../../shared/schemas";
+import { mailReasonMessage } from "../notify/copy";
 import { classifyMailError, inferSmtpStage, type MailStage } from "./retry";
 
 export type SmtpSecurity = "starttls" | "tls" | "none";
@@ -23,7 +25,13 @@ export type SmtpSettings = {
 
 export type MailResult =
   | { ok: true }
-  | { ok: false; stage: MailStage; message: string; permanent: boolean };
+  | {
+      ok: false;
+      stage: MailStage;
+      message: string;
+      permanent: boolean;
+      reason?: MailConfigReason;
+    };
 
 export async function sendSmtp(
   settings: SmtpSettings,
@@ -42,9 +50,9 @@ export async function sendSmtp(
     return {
       ok: false,
       stage: "config",
+      reason: "port_25",
       permanent: true,
-      message:
-        "Port 25 is blocked on Workers. Use 587 (STARTTLS) or 465 (TLS).",
+      message: mailReasonMessage("port_25"),
     };
   }
   const allowedPort =
@@ -55,17 +63,18 @@ export async function sendSmtp(
     return {
       ok: false,
       stage: "config",
+      reason: "unsupported_port",
       permanent: true,
-      message: "Only ports 587 and 465 are supported.",
+      message: mailReasonMessage("unsupported_port"),
     };
   }
   if (isBlockedHost(settings.host) && !loopback) {
     return {
       ok: false,
       stage: "config",
+      reason: "blocked_host",
       permanent: true,
-      message:
-        "That SMTP host is local, private, or otherwise not dialable. Cloudflare also blocks TCP to proxied (orange-cloud) hostnames. Use a DNS-only hostname that is reachable on the public internet.",
+      message: mailReasonMessage("blocked_host"),
     };
   }
   const secure = settings.security === "tls";

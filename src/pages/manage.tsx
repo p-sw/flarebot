@@ -2,6 +2,7 @@
 
 import AppHeader from "@brand/overrides/AppHeader";
 import { formatDateTime, t } from "@shared/copy";
+import { parseStoredMailError } from "@shared/mail-test";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -9,7 +10,7 @@ import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
 import { PendingButton } from "@/ui/pending-button";
 import { Switch } from "@/ui/switch";
-import { api, errorText } from "../lib/api";
+import { api, errorText, mailFailureText } from "../lib/api";
 import {
   accountQuery,
   auditQuery,
@@ -447,6 +448,9 @@ type MailSettings = {
   activeSource: "secrets" | "database" | "cloudflare" | "none";
   emailBinding: boolean;
   secretsOverride: boolean;
+  lastTestOk: boolean | null;
+  lastTestAt: number | null;
+  lastTestError: string | null;
 };
 
 type MailDraft = {
@@ -487,6 +491,97 @@ function mailDraft(data: MailSettings | undefined): MailDraft {
   };
 }
 
+function mailPayload(form: MailDraft): Record<string, unknown> {
+  if (form.driver === "none") return { driver: "none" };
+  if (form.driver === "cf-email") {
+    return {
+      driver: "cf-email",
+      fromName: form.fromName,
+      fromAddress: form.fromAddress,
+    };
+  }
+  return {
+    driver: "smtp",
+    host: form.host,
+    port: form.port,
+    security: form.security,
+    username: form.username,
+    fromName: form.fromName,
+    fromAddress: form.fromAddress,
+    ...(form.clearPassword
+      ? { clearPassword: true }
+      : form.password
+        ? { password: form.password }
+        : {}),
+  };
+}
+
+function recipientInvalid(value: string): boolean {
+  const recipient = value.trim();
+  return recipient.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient);
+}
+
+function testBlock(
+  form: MailDraft,
+  mail: MailSettings | undefined,
+): "driver" | "fields" | "password" | "recipient" | null {
+  if (recipientInvalid(form.testTo)) return "recipient";
+  if (mail?.secretsOverride) return null;
+  if (form.driver === "none") return "driver";
+  if (form.driver === "cf-email") {
+    if (!form.fromName.trim() || !form.fromAddress.trim()) return "fields";
+    return null;
+  }
+  if (!form.host.trim() || !form.fromName.trim() || !form.fromAddress.trim())
+    return "fields";
+  const needsPassword =
+    form.username.trim().length > 0 &&
+    (form.clearPassword || !mail?.hasPassword) &&
+    !form.password;
+  if (needsPassword) return "password";
+  return null;
+}
+
+function mailDirty(form: MailDraft, mail: MailSettings | undefined): boolean {
+  if (form.password || form.clearPassword) return true;
+  const saved = mailDraft(mail);
+  return (
+    form.driver !== saved.driver ||
+    form.host !== saved.host ||
+    form.port !== saved.port ||
+    form.security !== saved.security ||
+    form.username !== saved.username ||
+    form.fromName !== saved.fromName ||
+    form.fromAddress !== saved.fromAddress
+  );
+}
+
+function testHelp(form: MailDraft, mail: MailSettings | undefined): string {
+  switch (testBlock(form, mail)) {
+    case "driver":
+      return t("settings_test_need_driver");
+    case "fields":
+      return t("settings_test_need_fields");
+    case "password":
+      return t("settings_test_need_password");
+    case "recipient":
+      return t("settings_test_need_recipient");
+    default:
+      break;
+  }
+  if (mail?.secretsOverride) return t("settings_test_secrets");
+  if (mailDirty(form, mail)) return t("settings_test_unsaved");
+  return t("settings_test_saved");
+}
+
+function lastTestText(mail: MailSettings): string {
+  if (mail.lastTestOk) return t("settings_last_test_ok");
+  const stored = parseStoredMailError(mail.lastTestError);
+  return t("settings_last_test_fail", {
+    reason: mailFailureText(stored ?? {}),
+  });
+}
+
 function mailSourceText(mail: MailSettings | undefined): string {
   if (!mail || mail.activeSource === "none")
     return t("settings_mail_source_none");
@@ -508,9 +603,12 @@ export function SettingsPage() {
   const client = useQueryClient();
   const saveInstance = useSubmitGuard();
   const saveMail = useSubmitGuard();
+  const testMail = useSubmitGuard();
   const shownName = name ?? settings.data?.instanceName ?? "";
   const form = draft ?? mailDraft(mail.data);
   const patch = (next: Partial<MailDraft>) => setDraft({ ...form, ...next });
+  const block = testBlock(form, mail.data);
+  const mailBusy = saveMail.pending || testMail.pending;
 
   function report(tone: "ok" | "error", text: string) {
     setNoteTone(tone);
@@ -571,29 +669,7 @@ export function SettingsPage() {
           if (!mail.data) return;
           void saveMail.run(async () => {
             try {
-              const body =
-                form.driver === "none"
-                  ? { driver: "none" }
-                  : form.driver === "cf-email"
-                    ? {
-                        driver: "cf-email",
-                        fromName: form.fromName,
-                        fromAddress: form.fromAddress,
-                      }
-                    : {
-                        driver: "smtp",
-                        host: form.host,
-                        port: form.port,
-                        security: form.security,
-                        username: form.username,
-                        fromName: form.fromName,
-                        fromAddress: form.fromAddress,
-                        ...(form.clearPassword
-                          ? { clearPassword: true }
-                          : form.password
-                            ? { password: form.password }
-                            : {}),
-                      };
+              const body = mailPayload(form);
               await api("/api/settings/mail", {
                 method: "PUT",
                 body: JSON.stringify(body),
@@ -746,30 +822,52 @@ export function SettingsPage() {
             placeholder={t("settings_test_to_placeholder")}
           />
         </Field>
+        <p className="text-sm text-muted-foreground">
+          {testHelp(form, mail.data)}
+        </p>
+        {mail.data?.lastTestAt != null ? (
+          <p className="text-sm text-muted-foreground" role="status">
+            {lastTestText(mail.data)}
+          </p>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           <PendingButton
             type="submit"
             pending={saveMail.pending}
-            disabled={!mail.data}
+            disabled={!mail.data || mailBusy}
           >
             {t("action_save")}
           </PendingButton>
           <PendingButton
             type="button"
             variant="outline"
-            pending={saveMail.pending}
-            disabled={!mail.data}
+            pending={testMail.pending}
+            disabled={!mail.data || mailBusy || block !== null}
             onClick={() => {
-              void saveMail.run(async () => {
+              void testMail.run(async () => {
                 try {
-                  await api("/api/settings/mail/test", {
+                  const result = await api<{
+                    source: "secrets" | "saved" | "form";
+                  }>("/api/settings/mail/test", {
                     method: "POST",
-                    body: JSON.stringify(
-                      form.testTo ? { email: form.testTo } : {},
-                    ),
+                    body: JSON.stringify({
+                      ...mailPayload(form),
+                      ...(form.testTo.trim()
+                        ? { email: form.testTo.trim() }
+                        : {}),
+                    }),
                   });
-                  report("ok", t("settings_test_ok"));
+                  await client.invalidateQueries({ queryKey: ["mail"] });
+                  report(
+                    "ok",
+                    result.source === "secrets"
+                      ? t("settings_test_ok_secrets")
+                      : result.source === "form"
+                        ? t("settings_test_ok_form")
+                        : t("settings_test_ok"),
+                  );
                 } catch (cause) {
+                  await client.invalidateQueries({ queryKey: ["mail"] });
                   report("error", errorText(cause));
                 }
               });

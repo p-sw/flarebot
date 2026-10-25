@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+import { mailReasonMessage } from "../notify/copy";
 import type { MailResult } from "./smtp";
 
 export async function sendCfEmail(
@@ -17,9 +18,9 @@ export async function sendCfEmail(
     return {
       ok: false,
       stage: "config",
+      reason: "missing_binding",
       permanent: true,
-      message:
-        "The send_email binding is not configured. Add it to wrangler.jsonc after you enable Cloudflare Email Service. On the free plan it can only deliver to addresses you have verified.",
+      message: mailReasonMessage("missing_binding"),
     };
   }
   try {

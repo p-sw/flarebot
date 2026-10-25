@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { t } from "../../shared/copy";
+import type { MailConfigReason } from "../../shared/mail-test";
 
 export type NoticeKind = "down" | "up" | "unstable";
 
@@ -58,6 +59,48 @@ export function testMail(instance: string, copy: CopyFn = t) {
     subject: copy("mail_test_subject", { instance }),
     text: copy("mail_test_body", { instance }),
   };
+}
+
+export function mailStageMessage(
+  stage: "config" | "connect" | "tls" | "auth" | "send",
+): string {
+  switch (stage) {
+    case "config":
+      return t("mail_stage_config");
+    case "connect":
+      return t("mail_stage_connect");
+    case "tls":
+      return t("mail_stage_tls");
+    case "auth":
+      return t("mail_stage_auth");
+    case "send":
+      return t("mail_stage_send");
+  }
+}
+
+export function mailReasonMessage(reason: MailConfigReason): string {
+  switch (reason) {
+    case "not_configured":
+      return t("mail_reason_not_configured");
+    case "missing_from":
+      return t("mail_reason_missing_from");
+    case "incomplete_smtp":
+      return t("mail_reason_incomplete_smtp");
+    case "port_25":
+      return t("mail_reason_port_25");
+    case "unsupported_port":
+      return t("mail_reason_unsupported_port");
+    case "blocked_host":
+      return t("mail_reason_blocked_host");
+    case "missing_binding":
+      return t("mail_reason_missing_binding");
+    case "missing_encryption_key":
+      return t("mail_reason_missing_encryption_key");
+  }
+}
+
+export function mailPasswordUnreadable(): string {
+  return t("mail_password_unreadable");
 }
 
 export function channelTestText(name: string, copy: CopyFn = t) {
