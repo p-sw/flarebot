@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 import AppFooter from "@brand/overrides/AppFooter";
 import StatusHero from "@brand/overrides/StatusHero";

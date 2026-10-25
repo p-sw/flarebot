@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "./schema";

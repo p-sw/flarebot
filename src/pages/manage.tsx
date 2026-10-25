@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 import AppHeader from "@brand/overrides/AppHeader";
 import { useQuery, useQueryClient } from "@tanstack/react-query";

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 import { decryptString } from "../crypto/secret";
 import { sendCfEmail } from "./cf-email";

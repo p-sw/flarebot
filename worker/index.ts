@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 import { createApp } from "./app";
 import { Mailer } from "./mail/mailer";

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 import { sql } from "drizzle-orm";
 import type { MonitorType } from "../../shared/schemas";

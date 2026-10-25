@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 export const ROLES = ["owner", "admin", "editor", "viewer"] as const;
 export type Role = (typeof ROLES)[number];

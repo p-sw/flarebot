@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 import logo from "@brand/assets/logo.svg";
 import brand from "@brand/brand.config";

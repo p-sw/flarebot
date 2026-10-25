@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 import { connect } from "cloudflare:sockets";
 import { isBlockedHost, type MonitorType } from "../../shared/schemas";

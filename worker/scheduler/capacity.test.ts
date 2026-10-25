@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 import { describe, expect, it } from "vitest";
 import { CHECK_CONCURRENCY, CHECKS_PER_ALARM, shardCapacity } from "./capacity";

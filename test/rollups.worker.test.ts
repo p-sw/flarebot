@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 import { applyD1Migrations, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";

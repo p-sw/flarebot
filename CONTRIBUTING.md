@@ -1,6 +1,6 @@
 # Contributing
 
-Flarebot is licensed under AGPL-3.0-only. By contributing you agree that your changes are released under that license.
+Flarebot is licensed under MIT. By contributing you agree that your changes are released under that license.
 
 ## Language
 

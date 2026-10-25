@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 import * as SwitchPrimitive from "@radix-ui/react-switch";
 import type { ComponentProps } from "react";

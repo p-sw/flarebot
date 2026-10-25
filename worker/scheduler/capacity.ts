@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 /** Free-plan cap: 6 in-flight connections, and well under 50 subrequests per alarm. */
 export const CHECKS_PER_ALARM = 12;

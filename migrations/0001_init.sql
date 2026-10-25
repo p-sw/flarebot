@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: AGPL-3.0-only
+-- SPDX-License-Identifier: MIT
 -- Flarebot MVP schema. v1 tables (incidents, maintenance, subscribers, Access mappings)
 -- are intentionally not created yet; see docs/decisions.md.
 
