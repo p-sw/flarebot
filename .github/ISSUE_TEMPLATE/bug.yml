@@ -1,0 +1,21 @@
+name: Bug
+description: A defect in the current MVP
+title: "fix: "
+labels: []
+body:
+  - type: textarea
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: How to reproduce
+      description: Include the monitor type and whether this was wrangler dev or a deployment.
+    validations:
+      required: true

@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["./worker-configuration.d.ts"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@shared/*": ["./shared/*"],
+      "@brand/*": ["./brand/*"]
+    }
+  },
+  "include": [
+    "worker",
+    "shared",
+    "brand/brand.config.ts",
+    "brand/motion.ts",
+    "test"
+  ]
+}

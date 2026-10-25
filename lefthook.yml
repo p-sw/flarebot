@@ -1,0 +1,30 @@
+pre-commit:
+  parallel: false
+  jobs:
+    - name: format
+      glob: "*.{js,jsx,ts,tsx,css,json,jsonc,mjs,yml,yaml}"
+      run: pnpm exec biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      stage_fixed: true
+    - name: language
+      run: pnpm lint:lang
+    - name: typecheck
+      run: pnpm typecheck
+
+commit-msg:
+  jobs:
+    - name: commitlint
+      run: pnpm exec commitlint --edit {1}
+    - name: language
+      run: node scripts/lint-lang.mjs --commit {1}
+
+pre-push:
+  parallel: false
+  jobs:
+    - name: test
+      run: pnpm test
+    - name: i18n
+      run: pnpm i18n:check
+    - name: build
+      run: pnpm build
+    - name: e2e
+      run: pnpm e2e
