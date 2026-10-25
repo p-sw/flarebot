@@ -10,33 +10,27 @@ import { Input } from "@/ui/input";
 import { PendingButton } from "@/ui/pending-button";
 import { Switch } from "@/ui/switch";
 import { api, errorText } from "../lib/api";
+import {
+  accountQuery,
+  auditQuery,
+  channelsQuery,
+  mailQuery,
+  monitorsQuery,
+  settingsQuery,
+  statusPagesQuery,
+  teamQuery,
+  tokensQuery,
+} from "../lib/queries";
 import { useSubmitGuard } from "../lib/use-submit-guard";
-import { PageEnter } from "../motion/page";
+import { Stagger, StaggerItem } from "../motion/page";
 import { m } from "../paraglide/messages.js";
 import { getLocale, setLocale } from "../paraglide/runtime.js";
+import { ContentSkeleton } from "../ui/skeleton";
 import { controlClass, Field } from "./fields";
 
 export function StatusPagesPage() {
-  const pages = useQuery({
-    queryKey: ["pages"],
-    queryFn: () =>
-      api<{
-        pages: {
-          id: string;
-          slug: string;
-          title: string;
-          published: boolean;
-          serveAtRoot: boolean;
-          missing: number;
-          itemCount: number;
-        }[];
-      }>("/api/status-pages"),
-  });
-  const monitors = useQuery({
-    queryKey: ["monitors"],
-    queryFn: () =>
-      api<{ monitors: { id: string; name: string }[] }>("/api/monitors"),
-  });
+  const pages = useQuery(statusPagesQuery);
+  const monitors = useQuery(monitorsQuery);
   const client = useQueryClient();
   const [title, setTitle] = useState("Status");
   const [slug, setSlug] = useState("status");
@@ -60,7 +54,7 @@ export function StatusPagesPage() {
     }
   }
   return (
-    <PageEnter>
+    <>
       <AppHeader title={m.nav_status_pages()} />
       <form
         className="mb-6 grid max-w-xl gap-3"
@@ -140,62 +134,63 @@ export function StatusPagesPage() {
           {m.page_new()}
         </PendingButton>
       </form>
-      <div className="grid gap-3">
-        {pages.data?.pages.map((page) => (
-          <article
-            key={page.id}
-            className="rounded-lg border border-border bg-card p-4"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-medium">{page.title}</p>
-                <p className="text-sm break-all text-muted-foreground">
-                  /s/{page.slug} · {m.missing_count({ count: page.missing })}
-                </p>
-              </div>
-              <a className="text-sm" href={`/s/${page.slug}`}>
-                {m.page_public_link()}
-              </a>
-            </div>
-            <div className="mt-4 grid gap-2 border-t border-border pt-4">
-              {/* biome-ignore lint/a11y/noLabelWithoutControl: Switch is the control */}
-              <label className="flex items-center gap-3 text-sm">
-                <Switch
-                  checked={page.serveAtRoot}
-                  disabled={
-                    pendingId !== null || (!page.published && !page.serveAtRoot)
-                  }
-                  onCheckedChange={(checked) => void setRoot(page.id, checked)}
-                />
-                <span>{m.page_root_label()}</span>
-              </label>
-              <p className="text-sm text-muted-foreground">
-                {m.page_root_note({ slug: page.slug })}
-              </p>
-              {page.serveAtRoot ? (
-                <p className="text-sm">{m.page_root_current()}</p>
-              ) : null}
-              {page.published ? null : (
-                <p className="text-sm text-muted-foreground">
-                  {m.page_root_unpublished()}
-                </p>
-              )}
-            </div>
-          </article>
-        ))}
-      </div>
-    </PageEnter>
+      {pages.isPending ? (
+        <ContentSkeleton />
+      ) : (
+        <Stagger className="grid gap-3">
+          {pages.data?.pages.map((page) => (
+            <StaggerItem key={page.id}>
+              <article className="rounded-lg border border-border bg-card p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">{page.title}</p>
+                    <p className="text-sm break-all text-muted-foreground">
+                      /s/{page.slug} ·{" "}
+                      {m.missing_count({ count: page.missing })}
+                    </p>
+                  </div>
+                  <a className="text-sm" href={`/s/${page.slug}`}>
+                    {m.page_public_link()}
+                  </a>
+                </div>
+                <div className="mt-4 grid gap-2 border-t border-border pt-4">
+                  {/* biome-ignore lint/a11y/noLabelWithoutControl: Switch is the control */}
+                  <label className="flex items-center gap-3 text-sm">
+                    <Switch
+                      checked={page.serveAtRoot}
+                      disabled={
+                        pendingId !== null ||
+                        (!page.published && !page.serveAtRoot)
+                      }
+                      onCheckedChange={(checked) =>
+                        void setRoot(page.id, checked)
+                      }
+                    />
+                    <span>{m.page_root_label()}</span>
+                  </label>
+                  <p className="text-sm text-muted-foreground">
+                    {m.page_root_note({ slug: page.slug })}
+                  </p>
+                  {page.serveAtRoot ? (
+                    <p className="text-sm">{m.page_root_current()}</p>
+                  ) : null}
+                  {page.published ? null : (
+                    <p className="text-sm text-muted-foreground">
+                      {m.page_root_unpublished()}
+                    </p>
+                  )}
+                </div>
+              </article>
+            </StaggerItem>
+          ))}
+        </Stagger>
+      )}
+    </>
   );
 }
 
 export function ChannelsPage() {
-  const channels = useQuery({
-    queryKey: ["channels"],
-    queryFn: () =>
-      api<{ channels: { id: string; name: string; type: string }[] }>(
-        "/api/channels",
-      ),
-  });
+  const channels = useQuery(channelsQuery);
   const client = useQueryClient();
   const [name, setName] = useState("Ops email");
   const [to, setTo] = useState("");
@@ -203,7 +198,7 @@ export function ChannelsPage() {
   const submit = useSubmitGuard();
   const test = useSubmitGuard();
   return (
-    <PageEnter>
+    <>
       <AppHeader title={m.nav_channels()} />
       <form
         className="mb-6 grid max-w-xl gap-3"
@@ -240,56 +235,53 @@ export function ChannelsPage() {
         </PendingButton>
       </form>
       {message ? <p className="mb-3 text-sm">{message}</p> : null}
-      <div className="grid gap-2">
-        {channels.data?.channels.map((channel) => (
-          <div
-            key={channel.id}
-            className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
-          >
-            <span>
-              {channel.name} · {channel.type}
-            </span>
-            <PendingButton
-              size="sm"
-              variant="outline"
-              type="button"
-              pending={test.pending}
-              onClick={() => {
-                void test.run(async () => {
-                  try {
-                    await api(`/api/channels/${channel.id}/test`, {
-                      method: "POST",
+      {channels.isPending ? (
+        <ContentSkeleton />
+      ) : (
+        <Stagger className="grid gap-2">
+          {channels.data?.channels.map((channel) => (
+            <StaggerItem key={channel.id}>
+              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+                <span>
+                  {channel.name} · {channel.type}
+                </span>
+                <PendingButton
+                  size="sm"
+                  variant="outline"
+                  type="button"
+                  pending={test.pending}
+                  onClick={() => {
+                    void test.run(async () => {
+                      try {
+                        await api(`/api/channels/${channel.id}/test`, {
+                          method: "POST",
+                        });
+                        setMessage(m.channel_test_sent());
+                      } catch (cause) {
+                        setMessage(errorText(cause));
+                      }
                     });
-                    setMessage(m.channel_test_sent());
-                  } catch (cause) {
-                    setMessage(errorText(cause));
-                  }
-                });
-              }}
-            >
-              {m.action_test()}
-            </PendingButton>
-          </div>
-        ))}
-      </div>
-    </PageEnter>
+                  }}
+                >
+                  {m.action_test()}
+                </PendingButton>
+              </div>
+            </StaggerItem>
+          ))}
+        </Stagger>
+      )}
+    </>
   );
 }
 
 export function TeamPage() {
-  const team = useQuery({
-    queryKey: ["team"],
-    queryFn: () =>
-      api<{
-        members: { id: string; name: string; email: string; role: string }[];
-      }>("/api/team"),
-  });
+  const team = useQuery(teamQuery);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("viewer");
   const [link, setLink] = useState("");
   const submit = useSubmitGuard();
   return (
-    <PageEnter>
+    <>
       <AppHeader title={m.nav_team()} />
       <form
         className="mb-6 grid max-w-xl gap-3"
@@ -327,44 +319,35 @@ export function TeamPage() {
         </PendingButton>
       </form>
       {link ? <p className="mb-4 break-all font-mono text-xs">{link}</p> : null}
-      <div className="grid gap-2">
-        {team.data?.members.map((member) => (
-          <div
-            key={member.id}
-            className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
-          >
-            <span>
-              {member.name} · {member.email}
-            </span>
-            <span>{member.role}</span>
-          </div>
-        ))}
-      </div>
-    </PageEnter>
+      {team.isPending ? (
+        <ContentSkeleton />
+      ) : (
+        <Stagger className="grid gap-2">
+          {team.data?.members.map((member) => (
+            <StaggerItem key={member.id}>
+              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                <span>
+                  {member.name} · {member.email}
+                </span>
+                <span>{member.role}</span>
+              </div>
+            </StaggerItem>
+          ))}
+        </Stagger>
+      )}
+    </>
   );
 }
 
 export function TokensPage() {
-  const tokens = useQuery({
-    queryKey: ["tokens"],
-    queryFn: () =>
-      api<{
-        tokens: {
-          id: string;
-          name: string;
-          scopes: string[];
-          lastUsedAt: number | null;
-        }[];
-        allowedScopes: string[];
-      }>("/api/tokens"),
-  });
+  const tokens = useQuery(tokensQuery);
   const client = useQueryClient();
   const [name, setName] = useState("CI");
   const [raw, setRaw] = useState("");
   const submit = useSubmitGuard();
   const revoke = useSubmitGuard();
   return (
-    <PageEnter>
+    <>
       <AppHeader title={m.nav_tokens()} />
       <form
         className="mb-4 grid max-w-xl gap-3"
@@ -397,70 +380,64 @@ export function TokensPage() {
           {m.token_once()} {raw}
         </p>
       ) : null}
-      <div className="grid gap-2">
-        {tokens.data?.tokens.map((token) => (
-          <div
-            key={token.id}
-            className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
-          >
-            <span>
-              {token.name} · {token.scopes.join(", ")}
-            </span>
-            <PendingButton
-              size="sm"
-              variant="outline"
-              type="button"
-              pending={revoke.pending}
-              onClick={() => {
-                void revoke.run(async () => {
-                  await api(`/api/tokens/${token.id}`, { method: "DELETE" });
-                  await client.invalidateQueries({ queryKey: ["tokens"] });
-                });
-              }}
-            >
-              {m.token_revoke()}
-            </PendingButton>
-          </div>
-        ))}
-      </div>
-    </PageEnter>
+      {tokens.isPending ? (
+        <ContentSkeleton />
+      ) : (
+        <Stagger className="grid gap-2">
+          {tokens.data?.tokens.map((token) => (
+            <StaggerItem key={token.id}>
+              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                <span>
+                  {token.name} · {token.scopes.join(", ")}
+                </span>
+                <PendingButton
+                  size="sm"
+                  variant="outline"
+                  type="button"
+                  pending={revoke.pending}
+                  onClick={() => {
+                    void revoke.run(async () => {
+                      await api(`/api/tokens/${token.id}`, {
+                        method: "DELETE",
+                      });
+                      await client.invalidateQueries({ queryKey: ["tokens"] });
+                    });
+                  }}
+                >
+                  {m.token_revoke()}
+                </PendingButton>
+              </div>
+            </StaggerItem>
+          ))}
+        </Stagger>
+      )}
+    </>
   );
 }
 
 export function AuditPage() {
-  const audit = useQuery({
-    queryKey: ["audit"],
-    queryFn: () =>
-      api<{
-        events: {
-          id: string;
-          action: string;
-          target: string | null;
-          createdAt: number;
-        }[];
-      }>("/api/audit"),
-  });
+  const audit = useQuery(auditQuery);
   return (
-    <PageEnter>
+    <>
       <AppHeader title={m.nav_audit()} />
-      {(audit.data?.events.length ?? 0) === 0 ? (
+      {audit.isPending ? <ContentSkeleton /> : null}
+      {!audit.isPending && (audit.data?.events.length ?? 0) === 0 ? (
         <p className="text-sm text-muted-foreground">{m.audit_empty()}</p>
       ) : null}
-      <div className="grid gap-2">
+      <Stagger className="grid gap-2">
         {audit.data?.events.map((event) => (
-          <div
-            key={event.id}
-            className="grid min-w-0 gap-1 rounded-lg border border-border px-3 py-2 text-sm sm:grid-cols-3"
-          >
-            <span>{new Date(event.createdAt).toISOString()}</span>
-            <span>{event.action}</span>
-            <span className="truncate text-muted-foreground">
-              {event.target}
-            </span>
-          </div>
+          <StaggerItem key={event.id}>
+            <div className="grid min-w-0 gap-1 rounded-lg border border-border px-3 py-2 text-sm sm:grid-cols-3">
+              <span>{new Date(event.createdAt).toISOString()}</span>
+              <span>{event.action}</span>
+              <span className="truncate text-muted-foreground">
+                {event.target}
+              </span>
+            </div>
+          </StaggerItem>
         ))}
-      </div>
-    </PageEnter>
+      </Stagger>
+    </>
   );
 }
 
@@ -531,17 +508,8 @@ function mailSourceText(mail: MailSettings | undefined): string {
 }
 
 export function SettingsPage() {
-  const settings = useQuery({
-    queryKey: ["settings"],
-    queryFn: () =>
-      api<{ instanceName: string; defaultLocale: string; authMode: string }>(
-        "/api/settings",
-      ),
-  });
-  const mail = useQuery({
-    queryKey: ["mail"],
-    queryFn: () => api<MailSettings>("/api/settings/mail"),
-  });
+  const settings = useQuery(settingsQuery);
+  const mail = useQuery(mailQuery);
   const [name, setName] = useState<string | null>(null);
   const [draft, setDraft] = useState<MailDraft | null>(null);
   const [note, setNote] = useState("");
@@ -559,8 +527,9 @@ export function SettingsPage() {
   }
 
   return (
-    <PageEnter>
+    <>
       <AppHeader title={m.nav_settings()} />
+      {settings.isPending || mail.isPending ? <ContentSkeleton /> : null}
       <form
         className="mb-8 grid max-w-xl gap-3"
         onSubmit={(event) => {
@@ -827,22 +796,12 @@ export function SettingsPage() {
           {note}
         </p>
       ) : null}
-    </PageEnter>
+    </>
   );
 }
 
 export function AccountPage() {
-  const account = useQuery({
-    queryKey: ["account"],
-    queryFn: () =>
-      api<{
-        name: string;
-        email: string;
-        locale: string | null;
-        totpEnabled: boolean;
-        passkeys: { id: string; deviceName: string | null }[];
-      }>("/api/account"),
-  });
+  const account = useQuery(accountQuery);
   const [draft, setDraft] = useState<string | null>(null);
   const [error, setError] = useState("");
   const submit = useSubmitGuard();
@@ -851,8 +810,9 @@ export function AccountPage() {
     : null;
   const locale = draft ?? saved ?? getLocale();
   return (
-    <PageEnter>
+    <>
       <AppHeader title={m.nav_account()} />
+      {account.isPending ? <ContentSkeleton /> : null}
       <p className="mb-4 break-all text-sm text-muted-foreground">
         {account.data?.email}
       </p>
@@ -912,7 +872,7 @@ export function AccountPage() {
           ? m.account_totp_disable()
           : m.account_totp_enable()}
       </p>
-    </PageEnter>
+    </>
   );
 }
 

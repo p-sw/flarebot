@@ -19,31 +19,18 @@ import { Card, CardContent } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { PendingButton } from "@/ui/pending-button";
 import { api, errorText } from "../lib/api";
+import {
+  monitorQuery,
+  monitorsQuery,
+  outagesQuery,
+  statsQuery,
+} from "../lib/queries";
 import { useSubmitGuard } from "../lib/use-submit-guard";
-import { PageEnter } from "../motion/page";
+import { Stagger, StaggerItem } from "../motion/page";
 import { m } from "../paraglide/messages.js";
+import { ConfirmDialog } from "../ui/confirm-dialog";
+import { ContentSkeleton } from "../ui/skeleton";
 import { controlClass, Field, statusTone } from "./fields";
-
-type MonitorListItem = {
-  id: string;
-  name: string;
-  type: string;
-  status: string;
-  uptime24: number | null;
-  lastResponseMs: number | null;
-  lastError: string | null;
-  paused: boolean;
-  pushUrl?: string;
-};
-
-type MonitorDetail = MonitorListItem & {
-  config: Record<string, unknown>;
-  intervalSeconds: number;
-  timeoutSeconds: number;
-  retries: number;
-  recoveryThreshold: number;
-  channelIds: string[];
-};
 
 const types = ["http", "tcp", "dns", "ssl", "heartbeat"] as const;
 
@@ -64,13 +51,10 @@ function statusLabel(status: string) {
 }
 
 export function DashboardPage() {
-  const monitors = useQuery({
-    queryKey: ["monitors"],
-    queryFn: () => api<{ monitors: MonitorListItem[] }>("/api/monitors"),
-  });
+  const monitors = useQuery(monitorsQuery);
   const rows = monitors.data?.monitors ?? [];
   return (
-    <PageEnter>
+    <>
       <AppHeader
         title={m.nav_dashboard()}
         actions={
@@ -82,7 +66,9 @@ export function DashboardPage() {
       <p className="mb-4 text-sm text-muted-foreground">
         {m.monitors_count({ count: rows.length })}
       </p>
-      {rows.length === 0 ? (
+      {monitors.isPending ? (
+        <ContentSkeleton />
+      ) : rows.length === 0 ? (
         <EmptyState
           action={
             <Link to="/console/monitors/new">
@@ -91,40 +77,41 @@ export function DashboardPage() {
           }
         />
       ) : (
-        <div className="grid gap-3">
+        <Stagger className="grid gap-3">
           {rows.map((row) => (
-            <Link
-              key={row.id}
-              to="/console/monitors/$id"
-              params={{ id: row.id }}
-              className="block"
-            >
-              <Card>
-                <CardContent className="flex min-w-0 flex-wrap items-center justify-between gap-4 p-5">
-                  <div className="min-w-0">
-                    <p className="break-words font-medium">{row.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {typeLabel(row.type)}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-4 text-sm">
-                    <span>
-                      {row.uptime24 === null ? "—" : `${row.uptime24}%`}
-                    </span>
-                    <span className="font-mono text-muted-foreground">
-                      {row.lastResponseMs ?? "—"} ms
-                    </span>
-                    <Badge tone={statusTone(row.status)}>
-                      {statusLabel(row.status)}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+            <StaggerItem key={row.id}>
+              <Link
+                to="/console/monitors/$id"
+                params={{ id: row.id }}
+                className="block"
+              >
+                <Card>
+                  <CardContent className="flex min-w-0 flex-wrap items-center justify-between gap-4 p-5">
+                    <div className="min-w-0">
+                      <p className="break-words font-medium">{row.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {typeLabel(row.type)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4 text-sm">
+                      <span>
+                        {row.uptime24 === null ? "—" : `${row.uptime24}%`}
+                      </span>
+                      <span className="font-mono text-muted-foreground">
+                        {row.lastResponseMs ?? "—"} ms
+                      </span>
+                      <Badge tone={statusTone(row.status)}>
+                        {statusLabel(row.status)}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       )}
-    </PageEnter>
+    </>
   );
 }
 
@@ -188,6 +175,7 @@ function configFrom(draft: Draft) {
 
 export function MonitorFormPage() {
   const navigate = useNavigate();
+  const client = useQueryClient();
   const [draft, setDraft] = useState<Draft>(blank);
   const [error, setError] = useState("");
   const [pushUrl, setPushUrl] = useState("");
@@ -208,13 +196,14 @@ export function MonitorFormPage() {
         }),
       }),
     onSuccess: (data) => {
+      void client.invalidateQueries({ queryKey: ["monitors"] });
       if (data.pushUrl) setPushUrl(data.pushUrl);
       else navigate({ to: "/console/monitors/$id", params: { id: data.id } });
     },
     onError: (cause) => setError(errorText(cause)),
   });
   return (
-    <PageEnter>
+    <>
       <AppHeader title={m.monitor_new()} />
       <form
         className="grid max-w-xl gap-3"
@@ -392,7 +381,7 @@ export function MonitorFormPage() {
           </PendingButton>
         )}
       </form>
-    </PageEnter>
+    </>
   );
 }
 
@@ -400,37 +389,9 @@ export function MonitorDetailPage() {
   const { id } = useParams({ strict: false }) as { id: string };
   const client = useQueryClient();
   const navigate = useNavigate();
-  const monitor = useQuery({
-    queryKey: ["monitor", id],
-    queryFn: () => api<MonitorDetail>(`/api/monitors/${id}`),
-  });
-  const stats = useQuery({
-    queryKey: ["stats", id],
-    queryFn: () =>
-      api<{
-        recent: { t: number; ok: boolean; ms: number }[];
-        uptime: {
-          h24: number | null;
-          d7: number | null;
-          d30: number | null;
-          d90: number | null;
-        };
-        p95: number;
-      }>(`/api/monitors/${id}/stats`),
-  });
-  const outages = useQuery({
-    queryKey: ["outages", id],
-    queryFn: () =>
-      api<{
-        outages: {
-          id: string;
-          startedAt: number;
-          endedAt: number | null;
-          cause: string | null;
-          acknowledgedAt: number | null;
-        }[];
-      }>(`/api/monitors/${id}/outages`),
-  });
+  const monitor = useQuery(monitorQuery(id));
+  const stats = useQuery(statsQuery(id));
+  const outages = useQuery(outagesQuery(id));
   const row = monitor.data;
   const action = useSubmitGuard();
   const pause = useMutation({
@@ -451,12 +412,17 @@ export function MonitorDetailPage() {
         }),
       });
     },
-    onSuccess: () => client.invalidateQueries({ queryKey: ["monitor", id] }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["monitor", id] });
+      void client.invalidateQueries({ queryKey: ["monitors"] });
+    },
   });
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  if (monitor.isPending) return <ContentSkeleton />;
   if (!row) return <p>{m.loading()}</p>;
   const recent = stats.data?.recent ?? [];
   return (
-    <PageEnter>
+    <>
       <AppHeader
         title={row.name}
         actions={
@@ -481,16 +447,27 @@ export function MonitorDetailPage() {
               variant="destructive"
               type="button"
               pending={action.pending}
-              onClick={() => {
-                if (!confirm(m.monitor_delete_confirm())) return;
-                void action.run(async () => {
-                  await api(`/api/monitors/${id}`, { method: "DELETE" });
-                  await navigate({ to: "/console" });
-                });
-              }}
+              onClick={() => setConfirmDelete(true)}
             >
               {m.action_delete()}
             </PendingButton>
+            <ConfirmDialog
+              open={confirmDelete}
+              onOpenChange={setConfirmDelete}
+              title={m.action_delete()}
+              description={m.monitor_delete_confirm()}
+              confirmLabel={m.action_delete()}
+              cancelLabel={m.action_cancel()}
+              pending={action.pending}
+              onConfirm={() => {
+                void action.run(async () => {
+                  await api(`/api/monitors/${id}`, { method: "DELETE" });
+                  await client.invalidateQueries({ queryKey: ["monitors"] });
+                  setConfirmDelete(false);
+                  await navigate({ to: "/console" });
+                });
+              }}
+            />
           </>
         }
       />
@@ -508,26 +485,28 @@ export function MonitorDetailPage() {
           {m.monitor_push_url()}: {row.pushUrl}
         </p>
       ) : null}
-      <div className="mb-4 grid gap-3 sm:grid-cols-4">
+      <Stagger className="mb-4 grid gap-3 sm:grid-cols-4">
         {(["h24", "d7", "d30", "d90"] as const).map((key) => (
-          <Card key={key}>
-            <CardContent className="p-4">
-              <p className="text-xs text-muted-foreground">
-                {key === "h24"
-                  ? m.range_24h()
-                  : key === "d7"
-                    ? m.range_7d()
-                    : key === "d30"
-                      ? m.range_30d()
-                      : m.range_90d()}
-              </p>
-              <p className="text-2xl font-medium">
-                {stats.data?.uptime[key] ?? "—"}%
-              </p>
-            </CardContent>
-          </Card>
+          <StaggerItem key={key}>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground">
+                  {key === "h24"
+                    ? m.range_24h()
+                    : key === "d7"
+                      ? m.range_7d()
+                      : key === "d30"
+                        ? m.range_30d()
+                        : m.range_90d()}
+                </p>
+                <p className="text-2xl font-medium">
+                  {stats.data?.uptime[key] ?? "—"}%
+                </p>
+              </CardContent>
+            </Card>
+          </StaggerItem>
         ))}
-      </div>
+      </Stagger>
       <Card className="mb-4">
         <CardContent className="p-4">
           <p className="mb-2 text-sm text-muted-foreground">
@@ -581,41 +560,41 @@ export function MonitorDetailPage() {
           {m.monitor_no_outages()}
         </p>
       ) : null}
-      <div className="grid gap-2">
+      {outages.isPending ? <ContentSkeleton /> : null}
+      <Stagger className="grid gap-2">
         {outages.data?.outages.map((outage) => (
-          <div
-            key={outage.id}
-            className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
-          >
-            <span>{outage.cause || m.outage_cause()}</span>
-            <span className="text-muted-foreground">
-              {outage.endedAt
-                ? new Date(outage.endedAt).toISOString()
-                : m.outage_ongoing()}
-            </span>
-            {!outage.acknowledgedAt ? (
-              <PendingButton
-                size="sm"
-                variant="outline"
-                type="button"
-                pending={action.pending}
-                onClick={() => {
-                  void action.run(async () => {
-                    await api(`/api/outages/${outage.id}/ack`, {
-                      method: "POST",
+          <StaggerItem key={outage.id}>
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm">
+              <span>{outage.cause || m.outage_cause()}</span>
+              <span className="text-muted-foreground">
+                {outage.endedAt
+                  ? new Date(outage.endedAt).toISOString()
+                  : m.outage_ongoing()}
+              </span>
+              {!outage.acknowledgedAt ? (
+                <PendingButton
+                  size="sm"
+                  variant="outline"
+                  type="button"
+                  pending={action.pending}
+                  onClick={() => {
+                    void action.run(async () => {
+                      await api(`/api/outages/${outage.id}/ack`, {
+                        method: "POST",
+                      });
+                      await client.invalidateQueries({
+                        queryKey: ["outages", id],
+                      });
                     });
-                    await client.invalidateQueries({
-                      queryKey: ["outages", id],
-                    });
-                  });
-                }}
-              >
-                {m.monitor_ack()}
-              </PendingButton>
-            ) : null}
-          </div>
+                  }}
+                >
+                  {m.monitor_ack()}
+                </PendingButton>
+              ) : null}
+            </div>
+          </StaggerItem>
         ))}
-      </div>
-    </PageEnter>
+      </Stagger>
+    </>
   );
 }
