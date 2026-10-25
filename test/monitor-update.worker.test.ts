@@ -243,8 +243,18 @@ describe("monitor update", () => {
     const due = await stub.scheduleOf(id);
     expect(due?.config).toMatchObject({ url: "https://example.com/new" });
     expect(due?.intervalMs).toBe(120_000);
-    if ((due?.nextCheckAt ?? 0) <= Date.now() + 2_000) {
-      expect((await stub.runDue(Date.now() + 5_000)).ran).toBe(1);
+    // Upsert arms the shard alarm at the new due time. The alarm can run the
+    // check before this test calls runDue, so either signal is success.
+    const dueAt = due?.nextCheckAt ?? Number.POSITIVE_INFINITY;
+    if (!seen.some((url) => url.includes("/new"))) {
+      expect(dueAt).toBeLessThanOrEqual(Date.now() + 5_000);
+    }
+    const deadline = Date.now() + 2_000;
+    while (!seen.some((url) => url.includes("/new")) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    if (!seen.some((url) => url.includes("/new"))) {
+      await stub.runDue(Date.now() + 5_000);
     }
     expect(seen.some((url) => url.includes("/new"))).toBe(true);
     expect(seen.some((url) => url.includes("/old"))).toBe(false);
