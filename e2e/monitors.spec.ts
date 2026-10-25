@@ -119,9 +119,9 @@ test("shows the full check configuration and applies an edit without a reload", 
   await expect(page.getByText("https://example.com/health")).toHaveCount(0);
   await page.getByRole("link", { name: "Dashboard" }).click();
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-  await expect(page.getByText(renamed)).toBeVisible();
-  await expect(page.getByText("https://example.com/ready")).toBeVisible();
-  await page.getByRole("link", { name: renamed }).click();
+  const card = page.getByRole("link", { name: renamed });
+  await expect(card.getByText("https://example.com/ready")).toBeVisible();
+  await card.click();
   await expect(page.getByText("120", { exact: true }).first()).toBeVisible();
 });
 
