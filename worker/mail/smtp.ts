@@ -21,7 +21,16 @@ export type MailResult =
 export async function sendSmtp(
   settings: SmtpSettings,
   message: { to: string; subject: string; text: string; messageId: string },
+  options?: {
+    allowLoopback?: boolean;
+    responseTimeoutMs?: number;
+    socketTimeoutMs?: number;
+    sendTimeoutMs?: number;
+  },
 ): Promise<MailResult> {
+  const loopback =
+    options?.allowLoopback === true &&
+    /^(127\.0\.0\.1|localhost|::1)$/i.test(settings.host.trim());
   if (settings.port === 25) {
     return {
       ok: false,
@@ -31,7 +40,11 @@ export async function sendSmtp(
         "Port 25 is blocked on Workers. Use 587 (STARTTLS) or 465 (TLS).",
     };
   }
-  if (settings.port !== 587 && settings.port !== 465) {
+  const allowedPort =
+    settings.port === 587 ||
+    settings.port === 465 ||
+    (loopback && settings.port >= 1024 && settings.port <= 65535);
+  if (!allowedPort) {
     return {
       ok: false,
       stage: "config",
@@ -39,7 +52,7 @@ export async function sendSmtp(
       message: "Only ports 587 and 465 are supported.",
     };
   }
-  if (isBlockedHost(settings.host)) {
+  if (isBlockedHost(settings.host) && !loopback) {
     return {
       ok: false,
       stage: "config",
@@ -61,8 +74,8 @@ export async function sendSmtp(
         : undefined,
       authType: ["plain", "login"],
       logLevel: LogLevel.NONE,
-      socketTimeoutMs: 10_000,
-      responseTimeoutMs: 15_000,
+      socketTimeoutMs: options?.socketTimeoutMs ?? 10_000,
+      responseTimeoutMs: options?.responseTimeoutMs ?? 15_000,
     });
     try {
       await Promise.race([
@@ -74,7 +87,10 @@ export async function sendSmtp(
           headers: { "Message-ID": message.messageId },
         }),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("SMTP send timed out")), 30_000),
+          setTimeout(
+            () => reject(new Error("SMTP send timed out")),
+            options?.sendTimeoutMs ?? 30_000,
+          ),
         ),
       ]);
     } finally {

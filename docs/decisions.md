@@ -31,7 +31,7 @@ These choices were open in the plan or forced by the free-plan and local-dev con
 27. The create and save requests run the first check so the UI has a result immediately. The sample is stored on the shard, so the response chart and today's status-page bar update before the five-minute flush.
 28. `worker-mailer` is pinned to 1.3.0. The SMTP stage is inferred from the error text because the library bundles the handshake.
 29. Cookies are `flarebot_session` and `locale`.
-30. End-to-end tests use the real setup wizard. There is no backdoor. `ALLOW_TEST_MAIL=1` exists for the Worker test suite.
+30. End-to-end tests seed the owner through `/api/setup` and then sign in over the API. They do not walk the setup wizard, and they do not call out to example.com or crt.sh. `ALLOW_TEST_MAIL=1` exists for the Worker test suite.
 31. v1 tables (incident posts, maintenance, subscribers, Access role maps, domain expiry) are not created. `cert_info` exists for the SSL monitor.
 32. `@cloudflare/vitest-pool-workers` was renamed to `@cloudflare/vitest-plugin`. The old package does not support Vitest 5, which Vite 8 requires.
 33. HTTP keyword and JSON bodies are capped at 64 KB.
@@ -39,3 +39,6 @@ These choices were open in the plan or forced by the free-plan and local-dev con
 35. Passkey verification does not require the user-verification flag, so a security key without a PIN can still sign in. Password login still asks for TOTP when TOTP is enabled. A successful passkey login does not also ask for TOTP.
 36. In this environment `git config core.hooksPath` points at Cursor's hook dispatcher. Lefthook shims are installed in `.git/hooks` so the dispatcher can chain to them. `core.hooksPath` is not changed. A normal clone still uses `lefthook install` from `pnpm install`. Git only runs `pre-push` when that name exists on the hooks path; the dispatcher directory originally had `pre-commit` and `commit-msg` only.
 37. Route guards use `fetchQuery`. This Query version's `ensureQueryData` returns a cached signed-out session after login and sends the browser back to the sign-in form.
+38. Pre-push runs unit tests, Worker tests, `i18n:check`, and the production build. The Playwright smoke test stays in CI (browsers cached) and in `pnpm test:e2e`. It seeds state through the API. Screenshot capture is `pnpm brand:preview`, not the default end-to-end run.
+39. SMTP tests dial a local mock only when `ALLOW_TEST_MAIL=1`. That flag lets `127.0.0.1` through the private-host check. Production config does not set the flag, so loopback stays blocked.
+40. CI runs lint, typecheck, tests, the production build, and Playwright as separate jobs. A new commit on a pull request cancels the previous run. Playwright drives `vite preview` of that build on port 4173, with two workers and `fullyParallel`. If `.dev.vars` is missing, CI copies `.dev.vars.example` first. Without `SETUP_SECRET` the setup route returns 503, the wizard never leaves the account step, and a fresh database still shows "Set up Flarebot" instead of the dashboard. Brand screenshots stay on `pnpm brand:preview`.

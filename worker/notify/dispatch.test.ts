@@ -35,4 +35,66 @@ describe("deliverChannel", () => {
     expect(email.ok).toBe(true);
     expect(queued[0]).toContain("API");
   });
+
+  it("posts slack, telegram, and webhook payloads and surfaces HTTP errors", async () => {
+    const seen: { url: string; body: string; auth?: string }[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const headers = new Headers(init?.headers);
+      seen.push({
+        url: String(input),
+        body: String(init?.body ?? ""),
+        auth: headers.get("authorization") ?? undefined,
+      });
+      const url = String(input);
+      if (url.includes("fail")) return new Response("no", { status: 500 });
+      return new Response("ok", { status: 200 });
+    };
+    const slack = await deliverChannel(
+      {
+        type: "slack",
+        locale: "en",
+        config: { webhookUrl: "https://hooks.slack.test/a" },
+      },
+      { kind: "down", monitorName: "API", reason: "status" },
+      { fetch: fetchImpl },
+    );
+    const telegram = await deliverChannel(
+      {
+        type: "telegram",
+        locale: "en",
+        config: { botToken: "token", chatId: "42" },
+      },
+      { kind: "unstable", monitorName: "API", reason: "flap" },
+      { fetch: fetchImpl },
+    );
+    const hook = await deliverChannel(
+      {
+        type: "webhook",
+        locale: null,
+        config: {
+          url: "https://ops.test/hook",
+          headers: [{ name: "authorization", value: "Bearer t" }],
+        },
+      },
+      { kind: "up", monitorName: "API", reason: "" },
+      { fetch: fetchImpl },
+    );
+    const failed = await deliverChannel(
+      {
+        type: "discord",
+        locale: "en",
+        config: { webhookUrl: "https://fail.test/hook" },
+      },
+      { kind: "down", monitorName: "API", reason: "x" },
+      { fetch: fetchImpl },
+    );
+    expect(slack.ok).toBe(true);
+    expect(JSON.parse(seen[0]?.body ?? "{}").text).toContain("API");
+    expect(telegram.ok).toBe(true);
+    expect(seen[1]?.url).toContain("/bottoken/sendMessage");
+    expect(hook.ok).toBe(true);
+    expect(seen[2]?.auth).toBe("Bearer t");
+    expect(JSON.parse(seen[2]?.body ?? "{}").event).toBe("up");
+    expect(failed.ok).toBe(false);
+  });
 });

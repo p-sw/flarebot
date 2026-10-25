@@ -12,5 +12,12 @@ export default defineConfig({
       "dist/**",
       "src/paraglide/**",
     ],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json-summary"],
+      reportsDirectory: "./coverage/unit",
+      include: ["shared/**/*.ts", "worker/**/*.ts", "scripts/**/*.mjs"],
+      exclude: ["**/*.test.ts", "**/*.worker.test.ts"],
+    },
   },
 });

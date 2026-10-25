@@ -17,5 +17,10 @@ describe("mail retry", () => {
     expect(classifyMailError("421 try again")).toBe("transient");
     expect(inferSmtpStage("connection timed out")).toBe("connect");
     expect(inferSmtpStage("certificate verify failed")).toBe("tls");
+    expect(classifyMailError("550 mailbox unavailable")).toBe("permanent");
+    expect(classifyMailError("invalid login")).toBe("permanent");
+    expect(classifyMailError("socket hang up")).toBe("transient");
+    expect(inferSmtpStage("message rejected")).toBe("send");
+    expect(nextRetryDelay(0)).toBeNull();
   });
 });

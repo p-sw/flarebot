@@ -129,6 +129,10 @@ export class SchedulerShard extends DurableObject<Env> {
     };
   }
 
+  async alarmAt(): Promise<number | null> {
+    return this.ctx.storage.getAlarm();
+  }
+
   async ensureAlarm(): Promise<void> {
     const current = await this.ctx.storage.getAlarm();
     if (current !== null) return;

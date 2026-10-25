@@ -105,4 +105,80 @@ describe("applyOutcome", () => {
     });
     expect(again.alert).toBeNull();
   });
+
+  it("waits for the recovery threshold before closing an outage", () => {
+    const state = applyOutcome(initialState(0), fail(), {
+      retries: 1,
+      recoveryThreshold: 2,
+      now: 0,
+    }).state;
+    const first = applyOutcome(state, ok, {
+      retries: 1,
+      recoveryThreshold: 2,
+      now: 1_000,
+    });
+    expect(first.state.status).toBe("down");
+    expect(first.closedOutage).toBe(false);
+    const second = applyOutcome(first.state, ok, {
+      retries: 1,
+      recoveryThreshold: 2,
+      now: 2_000,
+    });
+    expect(second.state.status).toBe("up");
+    expect(second.closedOutage).toBe(true);
+  });
+
+  it("does not alert again while the monitor stays down", () => {
+    const down = applyOutcome(initialState(0), fail(), {
+      retries: 1,
+      recoveryThreshold: 1,
+      now: 0,
+    });
+    const again = applyOutcome(down.state, fail(), {
+      retries: 1,
+      recoveryThreshold: 1,
+      now: 1_000,
+    });
+    expect(again.alert).toBeNull();
+    expect(again.openedOutage).toBe(false);
+  });
+
+  it("ignores checks while paused and drops old flap stamps", () => {
+    const paused = applyOutcome(
+      { ...initialState(0), status: "paused" },
+      fail(),
+      { retries: 1, recoveryThreshold: 1, now: 1 },
+    );
+    expect(paused.alert).toBeNull();
+    expect(paused.state.status).toBe("paused");
+
+    const stale = applyOutcome(
+      {
+        ...initialState(0),
+        status: "up",
+        transitions: [0],
+        flappingNotified: true,
+      },
+      fail(),
+      { retries: 1, recoveryThreshold: 1, now: 31 * 60_000 },
+    );
+    expect(stale.alert).toBe("down");
+    expect(stale.state.flappingNotified).toBe(false);
+  });
+
+  it("does not close an outage when a pending monitor recovers", () => {
+    const pending = applyOutcome(initialState(0), fail(), {
+      retries: 3,
+      recoveryThreshold: 1,
+      now: 0,
+    });
+    const recovered = applyOutcome(pending.state, ok, {
+      retries: 3,
+      recoveryThreshold: 1,
+      now: 1_000,
+    });
+    expect(recovered.state.status).toBe("up");
+    expect(recovered.closedOutage).toBe(false);
+    expect(recovered.alert).toBeNull();
+  });
 });

@@ -1,9 +1,57 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, it } from "vitest";
-import { assertScopesWithinRole, can, scopesForRole } from "./permissions";
+import {
+  ACTIONS,
+  type Action,
+  assertScopesWithinRole,
+  can,
+  ROLES,
+  type Role,
+  scopesForRole,
+} from "./permissions";
+
+const rank: Record<Role, number> = {
+  viewer: 1,
+  editor: 2,
+  admin: 3,
+  owner: 4,
+};
+
+const minimum: Record<Action, Role> = {
+  "dashboard.read": "viewer",
+  "monitors.read": "viewer",
+  "monitors.write": "editor",
+  "monitors.heartbeat": "viewer",
+  "outages.read": "viewer",
+  "outages.ack": "editor",
+  "channels.read": "viewer",
+  "channels.write": "admin",
+  "status_pages.read": "viewer",
+  "status_pages.write": "admin",
+  "users.read": "admin",
+  "users.invite": "admin",
+  "users.role": "admin",
+  "tokens.read": "viewer",
+  "tokens.write": "viewer",
+  "audit.read": "admin",
+  "mail.read": "owner",
+  "mail.write": "owner",
+  "instance.settings": "owner",
+  "instance.transfer": "owner",
+};
 
 describe("can", () => {
+  it("matches the role matrix for every action", () => {
+    for (const role of ROLES) {
+      for (const action of ACTIONS) {
+        expect(can({ role }, action, { id: "resource" })).toBe(
+          rank[role] >= rank[minimum[action]],
+        );
+      }
+    }
+  });
+
   it("lets a viewer read and blocks writes", () => {
     expect(can({ role: "viewer" }, "monitors.read", { id: "m1" })).toBe(true);
     expect(can({ role: "viewer" }, "monitors.write")).toBe(false);

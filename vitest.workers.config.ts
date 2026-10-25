@@ -23,8 +23,18 @@ export default defineConfig(async () => {
     test: {
       include: ["**/*.worker.test.ts"],
       setupFiles: ["./test/apply-migrations.ts"],
+      globalSetup: ["./test/smtp-global-setup.ts"],
+      fileParallelism: false,
+      maxWorkers: 1,
       testTimeout: 20_000,
       hookTimeout: 20_000,
+      coverage: {
+        provider: "v8",
+        reporter: ["text", "json-summary"],
+        reportsDirectory: "./coverage/worker",
+        include: ["shared/**/*.ts", "worker/**/*.ts"],
+        exclude: ["**/*.test.ts", "**/*.worker.test.ts"],
+      },
     },
   };
 });
