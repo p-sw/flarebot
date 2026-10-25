@@ -8,11 +8,13 @@ type MonitorList = { monitors: MonitorListItem[] };
 // This Query version's ensureQueryData returns cached data even after
 // invalidateQueries marks it stale. Loaders have to fetch so navigation
 // sees a pause or resume that happened on another screen.
-export function loadQuery<T>(
+// The options stay generic: FetchQueryOptions<unknown> rejects queryOptions()
+// because staleTime's query argument is contravariant.
+export function loadQuery<TOptions extends { queryKey: QueryKey }>(
   client: QueryClient,
-  options: Parameters<QueryClient["fetchQuery"]>[0],
-): Promise<T> {
-  return client.fetchQuery(options) as Promise<T>;
+  options: TOptions,
+): Promise<unknown> {
+  return client.fetchQuery(options as Parameters<QueryClient["fetchQuery"]>[0]);
 }
 
 export async function refreshQueries(
