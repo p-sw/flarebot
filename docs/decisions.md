@@ -37,5 +37,5 @@ These choices were open in the plan or forced by the free-plan and local-dev con
 33. HTTP keyword and JSON bodies are capped at 64 KB.
 34. Language-prefixed paths such as `/ko/` are not routed. The public page uses `?lang=`.
 35. Passkey verification does not require the user-verification flag, so a security key without a PIN can still sign in. Password login still asks for TOTP when TOTP is enabled. A successful passkey login does not also ask for TOTP.
-36. In this environment `git config core.hooksPath` points at Cursor's hook dispatcher. Lefthook shims are installed in `.git/hooks` so the dispatcher can chain to them. `core.hooksPath` is not changed. A normal clone still uses `lefthook install` from `pnpm install`.
+36. In this environment `git config core.hooksPath` points at Cursor's hook dispatcher. Lefthook shims are installed in `.git/hooks` so the dispatcher can chain to them. `core.hooksPath` is not changed. A normal clone still uses `lefthook install` from `pnpm install`. Git only runs `pre-push` when that name exists on the hooks path; the dispatcher directory originally had `pre-commit` and `commit-msg` only.
 37. Route guards use `fetchQuery`. This Query version's `ensureQueryData` returns a cached signed-out session after login and sends the browser back to the sign-in form.
