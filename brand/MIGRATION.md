@@ -5,7 +5,7 @@
 Current contract:
 
 - `defineBrand` fields: `brandApi`, `name`, `logo.light`, `logo.dark`, `defaultLocale` (`en` or `ko`), `motion` (`calm`, `crisp`, `playful`, `none`), optional `links.home`, `links.source`, and `links.docs`. The stock config sets `links.source` to the GitHub repository, and the footer shows that link. Omit `links.source` to hide it.
-- `defineMotion` fields: `spring.soft`, `spring.snappy`, `page` (`slide-up`, `fade`, `none`), `stagger`, `distance`.
+- `defineMotion` fields: `spring.soft`, `spring.snappy`, optional `spring.drawer`, `page` (`slide-up`, `fade`, `none`), `stagger`, `distance`, optional `sidebarMs`. Omitted `spring.drawer` and `sidebarMs` receive defaults (`420/40` and `180`). `page: "none"` also skips sidebar movement. `brandApi` stays `1`.
 - Slot props:
   - `AppHeader({ title, actions })`
   - `AppFooter()` with no props

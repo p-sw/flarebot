@@ -12,6 +12,25 @@ import {
 } from "@tanstack/react-router";
 import { ApiClientError, api } from "./lib/api";
 import {
+  accountQuery,
+  auditQuery,
+  channelsQuery,
+  mailQuery,
+  monitorQuery,
+  monitorsQuery,
+  outagesQuery,
+  settingsQuery,
+  statsQuery,
+  statusPagesQuery,
+  teamQuery,
+  tokensQuery,
+} from "./lib/queries";
+import {
+  canReuseSession,
+  sessionCacheEpoch,
+  sessionCacheKey,
+} from "./lib/session-gate";
+import {
   ForgotPage,
   InvitePage,
   LoginPage,
@@ -36,9 +55,12 @@ import {
 import { PublicStatusPage } from "./pages/public";
 import { getLocale, setLocale } from "./paraglide/runtime.js";
 import { type SessionUser, Shell } from "./shell";
+import { ContentSkeleton } from "./ui/skeleton";
+
+const SESSION_STALE = 60_000;
 
 export const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false, staleTime: 4_000 } },
+  defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
 });
 
 type Meta = { setupRequired: boolean };
@@ -49,14 +71,36 @@ async function meta() {
   return queryClient.fetchQuery({
     queryKey: ["meta"],
     queryFn: () => api<Meta>("/api/meta"),
+    staleTime: SESSION_STALE,
   });
 }
 
+function sessionOptions() {
+  const epoch = sessionCacheEpoch();
+  return {
+    queryKey: sessionCacheKey(),
+    queryFn: async () => {
+      const result = await api<{ user: SessionUser | null }>(
+        "/api/auth/session",
+      );
+      if (epoch !== sessionCacheEpoch()) {
+        throw new Error("session superseded");
+      }
+      return result;
+    },
+    staleTime: SESSION_STALE,
+  };
+}
+
 async function session() {
-  return queryClient.fetchQuery({
-    queryKey: ["session"],
-    queryFn: () => api<{ user: SessionUser | null }>("/api/auth/session"),
-  });
+  return queryClient.fetchQuery(sessionOptions());
+}
+
+function cachedUser() {
+  return (
+    queryClient.getQueryData<{ user: SessionUser | null }>(sessionCacheKey())
+      ?.user ?? null
+  );
 }
 
 async function applyExplicitLocale(locale: string | null | undefined) {
@@ -86,8 +130,9 @@ const loginRoute = createRoute({
     return next ? { next } : {};
   },
   beforeLoad: async () => {
-    if ((await meta()).setupRequired) throw redirect({ to: "/setup" });
-    if ((await session()).user) throw redirect({ to: "/console" });
+    const [info, current] = await Promise.all([meta(), session()]);
+    if (info.setupRequired) throw redirect({ to: "/setup" });
+    if (current.user) throw redirect({ to: "/console" });
   },
   component: LoginPage,
 });
@@ -141,9 +186,32 @@ const homeRoute = createRoute({
 const consoleRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/console",
-  beforeLoad: async ({ location }) => {
-    if ((await meta()).setupRequired) throw redirect({ to: "/setup" });
-    const current = await session();
+  beforeLoad: async ({ cause, location, navigate }) => {
+    // This parent gate runs on every child navigation. Waiting on the network
+    // here is what froze the shell for about a second after each click.
+    const epoch = sessionCacheEpoch();
+    const user = cachedUser();
+    if (user && canReuseSession(cause, user)) {
+      const updatedAt =
+        queryClient.getQueryState(sessionCacheKey())?.dataUpdatedAt ?? 0;
+      if (cause === "stay" && Date.now() - updatedAt > SESSION_STALE) {
+        void session()
+          .then((next) => {
+            if (epoch !== sessionCacheEpoch() || next.user) return;
+            const nextPath = safeReturnPath(
+              `${location.pathname}${location.searchStr}`,
+            );
+            void navigate({
+              to: "/login",
+              search: nextPath ? { next: nextPath } : {},
+            });
+          })
+          .catch(() => undefined);
+      }
+      return { user };
+    }
+    const [info, current] = await Promise.all([meta(), session()]);
+    if (info.setupRequired) throw redirect({ to: "/setup" });
     if (!current.user) {
       const next = safeReturnPath(`${location.pathname}${location.searchStr}`);
       throw redirect({
@@ -160,9 +228,18 @@ const consoleRoute = createRoute({
   },
 });
 
+const pending = {
+  pendingComponent: ContentSkeleton,
+  pendingMs: 120,
+  pendingMinMs: 0,
+};
+
 const indexRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/",
+  loader: () =>
+    queryClient.ensureQueryData(monitorsQuery).catch(() => undefined),
+  ...pending,
   component: DashboardPage,
 });
 const newMonitorRoute = createRoute({
@@ -173,41 +250,72 @@ const newMonitorRoute = createRoute({
 const monitorRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/monitors/$id",
+  loader: ({ params }) =>
+    Promise.all([
+      queryClient.ensureQueryData(monitorQuery(params.id)),
+      queryClient.ensureQueryData(statsQuery(params.id)),
+      queryClient.ensureQueryData(outagesQuery(params.id)),
+    ]).catch(() => undefined),
+  ...pending,
   component: MonitorDetailPage,
 });
 const pagesRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/status-pages",
+  loader: () =>
+    Promise.all([
+      queryClient.ensureQueryData(statusPagesQuery),
+      queryClient.ensureQueryData(monitorsQuery),
+    ]).catch(() => undefined),
+  ...pending,
   component: StatusPagesPage,
 });
 const channelsRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/channels",
+  loader: () =>
+    queryClient.ensureQueryData(channelsQuery).catch(() => undefined),
+  ...pending,
   component: ChannelsPage,
 });
 const teamRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/team",
+  loader: () => queryClient.ensureQueryData(teamQuery).catch(() => undefined),
+  ...pending,
   component: TeamPage,
 });
 const tokensRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/tokens",
+  loader: () => queryClient.ensureQueryData(tokensQuery).catch(() => undefined),
+  ...pending,
   component: TokensPage,
 });
 const auditRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/audit",
+  loader: () => queryClient.ensureQueryData(auditQuery).catch(() => undefined),
+  ...pending,
   component: AuditPage,
 });
 const settingsRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/settings",
+  loader: () =>
+    Promise.all([
+      queryClient.ensureQueryData(settingsQuery),
+      queryClient.ensureQueryData(mailQuery),
+    ]).catch(() => undefined),
+  ...pending,
   component: SettingsPage,
 });
 const accountRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/account",
+  loader: () =>
+    queryClient.ensureQueryData(accountQuery).catch(() => undefined),
+  ...pending,
   component: AccountPage,
 });
 
@@ -233,7 +341,13 @@ const routeTree = rootRoute.addChildren([
   ]),
 ]);
 
-export const router = createRouter({ routeTree });
+export const router = createRouter({
+  routeTree,
+  defaultPreload: "intent",
+  defaultPreloadDelay: 40,
+  defaultPendingMs: 120,
+  defaultPendingMinMs: 0,
+});
 
 declare module "@tanstack/react-router" {
   interface Register {

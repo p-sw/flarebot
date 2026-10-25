@@ -58,6 +58,7 @@ test("a status page renders the monitor title", async ({ page }) => {
 test("sign-out returns to the sign-in form", async ({ page }) => {
   await signIn(page);
   await page.goto("/console");
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("button", { name: /Account menu/ }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
 });

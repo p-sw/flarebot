@@ -8,7 +8,7 @@ Edit only `brand/` when the task is a rebrand, a copy change, a motion change, o
 
 - `brand/brand.config.ts` — product name, logo paths, default locale, motion preset name, links
 - `brand/tokens.css` — colors mapped onto the shadcn variables
-- `brand/motion.ts` — spring and page-enter presets
+- `brand/motion.ts` — springs (soft, snappy, drawer), page transition, stagger, distance, sidebar duration
 - `brand/copy/<locale>.json` — strings that override the locale catalogs
 - `brand/assets/` — logos
 - `brand/overrides/` — slot components (header, footer, status hero, empty state, login backdrop)

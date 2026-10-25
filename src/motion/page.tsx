@@ -1,39 +1,44 @@
 // SPDX-License-Identifier: MIT
 
 import presetsSource from "@brand/motion";
-import type { MotionConfig as BrandMotion } from "@shared/brand";
-import { MotionConfig, motion } from "motion/react";
+import type { ResolvedMotion } from "@shared/brand";
+import { MotionConfig, motion, useReducedMotion } from "motion/react";
 import type { ReactNode } from "react";
 
-const presets: BrandMotion = presetsSource;
+const presets: ResolvedMotion = presetsSource;
 
-const spring = (kind: "soft" | "snappy") => ({
-  type: "spring" as const,
-  stiffness: presets.spring[kind].stiffness,
-  damping: presets.spring[kind].damping,
-});
+type Spring = {
+  type: "spring";
+  stiffness: number;
+  damping: number;
+};
+
+function springOf(value: { stiffness: number; damping: number }): Spring {
+  return {
+    type: "spring",
+    stiffness: value.stiffness,
+    damping: value.damping,
+  };
+}
+
+export function useMotionPrefs() {
+  const reduce = useReducedMotion() === true;
+  const still = reduce || presets.page === "none";
+  return {
+    reduce,
+    still,
+    distance: still ? 0 : presets.distance,
+    sidebarMs: still ? 0 : presets.sidebarMs,
+    soft: springOf(presets.spring.soft),
+    snappy: springOf(presets.spring.snappy),
+    drawer: springOf(presets.spring.drawer),
+    page: presets.page,
+    stagger: still ? 0 : presets.stagger,
+  };
+}
 
 export function MotionRoot({ children }: { children: ReactNode }) {
   return <MotionConfig reducedMotion="user">{children}</MotionConfig>;
-}
-
-export function PageEnter({ children }: { children: ReactNode }) {
-  const distance = presets.page === "none" ? 0 : presets.distance;
-  const initial =
-    presets.page === "fade"
-      ? { opacity: 0 }
-      : presets.page === "none"
-        ? false
-        : { opacity: 0, y: distance };
-  return (
-    <motion.div
-      initial={initial}
-      animate={{ opacity: 1, y: 0 }}
-      transition={spring("soft")}
-    >
-      {children}
-    </motion.div>
-  );
 }
 
 export function Stagger({
@@ -43,12 +48,16 @@ export function Stagger({
   children: ReactNode;
   className?: string;
 }) {
+  const motionPrefs = useMotionPrefs();
+  if (motionPrefs.still) return <div className={className}>{children}</div>;
   return (
     <motion.div
       className={className}
       initial="hidden"
       animate="show"
-      variants={{ show: { transition: { staggerChildren: presets.stagger } } }}
+      variants={{
+        show: { transition: { staggerChildren: motionPrefs.stagger } },
+      }}
     >
       {children}
     </motion.div>
@@ -62,15 +71,18 @@ export function StaggerItem({
   children: ReactNode;
   className?: string;
 }) {
+  const motionPrefs = useMotionPrefs();
+  if (motionPrefs.still) return <div className={className}>{children}</div>;
   return (
     <motion.div
       className={className}
       variants={{
-        hidden: {
-          opacity: 0,
-          y: presets.page === "none" ? 0 : presets.distance,
+        hidden: { opacity: 0, y: motionPrefs.distance },
+        show: {
+          opacity: 1,
+          y: 0,
+          transition: motionPrefs.snappy,
         },
-        show: { opacity: 1, y: 0, transition: spring("snappy") },
       }}
     >
       {children}

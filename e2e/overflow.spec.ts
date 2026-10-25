@@ -63,7 +63,9 @@ test("key pages do not overflow at mobile widths", async ({ page }) => {
       await expectNoHorizontalOverflow(page);
     }
     await page.goto("/console");
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.getByRole("button", { name: "Open menu" }).click();
+    await page.getByRole("button", { name: /Account menu/ }).click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
     await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
     for (const path of signedOut) {
       await page.goto(path);
