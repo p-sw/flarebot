@@ -40,9 +40,19 @@ function handle(mode: Mode, socket: Socket) {
       } else if (upper.startsWith("STARTTLS")) {
         reply(socket, "454 4.7.0 TLS not available");
       } else if (upper.startsWith("AUTH")) {
-        if (mode === "authFail")
+        if (mode === "authFail") {
           reply(socket, "535 5.7.8 Authentication failed");
-        else reply(socket, "235 authenticated");
+        } else if (mode === "ok") {
+          const token = line.slice("AUTH PLAIN ".length).trim();
+          const decoded = Buffer.from(token, "base64").toString("utf8");
+          const password = decoded.split("\0")[2] ?? "";
+          reply(
+            socket,
+            upper.startsWith("AUTH PLAIN ") && password === "secret"
+              ? "235 authenticated"
+              : "535 5.7.8 Authentication failed",
+          );
+        } else reply(socket, "235 authenticated");
       } else if (upper.startsWith("MAIL FROM")) {
         if (mode === "mailboxFail")
           reply(socket, "550 5.1.1 mailbox unavailable");

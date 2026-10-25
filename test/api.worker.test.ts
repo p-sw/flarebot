@@ -348,14 +348,31 @@ describe("flarebot API", () => {
     expect(restored.status).toBe(200);
     const test = await api(
       "/api/settings/mail/test",
-      { method: "POST", body: JSON.stringify({}) },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          driver: "smtp",
+          host: "192.0.2.1",
+          port: 587,
+          security: "starttls",
+          username: "bot",
+          password: "secret",
+          fromName: "Flarebot",
+          fromAddress: "bot@example.com",
+        }),
+      },
       owner,
     );
     expect(test.status).toBe(400);
-    const payload = (await test.json()) as { error: { stage?: string } };
-    expect(["connect", "tls", "config", "timeout"]).toContain(
-      payload.error.stage,
-    );
+    const payload = (await test.json()) as {
+      source?: string;
+      recorded?: boolean;
+      error: { stage?: string; reason?: string };
+    };
+    expect(["connect", "tls", "timeout"]).toContain(payload.error.stage);
+    expect(payload.error.reason).toBeUndefined();
+    expect(payload.source).toBe("saved");
+    expect(payload.recorded).toBe(true);
   });
 
   it("leaves a stored user locale unused and does not set a locale cookie", async () => {

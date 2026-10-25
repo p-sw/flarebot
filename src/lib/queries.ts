@@ -158,6 +158,9 @@ export type MailSettings = {
   activeSource: "secrets" | "database" | "cloudflare" | "none";
   emailBinding: boolean;
   secretsOverride: boolean;
+  lastTestOk: boolean | null;
+  lastTestAt: number | null;
+  lastTestError: string | null;
 };
 
 export const mailQuery = queryOptions({
