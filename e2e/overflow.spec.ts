@@ -42,16 +42,16 @@ test("key pages do not overflow at mobile widths", async ({ page }) => {
   expect(created.ok()).toBeTruthy();
 
   const signedIn = [
-    "/",
-    "/monitors/new",
-    `/monitors/${id}`,
-    "/status-pages",
-    "/channels",
-    "/team",
-    "/tokens",
-    "/audit",
-    "/settings",
-    "/account",
+    "/console",
+    "/console/monitors/new",
+    `/console/monitors/${id}`,
+    "/console/status-pages",
+    "/console/channels",
+    "/console/team",
+    "/console/tokens",
+    "/console/audit",
+    "/console/settings",
+    "/console/account",
   ];
   const signedOut = ["/login", "/forgot", "/setup", `/s/${slug}`];
 
@@ -62,7 +62,7 @@ test("key pages do not overflow at mobile widths", async ({ page }) => {
       await page.waitForLoadState("networkidle");
       await expectNoHorizontalOverflow(page);
     }
-    await page.goto("/");
+    await page.goto("/console");
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
     for (const path of signedOut) {

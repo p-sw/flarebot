@@ -5,7 +5,7 @@ import { signIn } from "./session";
 test("brand preview screenshots", async ({ page }) => {
   mkdirSync(".brand-preview", { recursive: true });
   await signIn(page);
-  await page.goto("/");
+  await page.goto("/console");
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   await page.screenshot({
     path: ".brand-preview/dashboard-light-desktop.png",

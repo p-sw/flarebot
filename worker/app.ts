@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: MIT
 
 import { Hono } from "hono";
-import { getCookie } from "hono/cookie";
-import { LOCALE_COOKIE } from "../shared/locales";
+import { registerFrontDoor } from "./front-door";
 import { ApiError, type AppEnv } from "./http";
 import { registerAuth } from "./routes/auth";
 import { registerManage } from "./routes/manage";
 import { registerMonitors } from "./routes/monitors";
-import { loadPublicStatus, statusDocument } from "./status/public";
 
 export function createApp(): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -27,17 +25,7 @@ export function createApp(): Hono<AppEnv> {
   registerAuth(app);
   registerMonitors(app);
   registerManage(app);
-  app.get("/s/:slug", async (c) => {
-    const page = await loadPublicStatus(
-      c.env,
-      c.req.param("slug"),
-      c.req.header("accept-language") ?? null,
-      c.req.query("lang") ?? null,
-      getCookie(c, LOCALE_COOKIE) ?? null,
-    );
-    if (!page) return c.notFound();
-    return statusDocument(c.env, c.req.raw, page);
-  });
+  registerFrontDoor(app);
   app.all("/api/*", (c) =>
     c.json({ error: { code: "not_found", message: "Not found." } }, 404),
   );

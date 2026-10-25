@@ -34,6 +34,7 @@ export type PublicStatus = {
   langs: Record<string, string>;
   logoUrl: string | null;
   accent: string | null;
+  serveAtRoot: boolean;
   overall: "operational" | "degraded" | "outage" | "empty";
   groups: {
     name: string;
@@ -225,12 +226,36 @@ export async function loadPublicStatus(
     langs: picked.langs,
     logoUrl: page.logoUrl,
     accent: page.accent,
+    serveAtRoot: page.serveAtRoot,
     overall,
     groups: [...groups.entries()].map(([name, groupItems]) => ({
       name,
       items: groupItems,
     })),
   };
+}
+
+export async function loadRootPublicStatus(
+  env: Env,
+  acceptLanguage: string | null,
+  queryLang: string | null,
+  cookieLocale: string | null = null,
+): Promise<PublicStatus | null> {
+  const page = await getDb(env.DB)
+    .select({ slug: statusPages.slug })
+    .from(statusPages)
+    .where(
+      and(eq(statusPages.serveAtRoot, true), eq(statusPages.published, true)),
+    )
+    .get();
+  if (!page) return null;
+  return loadPublicStatus(
+    env,
+    page.slug,
+    acceptLanguage,
+    queryLang,
+    cookieLocale,
+  );
 }
 
 export function escapeHtml(value: string): string {
@@ -248,6 +273,7 @@ export function injectDocument(
   page: PublicStatus,
   canonical: string,
 ): string {
+  const title = `<title>${escapeHtml(page.title)}</title>`;
   const links = page.locales
     .map(
       (locale) =>
@@ -255,16 +281,19 @@ export function injectDocument(
     )
     .join("");
   const meta = [
-    `<title>${escapeHtml(page.title)}</title>`,
     `<meta name="description" content="${escapeHtml(page.description)}" />`,
     `<meta property="og:title" content="${escapeHtml(page.title)}" />`,
     `<meta property="og:description" content="${escapeHtml(page.description)}" />`,
     `<link rel="canonical" href="${escapeHtml(canonical)}" />`,
     links,
   ].join("");
-  let next = html.includes("<!--flarebot-meta-->")
-    ? html.replace("<!--flarebot-meta-->", meta)
-    : html.replace("</head>", `${meta}</head>`);
+  let next = html;
+  const hadTitle = /<title>[\s\S]*?<\/title>/.test(next);
+  if (hadTitle) next = next.replace(/<title>[\s\S]*?<\/title>/, title);
+  const head = `${hadTitle ? "" : title}${meta}`;
+  next = next.includes("<!--flarebot-meta-->")
+    ? next.replace("<!--flarebot-meta-->", head)
+    : next.replace("</head>", `${head}</head>`);
   next = next.replace("<html", `<html lang="${escapeHtml(page.locale)}"`);
   return next;
 }
@@ -288,8 +317,14 @@ export async function statusDocument(
   } catch {
     // The SPA shell is optional in unit-style worker tests.
   }
-  const canonical = `${new URL(request.url).origin}/s/${page.slug}`;
-  const headers = new Headers({ "content-type": "text/html; charset=utf-8" });
+  const origin = new URL(request.url).origin;
+  const canonical = page.serveAtRoot
+    ? `${origin}/`
+    : `${origin}/s/${page.slug}`;
+  const headers = new Headers({
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "private, no-store",
+  });
   if (page.localeSource === "header") headers.set("vary", "Accept-Language");
   if (page.localeSource === "cookie") headers.set("vary", "Cookie");
   return new Response(injectDocument(html, page, canonical), { headers });

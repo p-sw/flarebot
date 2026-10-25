@@ -74,7 +74,7 @@ export function DashboardPage() {
       <AppHeader
         title={m.nav_dashboard()}
         actions={
-          <Link to="/monitors/new">
+          <Link to="/console/monitors/new">
             <Button>{m.monitor_new()}</Button>
           </Link>
         }
@@ -85,7 +85,7 @@ export function DashboardPage() {
       {rows.length === 0 ? (
         <EmptyState
           action={
-            <Link to="/monitors/new">
+            <Link to="/console/monitors/new">
               <Button>{m.monitor_new()}</Button>
             </Link>
           }
@@ -95,7 +95,7 @@ export function DashboardPage() {
           {rows.map((row) => (
             <Link
               key={row.id}
-              to="/monitors/$id"
+              to="/console/monitors/$id"
               params={{ id: row.id }}
               className="block"
             >
@@ -209,7 +209,7 @@ export function MonitorFormPage() {
       }),
     onSuccess: (data) => {
       if (data.pushUrl) setPushUrl(data.pushUrl);
-      else navigate({ to: "/monitors/$id", params: { id: data.id } });
+      else navigate({ to: "/console/monitors/$id", params: { id: data.id } });
     },
     onError: (cause) => setError(errorText(cause)),
   });
@@ -485,7 +485,7 @@ export function MonitorDetailPage() {
                 if (!confirm(m.monitor_delete_confirm())) return;
                 void action.run(async () => {
                   await api(`/api/monitors/${id}`, { method: "DELETE" });
-                  await navigate({ to: "/" });
+                  await navigate({ to: "/console" });
                 });
               }}
             >

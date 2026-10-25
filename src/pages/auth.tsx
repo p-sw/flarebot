@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import LoginBackdrop from "@brand/overrides/LoginBackdrop";
+import { safeReturnPath } from "@shared/front-door";
 import {
   startAuthentication,
   startRegistration,
@@ -29,6 +30,19 @@ function useMeta() {
     queryKey: ["meta"],
     queryFn: () => api<Meta>("/api/meta"),
   });
+}
+
+async function enterApp(
+  navigate: (options: { to: "/console" }) => Promise<void>,
+): Promise<void> {
+  const next = safeReturnPath(
+    new URLSearchParams(window.location.search).get("next"),
+  );
+  if (next) {
+    window.location.assign(next);
+    return;
+  }
+  await navigate({ to: "/console" });
 }
 
 export function SetupPage() {
@@ -282,7 +296,10 @@ export function SetupPage() {
               <p className="text-sm text-muted-foreground">
                 {m.setup_done_body()}
               </p>
-              <Button type="button" onClick={() => navigate({ to: "/" })}>
+              <Button
+                type="button"
+                onClick={() => navigate({ to: "/console" })}
+              >
                 {m.nav_dashboard()}
               </Button>
             </div>
@@ -308,7 +325,7 @@ export function LoginPage() {
       }),
     onSuccess: async (data) => {
       client.setQueryData(["session"], data);
-      await navigate({ to: "/" });
+      await enterApp(navigate);
     },
     onError: (cause) => {
       if (cause instanceof ApiClientError && cause.code === "totp_required")
@@ -396,7 +413,7 @@ export function LoginPage() {
                       },
                     );
                     client.setQueryData(["session"], session);
-                    await navigate({ to: "/" });
+                    await enterApp(navigate);
                   } catch (cause) {
                     setError(errorText(cause));
                   }
@@ -565,7 +582,7 @@ export function InvitePage() {
                     },
                   );
                   client.setQueryData(["session"], session);
-                  await navigate({ to: "/" });
+                  await enterApp(navigate);
                 } catch (cause) {
                   setError(errorText(cause));
                 }

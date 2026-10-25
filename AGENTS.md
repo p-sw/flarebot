@@ -30,7 +30,7 @@ pnpm brand:check
 pnpm brand:preview
 ```
 
-`pnpm dev` serves the admin UI and the Worker on http://127.0.0.1:5173 with local D1 and Durable Objects. The first account is created at `/setup` and requires `SETUP_SECRET`.
+`pnpm dev` serves the Worker on http://127.0.0.1:5173 with local D1 and Durable Objects. The admin UI lives at `/console` and sign-in is `/login`. The first account is created at `/setup` and requires `SETUP_SECRET`. After setup, `/setup` redirects to `/login`. `/` serves the status page marked as the site root, or redirects to `/login` when none is set. `/s/:slug` stays available for every published page, including the root page.
 
 ## Skills
 

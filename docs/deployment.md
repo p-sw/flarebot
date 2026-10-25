@@ -10,7 +10,7 @@ After the button finishes:
 
 1. `npx wrangler secret put SETUP_SECRET` and `npx wrangler secret put ENCRYPTION_KEY`.
    `ENCRYPTION_KEY` is 32 bytes of base64 (`openssl rand -base64 32`).
-2. Open the workers.dev (or custom) URL at `/setup` and create the Owner.
+2. Open the workers.dev (or custom) URL at `/setup` and create the Owner. When setup is finished, `/setup` sends you to `/login`, and the admin UI is `/console`. `/` stays a redirect to `/login` until a status page is set as the site root.
 3. Optional: `npx wrangler secret put SMTP_HOST` plus `SMTP_PORT`, `SMTP_SECURE` (`starttls` or `tls`), `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, and `MAIL_FROM_NAME`. These override the database mail settings.
 4. Cloudflare Email Service is not bound in the committed config, because the deploy button does not provision it. Add a `send_email` binding named `EMAIL` later if you choose that driver in Settings.
 

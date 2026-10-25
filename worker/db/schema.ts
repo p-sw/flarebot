@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+import { sql } from "drizzle-orm";
 import {
   integer,
   primaryKey,
@@ -162,24 +163,37 @@ export const monitorChannels = sqliteTable(
   (table) => [primaryKey({ columns: [table.monitorId, table.channelId] })],
 );
 
-export const statusPages = sqliteTable("status_pages", {
-  id: text("id").primaryKey(),
-  organizationId: text("organization_id").notNull(),
-  slug: text("slug").notNull().unique(),
-  published: integer("published", { mode: "boolean" }).notNull().default(true),
-  defaultLocale: text("default_locale").notNull(),
-  localesJson: text("locales_json").notNull(),
-  sourceLocale: text("source_locale").notNull(),
-  title: text("title").notNull(),
-  description: text("description").notNull(),
-  footer: text("footer").notNull(),
-  banner: text("banner").notNull(),
-  i18nJson: text("i18n_json").notNull(),
-  logoUrl: text("logo_url"),
-  accent: text("accent"),
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
-});
+export const statusPages = sqliteTable(
+  "status_pages",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id").notNull(),
+    slug: text("slug").notNull().unique(),
+    published: integer("published", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    serveAtRoot: integer("serve_at_root", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    defaultLocale: text("default_locale").notNull(),
+    localesJson: text("locales_json").notNull(),
+    sourceLocale: text("source_locale").notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    footer: text("footer").notNull(),
+    banner: text("banner").notNull(),
+    i18nJson: text("i18n_json").notNull(),
+    logoUrl: text("logo_url"),
+    accent: text("accent"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("status_pages_one_root")
+      .on(table.serveAtRoot)
+      .where(sql`${table.serveAtRoot} = 1`),
+  ],
+);
 
 export const statusPageItems = sqliteTable("status_page_items", {
   id: text("id").primaryKey(),

@@ -3,7 +3,7 @@ import { createHeartbeat, origin, signIn } from "./session";
 
 test("dashboard is visible after sign-in", async ({ page }) => {
   await signIn(page);
-  await page.goto("/");
+  await page.goto("/console");
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 });
 
@@ -12,6 +12,7 @@ test("a heartbeat monitor opens from the API id", async ({ page }) => {
   const name = `Smoke heartbeat ${test.info().parallelIndex}`;
   const id = await createHeartbeat(page, name);
   await page.goto(`/monitors/${id}`);
+  await expect(page).toHaveURL(new RegExp(`/console/monitors/${id}$`));
   await expect(page.getByRole("heading", { name })).toBeVisible();
 });
 
@@ -56,7 +57,7 @@ test("a status page renders the monitor title", async ({ page }) => {
 
 test("sign-out returns to the sign-in form", async ({ page }) => {
   await signIn(page);
-  await page.goto("/");
+  await page.goto("/console");
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
 });

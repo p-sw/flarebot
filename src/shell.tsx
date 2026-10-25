@@ -31,39 +31,47 @@ export type SessionUser = {
 
 const links = [
   {
-    to: "/",
+    to: "/console",
     label: () => m.nav_dashboard(),
     action: "dashboard.read" as const,
   },
   {
-    to: "/monitors/new",
+    to: "/console/monitors/new",
     label: () => m.monitor_new(),
     action: "monitors.write" as const,
   },
   {
-    to: "/status-pages",
+    to: "/console/status-pages",
     label: () => m.nav_status_pages(),
     action: "status_pages.read" as const,
   },
   {
-    to: "/channels",
+    to: "/console/channels",
     label: () => m.nav_channels(),
     action: "channels.read" as const,
   },
-  { to: "/team", label: () => m.nav_team(), action: "users.read" as const },
   {
-    to: "/tokens",
+    to: "/console/team",
+    label: () => m.nav_team(),
+    action: "users.read" as const,
+  },
+  {
+    to: "/console/tokens",
     label: () => m.nav_tokens(),
     action: "tokens.read" as const,
   },
-  { to: "/audit", label: () => m.nav_audit(), action: "audit.read" as const },
   {
-    to: "/settings",
+    to: "/console/audit",
+    label: () => m.nav_audit(),
+    action: "audit.read" as const,
+  },
+  {
+    to: "/console/settings",
     label: () => m.nav_settings(),
     action: "instance.settings" as const,
   },
   {
-    to: "/account",
+    to: "/console/account",
     label: () => m.nav_account(),
     action: "dashboard.read" as const,
   },
@@ -79,7 +87,7 @@ export function Shell({ user }: { user: SessionUser }) {
   return (
     <div className="min-h-screen md:grid md:grid-cols-[240px_minmax(0,1fr)]">
       <aside className="flex flex-col gap-6 bg-sidebar px-4 py-6 text-sidebar-foreground">
-        <Link to="/" className="flex items-center gap-2 px-2">
+        <Link to="/console" className="flex items-center gap-2 px-2">
           <img src={logo} alt="" className="h-8 w-8" />
           <span className="font-medium">{brand.name}</span>
         </Link>

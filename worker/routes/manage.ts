@@ -20,6 +20,7 @@ import {
   mailSettingsSchema,
   passwordChangeSchema,
   roleChangeSchema,
+  statusPageRootSchema,
   statusPageWriteSchema,
   tokenCreateSchema,
   totpConfirmSchema,
@@ -71,7 +72,8 @@ import { deliverWith, resolveMail } from "../mail/resolve";
 import { inviteMail, resetMail, testMail } from "../notify/copy";
 import { deliverChannel, sampleChannelText } from "../notify/dispatch";
 import { instanceName, readSetting, writeSetting } from "../settings-store";
-import { loadPublicStatus } from "../status/public";
+import { loadPublicStatus, loadRootPublicStatus } from "../status/public";
+import { setServeAtRoot } from "../status/root";
 
 const settingsSchema = z.object({
   instanceName: z.string().min(1).max(80).optional(),
@@ -293,6 +295,7 @@ export function registerManage(app: Hono<AppEnv>): void {
         slug: page.slug,
         title: page.title,
         published: page.published,
+        serveAtRoot: page.serveAtRoot,
         locales: JSON.parse(page.localesJson) as string[],
         missing: missingTranslationCount(
           ["title", "description", "footer", "banner"],
@@ -316,6 +319,13 @@ export function registerManage(app: Hono<AppEnv>): void {
     assertMutationOrigin(c, actor);
     requireCan(actor, "status_pages.write");
     const body = await parseBody(c, statusPageWriteSchema);
+    if (body.serveAtRoot && !body.published) {
+      throw new ApiError(
+        400,
+        "validation",
+        "Publish the page before serving it at the site root.",
+      );
+    }
     await assertMonitors(
       c.env,
       actor.organizationId,
@@ -361,13 +371,14 @@ export function registerManage(app: Hono<AppEnv>): void {
         i18nJson: JSON.stringify(item.i18n),
       });
     }
+    if (body.serveAtRoot) await setServeAtRoot(c.env, id, true);
     await audit(
       c.env,
       actor,
       "status_page.create",
       id,
       null,
-      { slug: body.slug },
+      { slug: body.slug, serveAtRoot: Boolean(body.serveAtRoot) },
       clientIp(c),
     );
     return c.json({ id }, 201);
@@ -407,6 +418,13 @@ export function registerManage(app: Hono<AppEnv>): void {
       c.req.param("id"),
     );
     const body = await parseBody(c, statusPageWriteSchema);
+    if (body.serveAtRoot && !body.published) {
+      throw new ApiError(
+        400,
+        "validation",
+        "Publish the page before serving it at the site root.",
+      );
+    }
     await assertMonitors(
       c.env,
       actor.organizationId,
@@ -455,16 +473,54 @@ export function registerManage(app: Hono<AppEnv>): void {
         i18nJson: JSON.stringify(item.i18n),
       });
     }
+    const serveAtRoot = body.published
+      ? (body.serveAtRoot ?? current.serveAtRoot)
+      : false;
+    if (!body.published) {
+      if (current.serveAtRoot) await setServeAtRoot(c.env, current.id, false);
+    } else if (typeof body.serveAtRoot === "boolean") {
+      await setServeAtRoot(c.env, current.id, body.serveAtRoot);
+    }
     await audit(
       c.env,
       actor,
       "status_page.update",
       current.id,
-      { slug: current.slug },
-      { slug: body.slug },
+      { slug: current.slug, serveAtRoot: current.serveAtRoot },
+      { slug: body.slug, serveAtRoot },
       clientIp(c),
     );
     return c.json({ id: current.id });
+  });
+
+  app.put("/api/status-pages/:id/root", async (c) => {
+    const actor = await requireActor(c);
+    assertMutationOrigin(c, actor);
+    requireCan(actor, "status_pages.write");
+    const current = await ownedPage(
+      c.env,
+      actor.organizationId,
+      c.req.param("id"),
+    );
+    const body = await parseBody(c, statusPageRootSchema);
+    if (body.serveAtRoot && !current.published) {
+      throw new ApiError(
+        400,
+        "validation",
+        "Publish the page before serving it at the site root.",
+      );
+    }
+    await setServeAtRoot(c.env, current.id, body.serveAtRoot);
+    await audit(
+      c.env,
+      actor,
+      "status_page.root",
+      current.id,
+      { serveAtRoot: current.serveAtRoot },
+      { serveAtRoot: body.serveAtRoot },
+      clientIp(c),
+    );
+    return c.json({ id: current.id, serveAtRoot: body.serveAtRoot });
   });
 
   app.delete("/api/status-pages/:id", async (c) => {
@@ -500,7 +556,25 @@ export function registerManage(app: Hono<AppEnv>): void {
       getCookie(c, LOCALE_COOKIE) ?? null,
     );
     if (!page) throw new ApiError(404, "not_found", "Status page not found.");
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = {
+      "cache-control": "private, no-store",
+    };
+    if (page.localeSource === "header") headers.vary = "Accept-Language";
+    if (page.localeSource === "cookie") headers.vary = "Cookie";
+    return c.json(page, 200, headers);
+  });
+
+  app.get("/api/public/root", async (c) => {
+    const page = await loadRootPublicStatus(
+      c.env,
+      c.req.header("accept-language") ?? null,
+      c.req.query("lang") ?? null,
+      getCookie(c, LOCALE_COOKIE) ?? null,
+    );
+    if (!page) throw new ApiError(404, "not_found", "Status page not found.");
+    const headers: Record<string, string> = {
+      "cache-control": "private, no-store",
+    };
     if (page.localeSource === "header") headers.vary = "Accept-Language";
     if (page.localeSource === "cookie") headers.vary = "Cookie";
     return c.json(page, 200, headers);

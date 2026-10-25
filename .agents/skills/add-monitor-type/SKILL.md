@@ -33,4 +33,4 @@ pnpm test:worker
 pnpm typecheck
 ```
 
-Create one monitor of the new type with `pnpm dev` and confirm the dashboard shows a status other than a thrown 500.
+Create one monitor of the new type with `pnpm dev` and confirm the dashboard at `/console` shows a status other than a thrown 500.

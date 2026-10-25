@@ -47,7 +47,7 @@ test("the saved account language wins over the browser language", async ({
     },
   ]);
 
-  await page.goto("/account");
+  await page.goto("/console/account");
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
   const select = page.locator('select[name="accountLocale"]');
   await expect(select).toHaveValue("en");

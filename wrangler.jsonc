@@ -46,7 +46,34 @@
   "assets": {
     "not_found_handling": "single-page-application",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/push/*", "/s/*"]
+    "run_worker_first": [
+      "/api/*",
+      "/push/*",
+      "/s/*",
+      "/",
+      "/login",
+      "/login/",
+      "/setup",
+      "/setup/",
+      "/console",
+      "/console/*",
+      "/monitors",
+      "/monitors/*",
+      "/status-pages",
+      "/status-pages/*",
+      "/channels",
+      "/channels/*",
+      "/team",
+      "/team/*",
+      "/tokens",
+      "/tokens/*",
+      "/audit",
+      "/audit/*",
+      "/settings",
+      "/settings/*",
+      "/account",
+      "/account/*"
+    ]
   },
   "vars": {
     "DEFAULT_LOCALE": "en"
