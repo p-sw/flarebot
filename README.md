@@ -30,7 +30,7 @@ Flarebot checks HTTP, TCP, DNS, certificate expiry, and heartbeat endpoints, con
 - [MIT license](LICENSE)
 
 <p align="center">
-  <img src="docs/images/status.webp" alt="Public Harbor status page on a desktop, with Edge and Platform sections over seven days" width="820" />
+  <img src="docs/images/status.webp" alt="Public Harbor status page on a desktop, with Edge and Platform sections over the last 24 hours" width="820" />
 </p>
 
 <p align="center">

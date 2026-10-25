@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { Badge } from "@/ui/badge";
 import { api } from "../lib/api";
-import { statusTone } from "./fields";
+import { responseText, statusTone } from "./fields";
 
 type PublicPage = {
   title: string;
@@ -127,10 +127,7 @@ export function PublicStatusPage() {
                       ? t("uptime_empty")
                       : t("uptime_percent", { value: item.uptime })}
                     {" · "}
-                    {t("response_label")}{" "}
-                    {item.responseMs === null
-                      ? t("uptime_empty")
-                      : t("response_ms", { value: item.responseMs })}
+                    {t("response_label")} {responseText(item.responseMs)}
                   </p>
                   <div
                     className="mt-3 flex h-6 min-w-0 items-end gap-px"
@@ -146,12 +143,7 @@ export function PublicStatusPage() {
                                 uptime: t("uptime_percent", {
                                   value: bar.uptime,
                                 }),
-                                response:
-                                  bar.responseMs === null
-                                    ? t("uptime_empty")
-                                    : t("response_ms", {
-                                        value: bar.responseMs,
-                                      }),
+                                response: responseText(bar.responseMs),
                               })
                         }
                         className={`min-w-0 flex-1 ${
