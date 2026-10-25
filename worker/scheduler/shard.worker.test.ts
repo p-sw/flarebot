@@ -27,6 +27,7 @@ describe("scheduler shard", () => {
     await insertMonitor(id, shardId);
     const stub = schedulerStub(env, shardId);
     const now = Date.now();
+    const dueAt = now + 30_000;
     await stub.upsert({
       id,
       name: id,
@@ -37,23 +38,23 @@ describe("scheduler shard", () => {
       recoveryThreshold: 1,
       config: { graceSeconds: 30 },
       paused: false,
-      nextCheckAt: now - 1,
+      nextCheckAt: dueAt,
       state: initialState(now),
       lastPushAt: null,
       regions: ["default"],
     });
-    expect(await stub.alarmAt()).not.toBeNull();
-    const first = await stub.runDue(now);
+    expect(await stub.alarmAt()).toBe(dueAt);
+    const first = await stub.runDue(dueAt);
     expect(first.ran).toBe(1);
     const pending = await stub.getOne(id);
     expect(pending?.state.status).toBe("pending");
-    expect(pending?.nextCheckAt).toBe(now + 10_000);
-    expect(await stub.alarmAt()).toBe(now + 10_000);
+    expect(pending?.nextCheckAt).toBe(dueAt + 10_000);
+    expect(await stub.alarmAt()).toBe(dueAt + 10_000);
 
-    const early = await stub.runDue(now + 1_000);
+    const early = await stub.runDue(dueAt + 1_000);
     expect(early.ran).toBe(0);
 
-    const second = await stub.runDue(now + 10_000);
+    const second = await stub.runDue(dueAt + 10_000);
     expect(second.ran).toBe(1);
     expect((await stub.getOne(id))?.state.status).toBe("down");
     const outage = await env.DB.prepare(
@@ -63,8 +64,8 @@ describe("scheduler shard", () => {
       .first<{ ended_at: number | null }>();
     expect(outage?.ended_at).toBeNull();
 
-    await stub.recordPush(id, now + 11_000);
-    await stub.runDue(now + 12_000);
+    await stub.recordPush(id, dueAt + 11_000);
+    await stub.runDue(dueAt + 12_000);
     expect((await stub.getOne(id))?.state.status).toBe("up");
     const closed = await env.DB.prepare(
       "SELECT ended_at FROM outages WHERE monitor_id = ?",
