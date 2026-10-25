@@ -301,6 +301,11 @@ export function MonitorDetailPage() {
           </StaggerItem>
         ))}
       </Stagger>
+      {stats.data ? (
+        <p className="mb-4 max-w-full text-xs break-words text-muted-foreground">
+          {t("monitor_history_note", { days: stats.data.retentionDays })}
+        </p>
+      ) : null}
       <Card className="mb-4">
         <CardContent className="p-4">
           <p className="mb-2 text-sm text-muted-foreground">

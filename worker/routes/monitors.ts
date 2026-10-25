@@ -3,6 +3,12 @@
 import { and, desc, eq, gte } from "drizzle-orm";
 import type { Hono } from "hono";
 import { t } from "../../shared/copy";
+import {
+  DAY_MS,
+  firstRetainedDay,
+  HOUR_MS,
+  retentionCutoff,
+} from "../../shared/history";
 import { monitorTargetLabel } from "../../shared/monitor-draft";
 import {
   monitorTargetKey,
@@ -43,6 +49,7 @@ import {
   schedulerStub,
   snapshotFromRow,
 } from "../monitors/sync";
+import { historyRetentionDays } from "../retention";
 import { percentile, saveRuntime } from "../scheduler/persist";
 import {
   initialState,
@@ -373,13 +380,18 @@ export function registerMonitors(app: Hono<AppEnv>): void {
     );
     const db = getDb(c.env.DB);
     const now = Date.now();
+    const retentionDays = await historyRetentionDays(c.env);
+    const retainedFrom = firstRetainedDay(retentionCutoff(now, retentionDays));
     const hourly = await db
       .select()
       .from(uptimeHourly)
       .where(
         and(
           eq(uptimeHourly.monitorId, row.id),
-          gte(uptimeHourly.hourStart, now - 48 * 3_600_000),
+          gte(
+            uptimeHourly.hourStart,
+            Math.max(now - 48 * HOUR_MS, retainedFrom),
+          ),
         ),
       );
     const daily = await db
@@ -388,7 +400,7 @@ export function registerMonitors(app: Hono<AppEnv>): void {
       .where(
         and(
           eq(uptimeDaily.monitorId, row.id),
-          gte(uptimeDaily.dayStart, now - 90 * 86_400_000),
+          gte(uptimeDaily.dayStart, Math.max(now - 90 * DAY_MS, retainedFrom)),
         ),
       );
     const live = await schedulerStub(c.env, row.shardId)
@@ -420,6 +432,7 @@ export function registerMonitors(app: Hono<AppEnv>): void {
     const weekAgo = now - 7 * 86_400_000;
     return c.json({
       recent: live?.recent ?? [],
+      retentionDays,
       uptime: {
         h24: sumRange(
           hourly.filter((item) => item.hourStart >= dayAgo),

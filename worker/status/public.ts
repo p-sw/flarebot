@@ -2,6 +2,14 @@
 
 import { and, eq, gte, inArray } from "drizzle-orm";
 import { t, textLang } from "../../shared/copy";
+import {
+  type CountRow,
+  type DisplayRange,
+  parseDisplayRange,
+  resolveWindow,
+  summarizeHistory,
+  utcDayStart,
+} from "../../shared/history";
 import { visibleStatus } from "../../shared/monitor-status";
 import { statusItemLabel } from "../../shared/status-layout";
 import { getDb } from "../db/client";
@@ -14,6 +22,7 @@ import {
   uptimeHourly,
 } from "../db/schema";
 import { schedulerStub } from "../monitors/sync";
+import { historyRetentionDays } from "../retention";
 
 export type PublicStatus = {
   slug: string;
@@ -24,6 +33,11 @@ export type PublicStatus = {
   logoUrl: string | null;
   accent: string | null;
   serveAtRoot: boolean;
+  displayRange: DisplayRange;
+  bucket: "hour" | "day";
+  barCount: number;
+  clamped: boolean;
+  retentionDays: number;
   overall: "operational" | "degraded" | "outage" | "empty" | "paused";
   groups: {
     name: string;
@@ -31,17 +45,16 @@ export type PublicStatus = {
       id: string;
       name: string;
       status: string;
-      uptime90: number | null;
-      bars: { day: number; uptime: number | null }[];
+      uptime: number | null;
+      responseMs: number | null;
+      bars: {
+        start: number;
+        uptime: number | null;
+        responseMs: number | null;
+      }[];
     }[];
   }[];
 };
-
-function percent(ok: number, fail: number): number | null {
-  const total = ok + fail;
-  if (total === 0) return null;
-  return Math.round((ok / total) * 1000) / 10;
-}
 
 export async function loadPublicStatus(
   env: Env,
@@ -59,32 +72,35 @@ export async function loadPublicStatus(
     .from(statusPageItems)
     .where(eq(statusPageItems.pageId, page.id));
   items.sort((a, b) => a.position - b.position);
-  const now = new Date();
-  const today = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate(),
+  const nowMs = Date.now();
+  const retentionDays = await historyRetentionDays(env);
+  const window = resolveWindow(
+    parseDisplayRange(page.displayRange),
+    retentionDays,
+    nowMs,
   );
-  const since = today - 89 * 86_400_000;
   const ids = items.map((item) => item.monitorId);
-  const daily = ids.length
-    ? await db
-        .select()
-        .from(uptimeDaily)
-        .where(
-          and(
-            gte(uptimeDaily.dayStart, since),
-            inArray(uptimeDaily.monitorId, ids),
-          ),
-        )
-    : [];
+  const daily =
+    ids.length && window.bucket === "day"
+      ? await db
+          .select()
+          .from(uptimeDaily)
+          .where(
+            and(
+              gte(uptimeDaily.dayStart, window.start),
+              inArray(uptimeDaily.monitorId, ids),
+            ),
+          )
+      : [];
+  const hourlySince =
+    window.bucket === "hour" ? window.start : utcDayStart(nowMs);
   const hourly = ids.length
     ? await db
         .select()
         .from(uptimeHourly)
         .where(
           and(
-            gte(uptimeHourly.hourStart, today),
+            gte(uptimeHourly.hourStart, hourlySince),
             inArray(uptimeHourly.monitorId, ids),
           ),
         )
@@ -92,7 +108,7 @@ export async function loadPublicStatus(
   const owned = ids.length
     ? await db.select().from(monitors).where(inArray(monitors.id, ids))
     : [];
-  const live = new Map<string, { ok: number; fail: number }>();
+  const live = new Map<string, CountRow>();
   const shardIds = [...new Set(owned.map((row) => row.shardId))];
   await Promise.all(
     shardIds.map(async (shardId) => {
@@ -100,10 +116,17 @@ export async function loadPublicStatus(
         .getAll()
         .catch(() => []);
       for (const row of rows) {
-        if (!row.rollup || row.rollup.hourStart < today) continue;
-        const current = live.get(row.id) ?? { ok: 0, fail: 0 };
+        if (!row.rollup || row.rollup.hourStart < window.start) continue;
+        const current = live.get(row.id) ?? {
+          start: row.rollup.hourStart,
+          ok: 0,
+          fail: 0,
+          sum: 0,
+        };
+        if (row.rollup.hourStart !== current.start) continue;
         current.ok += row.rollup.ok;
         current.fail += row.rollup.fail;
+        current.sum += row.rollup.sum;
         live.set(row.id, current);
       }
     }),
@@ -122,40 +145,27 @@ export async function loadPublicStatus(
       t("monitor_fallback_name");
     const groupKey = item.groupName;
     const groupName = item.groupName.trim();
-    const rows = daily.filter((row) => row.monitorId === item.monitorId);
-    const todayHours = hourly.filter((row) => row.monitorId === item.monitorId);
-    const pending = live.get(item.monitorId) ?? { ok: 0, fail: 0 };
-    const bars = Array.from({ length: 90 }, (_, index) => {
-      const day = since + index * 86_400_000;
-      const match = rows.find((row) => row.dayStart === day);
-      const ok = match?.okCount ?? 0;
-      const fail = match?.failCount ?? 0;
-      if (day === today) {
-        return {
-          day,
-          uptime: percent(
-            ok +
-              todayHours.reduce((sum, row) => sum + row.okCount, 0) +
-              pending.ok,
-            fail +
-              todayHours.reduce((sum, row) => sum + row.failCount, 0) +
-              pending.fail,
-          ),
-        };
-      }
-      return {
-        day,
-        uptime: match ? percent(match.okCount, match.failCount) : null,
-      };
+    const summary = summarizeHistory({
+      window,
+      now: nowMs,
+      daily: daily
+        .filter((row) => row.monitorId === item.monitorId)
+        .map((row) => ({
+          start: row.dayStart,
+          ok: row.okCount,
+          fail: row.failCount,
+          sum: row.latencySum,
+        })),
+      hourly: hourly
+        .filter((row) => row.monitorId === item.monitorId)
+        .map((row) => ({
+          start: row.hourStart,
+          ok: row.okCount,
+          fail: row.failCount,
+          sum: row.latencySum,
+        })),
+      live: live.get(item.monitorId) ?? null,
     });
-    const ok =
-      rows.reduce((sum, row) => sum + row.okCount, 0) +
-      todayHours.reduce((sum, row) => sum + row.okCount, 0) +
-      pending.ok;
-    const fail =
-      rows.reduce((sum, row) => sum + row.failCount, 0) +
-      todayHours.reduce((sum, row) => sum + row.failCount, 0) +
-      pending.fail;
     const bucket = groups.get(groupKey) ?? { name: groupName, items: [] };
     if (!bucket.name && groupName) bucket.name = groupName;
     bucket.items.push({
@@ -165,8 +175,9 @@ export async function loadPublicStatus(
         pausedById.get(item.monitorId) ?? false,
         stateById.get(item.monitorId),
       ),
-      uptime90: percent(ok, fail),
-      bars,
+      uptime: summary.uptime,
+      responseMs: summary.responseMs,
+      bars: summary.bars,
     });
     groups.set(groupKey, bucket);
   }
@@ -191,6 +202,11 @@ export async function loadPublicStatus(
     logoUrl: page.logoUrl,
     accent: page.accent,
     serveAtRoot: page.serveAtRoot,
+    displayRange: window.configured,
+    bucket: window.bucket,
+    barCount: window.bars,
+    clamped: window.clamped,
+    retentionDays: window.retentionDays,
     overall,
     groups: [...groups.values()].map((group) => ({
       name: group.name,

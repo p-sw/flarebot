@@ -2,6 +2,7 @@
 
 import AppHeader from "@brand/overrides/AppHeader";
 import { t } from "@shared/copy";
+import type { DisplayRange } from "@shared/history";
 import {
   duplicateSectionNames,
   isStatusSlug,
@@ -38,7 +39,7 @@ import { PendingButton } from "../ui/pending-button";
 import { ContentSkeleton } from "../ui/skeleton";
 import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
-import { Field } from "./fields";
+import { controlClass, Field } from "./fields";
 import { RootSwitch, rootToggleError } from "./root-switch";
 import { StatusLayoutEditor } from "./status-layout-editor";
 
@@ -52,6 +53,7 @@ type Draft = {
   serveAtRoot: boolean;
   logoUrl: string;
   accent: string;
+  displayRange: DisplayRange;
   sections: LayoutSection[];
 };
 
@@ -74,6 +76,7 @@ function emptyDraft(): Draft {
     serveAtRoot: false,
     logoUrl: "",
     accent: "",
+    displayRange: "24h",
     sections: [],
   };
 }
@@ -89,6 +92,7 @@ function draftFromPage(page: StatusPageDetail): Draft {
     serveAtRoot: page.serveAtRoot,
     logoUrl: page.logoUrl ?? "",
     accent: page.accent ?? "",
+    displayRange: page.displayRange ?? "24h",
     sections: sectionsFromItems(page.items),
   };
 }
@@ -251,6 +255,7 @@ function StatusPageForm({
           banner: saved.banner,
           logoUrl: saved.logoUrl,
           accent: saved.accent,
+          displayRange: saved.displayRange,
           items: itemsFromSections(saved.sections),
         };
         if (mode === "create") {
@@ -485,6 +490,27 @@ function StatusPageForm({
                   setErrors((current) => ({ ...current, accent: undefined }));
                 }}
               />
+            )}
+          </Described>
+          <Described label={t("page_range")} hint={t("page_range_hint")}>
+            {(describedBy) => (
+              <select
+                className={controlClass}
+                name="displayRange"
+                value={draft.displayRange}
+                aria-describedby={describedBy}
+                disabled={submit.pending}
+                onChange={(event) =>
+                  update({
+                    displayRange: event.target.value as DisplayRange,
+                  })
+                }
+              >
+                <option value="24h">{t("range_24h")}</option>
+                <option value="7d">{t("range_7d")}</option>
+                <option value="30d">{t("range_30d")}</option>
+                <option value="90d">{t("range_90d")}</option>
+              </select>
             )}
           </Described>
           <div className="grid gap-2 rounded-lg border border-border p-3">

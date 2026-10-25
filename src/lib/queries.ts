@@ -67,6 +67,7 @@ export function statsQuery(id: string) {
           d90: number | null;
         };
         p95: number;
+        retentionDays: number;
       }>(`/api/monitors/${id}/stats`),
     staleTime: fresh,
   });
@@ -100,6 +101,7 @@ export type StatusPageDetail = {
   serveAtRoot: boolean;
   logoUrl: string | null;
   accent: string | null;
+  displayRange: "24h" | "7d" | "30d" | "90d";
   items: {
     id: string;
     monitorId: string;
@@ -185,7 +187,11 @@ export const auditQuery = queryOptions({
 export const settingsQuery = queryOptions({
   queryKey: ["settings"],
   queryFn: () =>
-    api<{ instanceName: string; authMode: string }>("/api/settings"),
+    api<{
+      instanceName: string;
+      authMode: string;
+      historyRetentionDays: number;
+    }>("/api/settings"),
   staleTime: fresh,
 });
 

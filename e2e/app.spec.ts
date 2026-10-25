@@ -49,6 +49,23 @@ test("a status page renders the monitor title", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Korean" })).toHaveCount(0);
   await expect(page.getByText(name)).toBeVisible();
+  await expect(page.getByText("24 hours").first()).toBeVisible();
+});
+
+test("owner saves how long check history is kept", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/console/settings");
+  const form = page.getByRole("form", { name: "Check history" });
+  await expect(form.getByText(/finished outages/i)).toBeVisible();
+  await form.getByLabel("Keep history for").selectOption("30");
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("status")).toHaveText("Saved");
+  await page.reload();
+  await expect(
+    page
+      .getByRole("form", { name: "Check history" })
+      .getByLabel("Keep history for"),
+  ).toHaveValue("30");
 });
 
 test("sign-out returns to the sign-in form", async ({ page }) => {

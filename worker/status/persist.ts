@@ -21,6 +21,7 @@ export type StatusPageInsert = {
   i18nJson: string;
   logoUrl: string | null;
   accent: string | null;
+  displayRange: string;
   createdAt: number;
   updatedAt: number;
 };
@@ -37,6 +38,7 @@ export type StatusPageReplace = {
   banner: string;
   logoUrl: string | null;
   accent: string | null;
+  displayRange: string;
   updatedAt: number;
 };
 
@@ -126,8 +128,8 @@ export async function createStatusPage(
         id, organization_id, slug, published, serve_at_root,
         default_locale, locales_json, source_locale,
         title, description, footer, banner, i18n_json,
-        logo_url, accent, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        logo_url, accent, display_range, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(
       page.id,
       page.organizationId,
@@ -144,6 +146,7 @@ export async function createStatusPage(
       page.i18nJson,
       page.logoUrl,
       page.accent,
+      page.displayRange,
       page.createdAt,
       page.updatedAt,
     ),
@@ -176,6 +179,7 @@ export async function replaceStatusPage(
       banner = ?,
       logo_url = ?,
       accent = ?,
+      display_range = ?,
       updated_at = ?
     WHERE id = ?`,
   );
@@ -191,6 +195,7 @@ export async function replaceStatusPage(
     page.banner,
     page.logoUrl,
     page.accent,
+    page.displayRange,
     page.updatedAt,
     page.id,
   );

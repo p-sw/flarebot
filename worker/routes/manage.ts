@@ -4,6 +4,12 @@ import { and, desc, eq, ne } from "drizzle-orm";
 import type { Hono } from "hono";
 import { z } from "zod";
 import { t, textLang } from "../../shared/copy";
+import {
+  HISTORY_RETENTION_KEY,
+  MAX_RETENTION_DAYS,
+  MIN_RETENTION_DAYS,
+  parseDisplayRange,
+} from "../../shared/history";
 import { describeMailSource } from "../../shared/mail-source";
 import {
   assertScopesWithinRole,
@@ -72,6 +78,7 @@ import {
 } from "../mail/test-request";
 import { inviteMail, resetMail, testMail } from "../notify/copy";
 import { deliverChannel, sampleChannelText } from "../notify/dispatch";
+import { historyRetentionDays } from "../retention";
 import { instanceName, readSetting, writeSetting } from "../settings-store";
 import { createStatusPage, replaceStatusPage } from "../status/persist";
 import { loadPublicStatus, loadRootPublicStatus } from "../status/public";
@@ -80,6 +87,12 @@ import { setServeAtRoot } from "../status/root";
 const settingsSchema = z.object({
   instanceName: z.string().min(1).max(80).optional(),
   authMode: z.enum(["local", "access"]).optional(),
+  historyRetentionDays: z
+    .number()
+    .int()
+    .min(MIN_RETENTION_DAYS)
+    .max(MAX_RETENTION_DAYS)
+    .optional(),
 });
 
 function legacyLocaleColumns() {
@@ -353,6 +366,7 @@ export function registerManage(app: Hono<AppEnv>): void {
         i18nJson: legacy.i18nJson,
         logoUrl: body.logoUrl || null,
         accent: body.accent || null,
+        displayRange: body.displayRange,
         createdAt: now,
         updatedAt: now,
       },
@@ -407,6 +421,7 @@ export function registerManage(app: Hono<AppEnv>): void {
       banner: page.banner,
       logoUrl: page.logoUrl,
       accent: page.accent,
+      displayRange: parseDisplayRange(page.displayRange),
       items: items.map((item) => ({
         id: item.id,
         monitorId: item.monitorId,
@@ -464,6 +479,7 @@ export function registerManage(app: Hono<AppEnv>): void {
         banner: body.banner,
         logoUrl: body.logoUrl || null,
         accent: body.accent || null,
+        displayRange: body.displayRange,
         updatedAt: now,
       },
       body.items.map((item) => ({
@@ -941,6 +957,7 @@ export function registerManage(app: Hono<AppEnv>): void {
       instanceName: await instanceName(c.env),
       authMode: await readSetting(c.env, "auth_mode", "local"),
       turnstile: Boolean(c.env.TURNSTILE_SITE_KEY),
+      historyRetentionDays: await historyRetentionDays(c.env),
     });
   });
 
@@ -955,6 +972,13 @@ export function registerManage(app: Hono<AppEnv>): void {
     if (body.instanceName)
       await writeSetting(c.env, "instance_name", body.instanceName);
     if (body.authMode) await writeSetting(c.env, "auth_mode", body.authMode);
+    if (body.historyRetentionDays !== undefined) {
+      await writeSetting(
+        c.env,
+        HISTORY_RETENTION_KEY,
+        body.historyRetentionDays,
+      );
+    }
     await audit(
       c.env,
       actor,
