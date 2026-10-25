@@ -117,4 +117,276 @@ describe("status pages", () => {
     expect(html.headers.get("vary")).toBeNull();
     expect((await api("/s/hidden-page")).status).toBe(404);
   });
+
+  it("uses the monitor name when an item has no display name", async () => {
+    const owner = await ownerSession();
+    const monitor = await api(
+      "/api/monitors",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Named probe",
+          type: "heartbeat",
+          config: { graceSeconds: 30 },
+          intervalSeconds: 60,
+        }),
+      },
+      owner,
+    );
+    expect(monitor.status).toBe(201);
+    const monitorId = ((await monitor.json()) as { id: string }).id;
+    const slug = `names-${crypto.randomUUID().slice(0, 8)}`;
+    const created = await api(
+      "/api/status-pages",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          slug,
+          published: true,
+          defaultLocale: "en",
+          locales: ["en"],
+          sourceLocale: "en",
+          title: "Names",
+          description: "",
+          items: [
+            {
+              monitorId,
+              position: 0,
+              groupName: "Core",
+              displayName: "",
+              sourceLocale: "en",
+              i18n: {},
+            },
+          ],
+        }),
+      },
+      owner,
+    );
+    expect(created.status).toBe(201);
+    const body = (await (await api(`/api/public/status/${slug}`)).json()) as {
+      groups: { name: string; items: { name: string }[] }[];
+    };
+    expect(body.groups[0]?.name).toBe("Core");
+    expect(body.groups[0]?.items[0]?.name).toBe("Named probe");
+    expect(body.groups[0]?.items[0]?.name).not.toBe("Core");
+    expect(body.groups[0]?.items[0]?.name).not.toBe(monitorId);
+    const id = ((await created.json()) as { id: string }).id;
+    const detail = (await (
+      await api(`/api/status-pages/${id}`, {}, owner)
+    ).json()) as {
+      items: { monitorId: string; monitorName: string }[];
+    };
+    expect(detail.items[0]?.monitorName).toBe("Named probe");
+    expect(detail.items[0]?.monitorName).not.toBe(monitorId);
+  });
+
+  it("stores section order and rolls a failed create back", async () => {
+    const owner = await ownerSession();
+    const slug = `order-${crypto.randomUUID().slice(0, 8)}`;
+    const before = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM status_pages WHERE slug = ?",
+    )
+      .bind(slug)
+      .first<{ n: number }>();
+    const invalid = await api(
+      "/api/status-pages",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          slug: "Not A Slug",
+          published: true,
+          defaultLocale: "en",
+          locales: ["en"],
+          sourceLocale: "en",
+          title: "Nope",
+          items: [
+            {
+              monitorId: crypto.randomUUID(),
+              position: 0,
+              groupName: "Core",
+              displayName: "",
+              sourceLocale: "en",
+            },
+          ],
+        }),
+      },
+      owner,
+    );
+    expect(invalid.status).toBe(400);
+    const unknown = await api(
+      "/api/status-pages",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          slug,
+          published: true,
+          defaultLocale: "en",
+          locales: ["en"],
+          sourceLocale: "en",
+          title: "Nope",
+          items: [
+            {
+              monitorId: crypto.randomUUID(),
+              position: 0,
+              groupName: "Core",
+              displayName: "",
+              sourceLocale: "en",
+            },
+          ],
+        }),
+      },
+      owner,
+    );
+    expect(unknown.status).toBe(400);
+    expect(
+      (
+        await env.DB.prepare(
+          "SELECT COUNT(*) AS n FROM status_pages WHERE slug = ?",
+        )
+          .bind(slug)
+          .first<{ n: number }>()
+      )?.n,
+    ).toBe(before?.n ?? 0);
+
+    async function monitor(name: string) {
+      const response = await api(
+        "/api/monitors",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name,
+            type: "heartbeat",
+            config: { graceSeconds: 30 },
+            intervalSeconds: 60,
+          }),
+        },
+        owner,
+      );
+      expect(response.status).toBe(201);
+      return ((await response.json()) as { id: string }).id;
+    }
+    const alpha = await monitor("Alpha probe");
+    const beta = await monitor("Beta probe");
+    const sharedId = crypto.randomUUID();
+    const duplicate = await api(
+      "/api/status-pages",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          slug,
+          published: true,
+          defaultLocale: "en",
+          locales: ["en"],
+          sourceLocale: "en",
+          title: "Rollback",
+          items: [
+            {
+              id: sharedId,
+              monitorId: alpha,
+              position: 0,
+              groupName: "Edge",
+              displayName: "",
+              sourceLocale: "en",
+            },
+            {
+              id: sharedId,
+              monitorId: beta,
+              position: 1,
+              groupName: "Core",
+              displayName: "",
+              sourceLocale: "en",
+            },
+          ],
+        }),
+      },
+      owner,
+    );
+    expect(duplicate.status).not.toBe(201);
+    expect(
+      await env.DB.prepare("SELECT id FROM status_pages WHERE slug = ?")
+        .bind(slug)
+        .first(),
+    ).toBeNull();
+
+    const created = await api(
+      "/api/status-pages",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          slug,
+          published: true,
+          defaultLocale: "en",
+          locales: ["en"],
+          sourceLocale: "en",
+          title: "Ordered",
+          description: "Ready",
+          items: [
+            {
+              monitorId: beta,
+              position: 0,
+              groupName: "Core",
+              displayName: "",
+              sourceLocale: "en",
+            },
+            {
+              monitorId: alpha,
+              position: 1,
+              groupName: "Edge",
+              displayName: "Edge API",
+              sourceLocale: "en",
+            },
+          ],
+        }),
+      },
+      owner,
+    );
+    expect(created.status).toBe(201);
+    const pageId = ((await created.json()) as { id: string }).id;
+    const reversed = await api(
+      `/api/status-pages/${pageId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          slug,
+          published: true,
+          defaultLocale: "en",
+          locales: ["en"],
+          sourceLocale: "en",
+          title: "Ordered",
+          description: "Ready",
+          items: [
+            {
+              monitorId: alpha,
+              position: 0,
+              groupName: "Edge",
+              displayName: "",
+              sourceLocale: "en",
+            },
+            {
+              monitorId: beta,
+              position: 1,
+              groupName: "Core",
+              displayName: "",
+              sourceLocale: "en",
+            },
+          ],
+        }),
+      },
+      owner,
+    );
+    expect(reversed.status).toBe(200);
+    const body = (await (await api(`/api/public/status/${slug}`)).json()) as {
+      groups: { name: string; items: { name: string }[] }[];
+    };
+    expect(body.groups.map((group) => group.name)).toEqual(["Edge", "Core"]);
+    expect(body.groups[0]?.items[0]?.name).toBe("Alpha probe");
+    expect(body.groups[1]?.items[0]?.name).toBe("Beta probe");
+    const rows = await env.DB.prepare(
+      "SELECT group_name AS groupName, position FROM status_page_items WHERE page_id = ? ORDER BY position",
+    )
+      .bind(pageId)
+      .all<{ groupName: string; position: number }>();
+    expect(rows.results.map((row) => row.groupName)).toEqual(["Edge", "Core"]);
+    expect(rows.results.map((row) => row.position)).toEqual([0, 1]);
+  });
 });

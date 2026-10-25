@@ -2,6 +2,7 @@
 
 import { and, eq, gte, inArray } from "drizzle-orm";
 import { t, textLang } from "../../shared/copy";
+import { statusItemLabel } from "../../shared/status-layout";
 import { getDb } from "../db/client";
 import {
   monitorState,
@@ -108,11 +109,19 @@ export async function loadPublicStatus(
   );
   const states = items.length ? await db.select().from(monitorState) : [];
   const stateById = new Map(states.map((row) => [row.monitorId, row.status]));
-  const groups = new Map<string, PublicStatus["groups"][number]["items"]>();
+  const nameById = new Map(owned.map((row) => [row.id, row.name]));
+  const groups = new Map<
+    string,
+    { name: string; items: PublicStatus["groups"][number]["items"] }
+  >();
   for (const item of items) {
     const name =
-      item.displayName || item.groupName || t("monitor_fallback_name");
-    const groupName = item.groupName || "";
+      statusItemLabel(
+        item.displayName,
+        nameById.get(item.monitorId) ?? "",
+      ) || t("monitor_fallback_name");
+    const groupKey = item.groupName;
+    const groupName = item.groupName.trim();
     const rows = daily.filter((row) => row.monitorId === item.monitorId);
     const todayHours = hourly.filter((row) => row.monitorId === item.monitorId);
     const pending = live.get(item.monitorId) ?? { ok: 0, fail: 0 };
@@ -147,17 +156,18 @@ export async function loadPublicStatus(
       rows.reduce((sum, row) => sum + row.failCount, 0) +
       todayHours.reduce((sum, row) => sum + row.failCount, 0) +
       pending.fail;
-    const list = groups.get(groupName) ?? [];
-    list.push({
+    const bucket = groups.get(groupKey) ?? { name: groupName, items: [] };
+    if (!bucket.name && groupName) bucket.name = groupName;
+    bucket.items.push({
       id: item.id,
       name,
       status: stateById.get(item.monitorId) ?? "unknown",
       uptime90: percent(ok, fail),
       bars,
     });
-    groups.set(groupName, list);
+    groups.set(groupKey, bucket);
   }
-  const flat = [...groups.values()].flat();
+  const flat = [...groups.values()].flatMap((group) => group.items);
   const overall: PublicStatus["overall"] =
     flat.length === 0
       ? "empty"
@@ -176,9 +186,9 @@ export async function loadPublicStatus(
     accent: page.accent,
     serveAtRoot: page.serveAtRoot,
     overall,
-    groups: [...groups.entries()].map(([name, groupItems]) => ({
-      name,
-      items: groupItems,
+    groups: [...groups.values()].map((group) => ({
+      name: group.name,
+      items: group.items,
     })),
   };
 }

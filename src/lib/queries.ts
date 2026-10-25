@@ -75,6 +75,41 @@ export function outagesQuery(id: string) {
   });
 }
 
+export type StatusPageDetail = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  footer: string;
+  banner: string;
+  published: boolean;
+  serveAtRoot: boolean;
+  defaultLocale: string;
+  sourceLocale: string;
+  locales: string[];
+  i18n: Record<string, Record<string, string>>;
+  logoUrl: string | null;
+  accent: string | null;
+  items: {
+    id: string;
+    monitorId: string;
+    monitorName: string;
+    position: number;
+    groupName: string;
+    displayName: string;
+    sourceLocale: string;
+    i18n: Record<string, Record<string, string>>;
+  }[];
+};
+
+export function statusPageQuery(id: string) {
+  return queryOptions({
+    queryKey: ["status-page", id],
+    queryFn: () => api<StatusPageDetail>(`/api/status-pages/${id}`),
+    staleTime: fresh,
+  });
+}
+
 export const statusPagesQuery = queryOptions({
   queryKey: ["pages"],
   queryFn: () =>

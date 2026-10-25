@@ -17,7 +17,7 @@ Flarebot checks HTTP, TCP, DNS, certificate expiry, and heartbeat endpoints, con
 - HTTP, TCP, DNS, SSL expiry (CT-log estimate), and heartbeat monitors
 - Pending, then down, so a single blip does not page anyone
 - Email (SMTP or Cloudflare Email Service), Discord, Slack, Telegram, and webhooks
-- Public status pages with a title, description, banner, and footer
+- Public status pages with a title, description, banner, footer, and an admin editor for sections and monitors
 - Uptime and response charts from local rollups
 - Owner, Admin, Editor, and Viewer roles, passkeys, passwords, optional TOTP, and scoped API tokens
 - One English copy file. A fork translates `brand/locale.json` to switch the whole product language
@@ -65,7 +65,7 @@ Open http://127.0.0.1:5173/setup. The sample setup secret is `change-me-setup-se
 | `/console`  | Admin dashboard and the rest of the admin UI                          |
 | `/setup`    | Create the first owner. Redirects to `/login` once setup is done      |
 
-Bookmarks under the old admin paths (`/monitors/...`, `/status-pages`, `/settings`, and the other console sections) redirect to `/console/...`. A status page setting, "Serve at the site root", chooses which published page answers `/`. Only one page can hold that setting. Turning it on for one page turns it off for the other.
+Bookmarks under the old admin paths (`/monitors/...`, `/status-pages`, `/settings`, and the other console sections) redirect to `/console/...`. A status page setting, "Serve at the site root", chooses which published page answers `/`. Only one page can hold that setting. Turning it on for one page turns it off for the other. Create a page at `/console/status-pages/new` and edit it at `/console/status-pages/<id>`. The public monitor label is the optional display name, or the monitor name when that field is blank.
 
 ## Configuration
 

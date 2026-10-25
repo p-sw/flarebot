@@ -206,7 +206,9 @@ function NavLinks({ user }: { user: SessionUser }) {
           const item = (
             <Link
               to={link.to}
-              activeOptions={{ exact: true }}
+              activeOptions={{
+                exact: link.to !== "/console/status-pages",
+              }}
               aria-busy={isPending || undefined}
               data-pending={isPending ? "true" : undefined}
               onClick={() => setOpenMobile(false)}

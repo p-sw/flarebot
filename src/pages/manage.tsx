@@ -9,157 +9,100 @@ import { useState } from "react";
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
 import { PendingButton } from "@/ui/pending-button";
-import { Switch } from "@/ui/switch";
 import { api, errorText, mailFailureText } from "../lib/api";
 import {
   accountQuery,
   auditQuery,
   channelsQuery,
   mailQuery,
-  monitorsQuery,
   settingsQuery,
   statusPagesQuery,
   teamQuery,
   tokensQuery,
 } from "../lib/queries";
+import { useToggleLock } from "../lib/toggle-guard";
 import { useSubmitGuard } from "../lib/use-submit-guard";
 import { Stagger, StaggerItem } from "../motion/page";
 import { ContentSkeleton } from "../ui/skeleton";
 import { controlClass, Field } from "./fields";
+import { RootSwitch, rootToggleError } from "./root-switch";
 
 export function StatusPagesPage() {
   const pages = useQuery(statusPagesQuery);
-  const monitors = useQuery(monitorsQuery);
   const client = useQueryClient();
-  const [title, setTitle] = useState(() => t("page_title_default"));
-  const [slug, setSlug] = useState("status");
-  const [monitorId, setMonitorId] = useState("");
+  const toggles = useToggleLock();
   const [error, setError] = useState("");
-  const submit = useSubmitGuard();
-  const [pendingId, setPendingId] = useState<string | null>(null);
   async function setRoot(id: string, serveAtRoot: boolean) {
     setError("");
-    setPendingId(id);
-    try {
-      await api(`/api/status-pages/${id}/root`, {
-        method: "PUT",
-        body: JSON.stringify({ serveAtRoot }),
-      });
-      await client.invalidateQueries({ queryKey: ["pages"] });
-    } catch (cause) {
-      setError(errorText(cause));
-    } finally {
-      setPendingId(null);
-    }
+    await toggles.run(id, async () => {
+      try {
+        await api(`/api/status-pages/${id}/root`, {
+          method: "PUT",
+          body: JSON.stringify({ serveAtRoot }),
+        });
+        await client.invalidateQueries({ queryKey: ["pages"] });
+        await client.invalidateQueries({ queryKey: ["status-page"] });
+      } catch (cause) {
+        setError(rootToggleError(cause));
+        await client.invalidateQueries({ queryKey: ["pages"] });
+        await client.invalidateQueries({ queryKey: ["status-page"] });
+      }
+    });
   }
   return (
     <>
-      <AppHeader title={t("nav_status_pages")} />
-      <form
-        className="mb-6 grid max-w-xl gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setError("");
-          void submit.run(async () => {
-            try {
-              const chosen = monitorId || monitors.data?.monitors[0]?.id;
-              await api("/api/status-pages", {
-                method: "POST",
-                body: JSON.stringify({
-                  slug,
-                  published: true,
-                  title,
-                  description: "",
-                  footer: "",
-                  banner: "",
-                  items: chosen
-                    ? [
-                        {
-                          monitorId: chosen,
-                          position: 0,
-                          groupName: t("page_group_default"),
-                          displayName: "",
-                        },
-                      ]
-                    : [],
-                }),
-              });
-              await client.invalidateQueries({ queryKey: ["pages"] });
-            } catch (cause) {
-              setError(errorText(cause));
-            }
-          });
-        }}
-      >
-        <Field label={t("page_title")}>
-          <Input
-            name="title"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            required
-          />
-        </Field>
-        <Field label={t("page_slug")}>
-          <Input
-            name="slug"
-            value={slug}
-            onChange={(event) => setSlug(event.target.value)}
-            required
-          />
-        </Field>
-        <Field label={t("page_items")}>
-          <select
-            className={controlClass}
-            name="monitorId"
-            value={monitorId}
-            onChange={(event) => setMonitorId(event.target.value)}
-          >
-            <option value="">{t("action_add")}</option>
-            {monitors.data?.monitors.map((row) => (
-              <option key={row.id} value={row.id}>
-                {row.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
-        <PendingButton type="submit" pending={submit.pending}>
-          {t("page_new")}
-        </PendingButton>
-      </form>
+      <AppHeader
+        title={t("nav_status_pages")}
+        actions={
+          <Button asChild>
+            <Link to="/console/status-pages/new">{t("page_new")}</Link>
+          </Button>
+        }
+      />
+      {error ? (
+        <p role="alert" className="mb-4 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
       {pages.isPending ? (
         <ContentSkeleton />
+      ) : (pages.data?.pages.length ?? 0) === 0 ? (
+        <p className="text-sm text-muted-foreground">{t("page_list_empty")}</p>
       ) : (
         <Stagger className="grid gap-3">
           {pages.data?.pages.map((page) => (
             <StaggerItem key={page.id}>
-              <article className="rounded-lg border border-border bg-card p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
+              <article className="min-w-0 rounded-lg border border-border bg-card p-4">
+                <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-medium">{page.title}</p>
+                    <p className="break-words font-medium">{page.title}</p>
                     <p className="text-sm break-all text-muted-foreground">
-                      /s/{page.slug}
+                      /s/{page.slug} ·{" "}
+                      {t("monitors_count", { count: page.itemCount })}
                     </p>
                   </div>
-                  <a className="text-sm" href={`/s/${page.slug}`}>
-                    {t("page_public_link")}
-                  </a>
+                  <div className="flex flex-wrap gap-3 text-sm">
+                    <Link
+                      to="/console/status-pages/$id"
+                      params={{ id: page.id }}
+                      search={{ created: undefined }}
+                    >
+                      {t("action_edit")}
+                    </Link>
+                    <a href={`/s/${page.slug}`}>{t("page_public_link")}</a>
+                  </div>
                 </div>
                 <div className="mt-4 grid gap-2 border-t border-border pt-4">
-                  {/* biome-ignore lint/a11y/noLabelWithoutControl: Switch is the control */}
-                  <label className="flex items-center gap-3 text-sm">
-                    <Switch
-                      checked={page.serveAtRoot}
-                      disabled={
-                        pendingId !== null ||
-                        (!page.published && !page.serveAtRoot)
-                      }
-                      onCheckedChange={(checked) =>
-                        void setRoot(page.id, checked)
-                      }
-                    />
-                    <span>{t("page_root_label")}</span>
-                  </label>
+                  <RootSwitch
+                    checked={page.serveAtRoot}
+                    pending={toggles.pendingKey === page.id}
+                    disabled={
+                      toggles.pending || (!page.published && !page.serveAtRoot)
+                    }
+                    onCheckedChange={(checked) =>
+                      void setRoot(page.id, checked)
+                    }
+                  />
                   <p className="text-sm text-muted-foreground">
                     {t("page_root_note", { slug: page.slug })}
                   </p>
