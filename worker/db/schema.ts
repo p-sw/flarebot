@@ -189,6 +189,7 @@ export const statusPages = sqliteTable(
     i18nJson: text("i18n_json").notNull(),
     logoUrl: text("logo_url"),
     accent: text("accent"),
+    displayRange: text("display_range").notNull().default("24h"),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },

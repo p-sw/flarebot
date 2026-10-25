@@ -5,6 +5,11 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
+// Screenshot capture uses its own D1 directory so it does not share the e2e database.
+const persistPath =
+  process.env.FLAREBOT_PERSIST ||
+  (process.env.FLAREBOT_E2E ? ".wrangler/e2e" : undefined);
+
 function localeHtml(): Plugin {
   return {
     name: "flarebot-locale-html",
@@ -51,9 +56,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     cloudflare({
-      persistState: process.env.FLAREBOT_E2E
-        ? { path: ".wrangler/e2e" }
-        : undefined,
+      persistState: persistPath ? { path: persistPath } : undefined,
       inspectorPort: process.env.FLAREBOT_E2E ? false : undefined,
     }),
   ],

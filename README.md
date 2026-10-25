@@ -6,7 +6,7 @@ Self-hosted uptime monitoring and status pages on Cloudflare Workers.
 [![Cloudflare Workers](https://img.shields.io/badge/runs%20on-Cloudflare%20Workers-f38020)](https://workers.cloudflare.com/)
 
 <p align="center">
-  <img src="docs/images/dashboard.png" alt="Flarebot dashboard with monitor status" width="820" />
+  <img src="docs/images/dashboard.webp" alt="Console dashboard listing Harbor monitors that are up, down, and paused" width="820" />
 </p>
 
 Flarebot checks HTTP, TCP, DNS, certificate expiry, and heartbeat endpoints, confirms an outage before it notifies you, and publishes a status page. It runs entirely on the Workers free plan: a Hono API, Durable Objects for the schedule and the mail outbox, D1 for configuration and uptime rollups, and Analytics Engine for raw samples.
@@ -15,17 +15,33 @@ Flarebot checks HTTP, TCP, DNS, certificate expiry, and heartbeat endpoints, con
 
 - Setup wizard that creates the Owner
 - HTTP, TCP, DNS, SSL expiry (CT-log estimate), and heartbeat monitors
+- A monitor detail page and an editor for the check, schedule, and notifications
+- Pause and resume without deleting check history
 - Pending, then down, so a single blip does not page anyone
 - Email (SMTP or Cloudflare Email Service), Discord, Slack, Telegram, and webhooks
-- Public status pages with a title, description, banner, footer, and an admin editor for sections and monitors
+- Public status pages, including one published page served at the site root
+- A layout builder for sections, monitor order, and the name visitors see
+- Each status page shows 24 hours, 7 days, 30 days, or 90 days. New pages start at 24 hours
+- Owners set how long check history is kept. Older hourly totals, daily totals, and finished outages are deleted on a schedule
 - Uptime and response charts from local rollups
 - Owner, Admin, Editor, and Viewer roles, passkeys, passwords, optional TOTP, and scoped API tokens
-- One English copy file. A fork translates `brand/locale.json` to switch the whole product language
+- One English copy file, `brand/locale.json`. A fork edits that file to translate the whole product
 - Rebrand by editing `brand/` and asking your own coding agent
+- [MIT license](LICENSE)
 
 <p align="center">
-  <img src="docs/images/status.png" alt="Public status page" width="720" />
+  <img src="docs/images/status.webp" alt="Public Harbor status page on a desktop, with Edge and Platform sections over the last 24 hours" width="820" />
 </p>
+
+<p align="center">
+  <img src="docs/images/status-mobile.webp" alt="Public Harbor status page on a phone, with the same sections and uptime bars" width="390" />
+</p>
+
+<p align="center">
+  <img src="docs/images/monitor.webp" alt="Monitor detail for the Harbor website, with uptime ranges and recent response time" width="820" />
+</p>
+
+The images above are from a local demo database. Regenerate them with `pnpm screenshots`. That command does not read production data.
 
 ## Deploy
 
@@ -97,7 +113,7 @@ If you have local branding, use the `upgrade-flarebot` skill and read [brand/MIG
 
 ## Development
 
-[docs/development.md](docs/development.md) and [CONTRIBUTING.md](CONTRIBUTING.md). Hooks format staged files, typecheck, and require Conventional Commits. GitHub Actions runs the same checks plus Playwright.
+[docs/development.md](docs/development.md) and [CONTRIBUTING.md](CONTRIBUTING.md). Hooks format staged files, typecheck, and require Conventional Commits. GitHub Actions runs the same checks plus Playwright. `pnpm screenshots` rewrites the images in this file from local demo data.
 
 ## License
 

@@ -38,7 +38,7 @@ import { useSubmitGuard } from "../lib/use-submit-guard";
 import { Stagger, StaggerItem } from "../motion/page";
 import { ConfirmDialog } from "../ui/confirm-dialog";
 import { ContentSkeleton } from "../ui/skeleton";
-import { statusTone } from "./fields";
+import { responseText, statusTone } from "./fields";
 import { MonitorConfig } from "./monitor-config";
 import { monitorStatusLabel, monitorTypeLabel } from "./monitor-labels";
 
@@ -165,9 +165,7 @@ export function DashboardPage() {
                         : t("uptime_percent", { value: row.uptime24 })}
                     </span>
                     <span className="font-mono text-muted-foreground">
-                      {row.lastResponseMs == null
-                        ? t("uptime_empty")
-                        : t("response_ms", { value: row.lastResponseMs })}
+                      {responseText(row.lastResponseMs)}
                     </span>
                     <Badge tone={statusTone(row.status)}>
                       {monitorStatusLabel(row.status)}
@@ -301,6 +299,11 @@ export function MonitorDetailPage() {
           </StaggerItem>
         ))}
       </Stagger>
+      {stats.data ? (
+        <p className="mb-4 max-w-full text-xs break-words text-muted-foreground">
+          {t("monitor_history_note", { days: stats.data.retentionDays })}
+        </p>
+      ) : null}
       <Card className="mb-4">
         <CardContent className="p-4">
           <p className="mb-2 text-sm text-muted-foreground">

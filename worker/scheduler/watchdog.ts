@@ -3,6 +3,7 @@
 import { and, eq, lt } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { mailOutbox, monitors } from "../db/schema";
+import { pruneHistory } from "../retention";
 import { rollDaily } from "./persist";
 
 export async function watchdog(env: Env): Promise<void> {
@@ -16,6 +17,7 @@ export async function watchdog(env: Env): Promise<void> {
   }
   await env.MAILER.get(env.MAILER.idFromName("mailer")).kick();
   await rollDaily(env.DB);
+  await pruneHistory(env);
   const cutoff = Date.now() - 14 * 86_400_000;
   await db
     .delete(mailOutbox)

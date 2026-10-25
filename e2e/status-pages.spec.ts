@@ -114,6 +114,7 @@ test.describe("status page editor", () => {
       "aria-label",
       "Core",
     );
+    await page.getByLabel("History shown").selectOption("7d");
     await page.route("**/api/status-pages/*", async (route) => {
       if (route.request().method() !== "PATCH") {
         await route.continue();
@@ -161,6 +162,7 @@ test.describe("status page editor", () => {
     const monitors = page.locator("h3");
     await expect(monitors.nth(0)).toHaveText("Public beta");
     await expect(monitors.nth(1)).toHaveText(alpha);
+    await expect(page.getByText("7 days").first()).toBeVisible();
   });
 
   test("keeps the monitor name visible after a display name is set", async ({
@@ -213,6 +215,7 @@ test.describe("status page editor", () => {
       .getByRole("textbox", { name: "Description" })
       .fill("Created from the form");
     await expect(page.getByText("No sections yet")).toBeVisible();
+    await expect(page.getByLabel("History shown")).toHaveValue("24h");
     await page.getByRole("button", { name: "Add section" }).click();
     await page.getByRole("textbox", { name: "Section name" }).fill("Core");
     const core = page.getByRole("article", { name: "Core" });

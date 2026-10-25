@@ -2,7 +2,13 @@
 
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import {
+  DAY_MS,
+  HISTORY_RETENTION_KEY,
+  utcDayStart,
+} from "../../shared/history";
 import { assignShard, schedulerStub } from "../monitors/sync";
+import { writeSetting } from "../settings-store";
 import { shardCapacity } from "./capacity";
 import { initialState } from "./state-machine";
 import { watchdog } from "./watchdog";
@@ -97,7 +103,8 @@ describe("scheduler shard", () => {
     await insertMonitor(id, shardId);
     const stub = schedulerStub(env, shardId);
     expect(await stub.alarmAt()).toBeNull();
-    const yesterday = Date.UTC(2020, 0, 2);
+    await writeSetting(env, HISTORY_RETENTION_KEY, 90);
+    const yesterday = utcDayStart(Date.now()) - DAY_MS;
     await env.DB.prepare(
       `INSERT INTO uptime_hourly (
         monitor_id, hour_start, ok_count, fail_count, latency_sum, latency_max, samples_json

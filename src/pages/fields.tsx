@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+import { t } from "@shared/copy";
 import type { ReactNode } from "react";
 
 export const controlClass =
@@ -34,6 +35,13 @@ export function Field({
       ) : null}
     </label>
   );
+}
+
+// A heartbeat has no round trip, and a connect that finishes in the same
+// millisecond is stored as 0. Both read as an empty measurement.
+export function responseText(ms: number | null): string {
+  if (ms == null || ms <= 0) return t("uptime_empty");
+  return t("response_ms", { value: ms });
 }
 
 export function statusTone(

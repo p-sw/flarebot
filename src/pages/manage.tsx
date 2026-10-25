@@ -418,6 +418,27 @@ function asSecurity(value: string | undefined): MailSecurity {
   return "starttls";
 }
 
+const RETENTION_CHOICES = ["7", "30", "90", "180", "365"] as const;
+
+function retentionChoice(days: number): { choice: string; custom: string } {
+  const choice = String(days);
+  if ((RETENTION_CHOICES as readonly string[]).includes(choice)) {
+    return { choice, custom: "" };
+  }
+  return { choice: "custom", custom: choice };
+}
+
+function retentionDays(choice: string, custom: string): number | null {
+  if (choice !== "custom") {
+    const days = Number(choice);
+    return Number.isInteger(days) && days >= 1 ? days : null;
+  }
+  if (!/^\d+$/.test(custom.trim())) return null;
+  const days = Number(custom.trim());
+  if (days < 1 || days > 3650) return null;
+  return days;
+}
+
 function mailDraft(data: MailSettings | undefined): MailDraft {
   return {
     driver: asDriver(data?.driver),
@@ -544,9 +565,19 @@ export function SettingsPage() {
   const [noteTone, setNoteTone] = useState<"ok" | "error">("ok");
   const client = useQueryClient();
   const saveInstance = useSubmitGuard();
+  const saveHistory = useSubmitGuard();
   const saveMail = useSubmitGuard();
   const testMail = useSubmitGuard();
+  const [history, setHistory] = useState<{
+    choice: string;
+    custom: string;
+  } | null>(null);
+  const [historyNote, setHistoryNote] = useState("");
+  const [historyTone, setHistoryTone] = useState<"ok" | "error">("ok");
   const shownName = name ?? settings.data?.instanceName ?? "";
+  const shownHistory =
+    history ?? retentionChoice(settings.data?.historyRetentionDays ?? 90);
+  const historyValue = retentionDays(shownHistory.choice, shownHistory.custom);
   const form = draft ?? mailDraft(mail.data);
   const patch = (next: Partial<MailDraft>) => setDraft({ ...form, ...next });
   const block = testBlock(form, mail.data);
@@ -593,6 +624,106 @@ export function SettingsPage() {
         <PendingButton type="submit" pending={saveInstance.pending}>
           {t("action_save")}
         </PendingButton>
+      </form>
+      <h2 className="mb-3 font-medium">{t("settings_history")}</h2>
+      <p className="mb-3 max-w-xl text-sm break-words text-muted-foreground">
+        {t("settings_history_intro")}
+      </p>
+      <form
+        className="mb-8 grid max-w-xl gap-3"
+        aria-label={t("settings_history")}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (historyValue === null) {
+            setHistoryTone("error");
+            setHistoryNote(t("settings_history_invalid"));
+            return;
+          }
+          void saveHistory.run(async () => {
+            try {
+              await api("/api/settings", {
+                method: "PUT",
+                body: JSON.stringify({ historyRetentionDays: historyValue }),
+              });
+              await refreshQueries(client, [["settings"]]);
+              setHistory(null);
+              setHistoryTone("ok");
+              setHistoryNote(t("saved"));
+            } catch (cause) {
+              setHistoryTone("error");
+              setHistoryNote(errorText(cause));
+            }
+          });
+        }}
+      >
+        <Field
+          label={t("settings_history_days")}
+          hint={t("settings_history_hint")}
+        >
+          <select
+            className={controlClass}
+            name="historyRetention"
+            value={shownHistory.choice}
+            disabled={saveHistory.pending}
+            onChange={(event) => {
+              setHistoryNote("");
+              setHistory({
+                choice: event.target.value,
+                custom: shownHistory.custom,
+              });
+            }}
+          >
+            <option value="7">{t("range_7d")}</option>
+            <option value="30">{t("range_30d")}</option>
+            <option value="90">{t("range_90d")}</option>
+            <option value="180">{t("range_180d")}</option>
+            <option value="365">{t("range_365d")}</option>
+            <option value="custom">{t("settings_history_custom")}</option>
+          </select>
+        </Field>
+        {shownHistory.choice === "custom" ? (
+          <Field
+            label={t("settings_history_custom_days")}
+            hint={t("settings_history_custom_hint")}
+          >
+            <Input
+              name="historyRetentionDays"
+              type="number"
+              min={1}
+              max={3650}
+              step={1}
+              inputMode="numeric"
+              value={shownHistory.custom}
+              disabled={saveHistory.pending}
+              aria-invalid={
+                shownHistory.choice === "custom" && historyValue === null
+              }
+              onChange={(event) => {
+                setHistoryNote("");
+                setHistory({
+                  choice: "custom",
+                  custom: event.target.value,
+                });
+              }}
+              required
+            />
+          </Field>
+        ) : null}
+        <PendingButton
+          type="submit"
+          pending={saveHistory.pending}
+          disabled={historyValue === null}
+        >
+          {t("action_save")}
+        </PendingButton>
+        {historyNote ? (
+          <p
+            className={`text-sm break-words ${historyTone === "error" ? "text-destructive" : ""}`}
+            role={historyTone === "error" ? "alert" : "status"}
+          >
+            {historyNote}
+          </p>
+        ) : null}
       </form>
       <h2 className="mb-3 font-medium">{t("settings_mail")}</h2>
       <p className="mb-3 max-w-xl text-sm text-muted-foreground">

@@ -236,6 +236,7 @@ export const statusPageWriteSchema = z.object({
     .regex(/^#[0-9a-fA-F]{6}$/)
     .optional()
     .or(z.literal("")),
+  displayRange: z.enum(["24h", "7d", "30d", "90d"]).default("24h"),
   items: z
     .array(
       z.object({

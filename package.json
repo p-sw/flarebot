@@ -24,6 +24,7 @@
     "test:worker": "vitest run --config vitest.workers.config.ts",
     "test:coverage": "vitest run --config vitest.unit.config.ts --coverage && vitest run --config vitest.workers.config.ts --coverage",
     "test:e2e": "playwright test",
+    "screenshots": "node scripts/ensure-dev-vars.mjs && pnpm build && playwright test -c playwright.screenshots.config.ts",
     "e2e": "pnpm test:e2e",
     "brand:check": "node scripts/brand-check.mjs",
     "brand:preview": "BRAND_PREVIEW=1 playwright test e2e/preview.spec.ts",

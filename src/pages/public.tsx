@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { Badge } from "@/ui/badge";
 import { api } from "../lib/api";
-import { statusTone } from "./fields";
+import { responseText, statusTone } from "./fields";
 
 type PublicPage = {
   title: string;
@@ -16,6 +16,11 @@ type PublicPage = {
   banner: string;
   logoUrl?: string | null;
   accent?: string | null;
+  displayRange: "24h" | "7d" | "30d" | "90d";
+  bucket: "hour" | "day";
+  barCount: number;
+  clamped: boolean;
+  retentionDays: number;
   overall: "operational" | "degraded" | "outage" | "empty" | "paused";
   groups: {
     name: string;
@@ -23,11 +28,28 @@ type PublicPage = {
       id: string;
       name: string;
       status: string;
-      uptime90: number | null;
-      bars: { day: number; uptime: number | null }[];
+      uptime: number | null;
+      responseMs: number | null;
+      bars: {
+        start: number;
+        uptime: number | null;
+        responseMs: number | null;
+      }[];
     }[];
   }[];
 };
+
+function configuredLabel(range: PublicPage["displayRange"]): string {
+  if (range === "24h") return t("range_24h");
+  if (range === "7d") return t("range_7d");
+  if (range === "30d") return t("range_30d");
+  return t("range_90d");
+}
+
+function shownLabel(page: PublicPage): string {
+  if (page.bucket === "hour") return t("range_24h");
+  return t("status_shown_days", { count: page.barCount });
+}
 
 function statusLabel(status: string) {
   if (status === "up") return t("status_up");
@@ -68,6 +90,15 @@ export function PublicStatusPage() {
         banner={data.banner}
         overall={data.overall}
       />
+      {data.clamped ? (
+        <p className="mt-4 max-w-full text-sm break-words text-muted-foreground">
+          {t("status_range_clamped", {
+            configured: configuredLabel(data.displayRange),
+            retention: data.retentionDays,
+            shown: shownLabel(data),
+          })}
+        </p>
+      ) : null}
       <div className="mt-8 grid gap-6">
         {data.groups.map((group) => (
           <section key={group.name || "default"}>
@@ -90,11 +121,13 @@ export function PublicStatusPage() {
                       {statusLabel(item.status)}
                     </Badge>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {t("range_90d")}{" "}
-                    {item.uptime90 === null
+                  <p className="mt-1 text-xs break-words text-muted-foreground">
+                    {shownLabel(data)}{" "}
+                    {item.uptime === null
                       ? t("uptime_empty")
-                      : t("uptime_percent", { value: item.uptime90 })}
+                      : t("uptime_percent", { value: item.uptime })}
+                    {" · "}
+                    {t("response_label")} {responseText(item.responseMs)}
                   </p>
                   <div
                     className="mt-3 flex h-6 min-w-0 items-end gap-px"
@@ -102,11 +135,16 @@ export function PublicStatusPage() {
                   >
                     {item.bars.map((bar) => (
                       <div
-                        key={bar.day}
+                        key={bar.start}
                         title={
                           bar.uptime === null
-                            ? ""
-                            : t("uptime_percent", { value: bar.uptime })
+                            ? t("chart_empty")
+                            : t("status_bar_title", {
+                                uptime: t("uptime_percent", {
+                                  value: bar.uptime,
+                                }),
+                                response: responseText(bar.responseMs),
+                              })
                         }
                         className={`min-w-0 flex-1 ${
                           bar.uptime === null
