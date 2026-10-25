@@ -23,7 +23,7 @@ pnpm test
 pnpm build
 ```
 
-The same commands run in GitHub Actions. Pre-push also runs Playwright when a browser is installed (`pnpm exec playwright install chromium`).
+GitHub Actions runs those commands as parallel jobs, plus Playwright. Pre-push runs the Vitest suites, `i18n:check`, and the production build. `pnpm test:e2e` is the browser smoke test (`pnpm exec playwright install chromium` first). `pnpm brand:preview` is separate and is not part of that smoke test.
 
 ## Branding versus product code
 

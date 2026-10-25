@@ -24,5 +24,6 @@
     "brand/brand.config.ts",
     "brand/motion.ts",
     "test"
-  ]
+  ],
+  "exclude": ["test/smtp-mock.ts", "test/smtp-global-setup.ts"]
 }

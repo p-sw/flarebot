@@ -19,5 +19,12 @@
       "@brand/*": ["./brand/*"]
     }
   },
-  "include": ["src", "shared", "brand", "e2e"]
+  "include": [
+    "src",
+    "shared",
+    "brand",
+    "e2e",
+    "test/smtp-mock.ts",
+    "test/smtp-global-setup.ts"
+  ]
 }

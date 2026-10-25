@@ -117,5 +117,7 @@ export async function deliverWith(
       message: "SMTP settings are incomplete",
       permanent: true,
     };
-  return sendSmtp(resolved.smtp, message);
+  return sendSmtp(resolved.smtp, message, {
+    allowLoopback: env.ALLOW_TEST_MAIL === "1",
+  });
 }

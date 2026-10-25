@@ -57,6 +57,7 @@ export type SchedulerApi = {
     } | null;
   } | null>;
   ensureAlarm(): Promise<void>;
+  alarmAt(): Promise<number | null>;
   runDue(now: number): Promise<{ ran: number }>;
   noteSample(
     id: string,

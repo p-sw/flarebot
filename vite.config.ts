@@ -24,7 +24,17 @@ function brandUi(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [brandUi(), react(), tailwindcss(), cloudflare()],
+  plugins: [
+    brandUi(),
+    react(),
+    tailwindcss(),
+    cloudflare({
+      persistState: process.env.FLAREBOT_E2E
+        ? { path: ".wrangler/e2e" }
+        : undefined,
+      inspectorPort: process.env.FLAREBOT_E2E ? false : undefined,
+    }),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
@@ -33,4 +43,5 @@ export default defineConfig({
     },
   },
   server: { port: 5173, strictPort: true, host: "127.0.0.1" },
+  preview: { port: 4173, strictPort: true, host: "127.0.0.1" },
 });

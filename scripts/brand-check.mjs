@@ -11,27 +11,30 @@ function gitStatus() {
   }
 }
 
-const outside = [];
-const contrastOnly = process.env.BRAND_CHECK_CONTRAST_ONLY === "1";
-for (const line of gitStatus().split("\n")) {
-  if (!line.trim()) continue;
-  const file = line
-    .slice(3)
-    .trim()
-    .replace(/^.* -> /, "");
-  if (!file || file.startsWith("brand/") || file.startsWith(".brand-preview/"))
-    continue;
-  outside.push(file);
+export function filesOutsideBrand(porcelain) {
+  const outside = [];
+  for (const line of porcelain.split("\n")) {
+    if (!line.trim()) continue;
+    const file = line
+      .slice(3)
+      .trim()
+      .replace(/^.* -> /, "");
+    if (
+      !file ||
+      file.startsWith("brand/") ||
+      file.startsWith(".brand-preview/")
+    )
+      continue;
+    outside.push(file);
+  }
+  return outside;
 }
-if (!contrastOnly && outside.length > 0) {
-  console.error(
-    "brand:check scope: these paths are outside brand/ (a rebrand must not touch them):",
-  );
-  for (const file of outside) console.error(`  ${file}`);
-  process.exit(1);
+
+export function contrastRatio(foreground, background) {
+  const lighter = Math.max(luminance(foreground), luminance(background));
+  const darker = Math.min(luminance(foreground), luminance(background));
+  return (lighter + 0.05) / (darker + 0.05);
 }
-if (gitStatus().trim() === "")
-  console.log("brand:check scope skipped (clean tree)");
 
 function oklchToLinear(value) {
   const match = /oklch\(\s*([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)/.exec(value);
@@ -56,9 +59,7 @@ function luminance(rgb) {
 }
 
 function contrast(a, b) {
-  const lighter = Math.max(luminance(a), luminance(b));
-  const darker = Math.min(luminance(a), luminance(b));
-  return (lighter + 0.05) / (darker + 0.05);
+  return contrastRatio(a, b);
 }
 
 function palette(css, selector) {
@@ -72,46 +73,63 @@ function palette(css, selector) {
   return colors;
 }
 
-const css = readFileSync("brand/tokens.css", "utf8");
-const pairs = [
-  ["foreground", "background"],
-  ["primary-foreground", "primary"],
-  ["muted-foreground", "background"],
-  ["card-foreground", "card"],
-  ["destructive-foreground", "destructive"],
-  ["status-up-foreground", "background"],
-  ["status-down-foreground", "background"],
-  ["status-pending-foreground", "background"],
-  ["status-unknown-foreground", "background"],
-  ["sidebar-foreground", "sidebar"],
-  ["sidebar-muted", "sidebar"],
-];
-
-let failed = false;
-for (const mode of [":root", ".dark"]) {
-  const colors = palette(css, mode);
-  for (const [fg, bg] of pairs) {
-    const ratio = contrast(
-      oklchToLinear(colors[fg] ?? ""),
-      oklchToLinear(colors[bg] ?? ""),
+function main() {
+  const outside = filesOutsideBrand(gitStatus());
+  const contrastOnly = process.env.BRAND_CHECK_CONTRAST_ONLY === "1";
+  if (!contrastOnly && outside.length > 0) {
+    console.error(
+      "brand:check scope: these paths are outside brand/ (a rebrand must not touch them):",
     );
-    if (ratio < 4.5) {
-      failed = true;
-      console.error(
-        `${mode} ${fg} on ${bg} is ${ratio.toFixed(2)}:1 (need 4.5:1)`,
+    for (const file of outside) console.error(`  ${file}`);
+    process.exit(1);
+  }
+  if (gitStatus().trim() === "")
+    console.log("brand:check scope skipped (clean tree)");
+
+  const css = readFileSync("brand/tokens.css", "utf8");
+  const pairs = [
+    ["foreground", "background"],
+    ["primary-foreground", "primary"],
+    ["muted-foreground", "background"],
+    ["card-foreground", "card"],
+    ["destructive-foreground", "destructive"],
+    ["status-up-foreground", "background"],
+    ["status-down-foreground", "background"],
+    ["status-pending-foreground", "background"],
+    ["status-unknown-foreground", "background"],
+    ["sidebar-foreground", "sidebar"],
+    ["sidebar-muted", "sidebar"],
+  ];
+
+  let failed = false;
+  for (const mode of [":root", ".dark"]) {
+    const colors = palette(css, mode);
+    for (const [fg, bg] of pairs) {
+      const ratio = contrast(
+        oklchToLinear(colors[fg] ?? ""),
+        oklchToLinear(colors[bg] ?? ""),
       );
+      if (ratio < 4.5) {
+        failed = true;
+        console.error(
+          `${mode} ${fg} on ${bg} is ${ratio.toFixed(2)}:1 (need 4.5:1)`,
+        );
+      }
     }
   }
-}
-if (failed) process.exit(1);
-console.log("contrast OK");
+  if (failed) process.exit(1);
+  console.log("contrast OK");
 
-if (process.env.BRAND_CHECK_SKIP_BUILD === "1") process.exit(0);
-execFileSync("pnpm", ["exec", "tsc", "-p", "tsconfig.json", "--noEmit"], {
-  stdio: "inherit",
-});
-execFileSync(
-  "pnpm",
-  ["exec", "vitest", "run", "--config", "vitest.unit.config.ts"],
-  { stdio: "inherit" },
-);
+  if (process.env.BRAND_CHECK_SKIP_BUILD === "1") process.exit(0);
+  execFileSync("pnpm", ["exec", "tsc", "-p", "tsconfig.json", "--noEmit"], {
+    stdio: "inherit",
+  });
+  execFileSync(
+    "pnpm",
+    ["exec", "vitest", "run", "--config", "vitest.unit.config.ts"],
+    { stdio: "inherit" },
+  );
+}
+
+const invoked = process.argv[1]?.endsWith("brand-check.mjs");
+if (invoked) main();
