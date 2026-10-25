@@ -21,7 +21,7 @@ Change the deployer's product without editing upstream files.
 ## Steps
 
 1. Read `brand/brand.config.ts` and `brand/BRAND.md`.
-2. Change `name`, `logo`, `links`, and `motion` (`calm`, `crisp`, `playful`, or `none`). Keep `brandApi` at `1`.
+2. Change `name`, `logo`, `links`, and `motion` (`calm`, `crisp`, `playful`, or `none`). Keep `brandApi` at `1`. `links.source` is optional and on by default. Leave it, point it at your own repository, or omit it to hide the footer source link.
 3. Put logo files in `brand/assets/` and point `logo.light` and `logo.dark` at those paths.
 4. Edit `brand/tokens.css`. Keep every variable name. Use `oklch()`. Text colors must clear WCAG AA 4.5:1 against the surfaces they sit on.
 5. If the motion name changed, update `brand/motion.ts` springs. Components read this file. Do not hardcode stiffness or damping in `src/`.

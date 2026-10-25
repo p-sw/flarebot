@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 import { and, eq, gte, inArray } from "drizzle-orm";
 import { type I18nMap, pickLocalized } from "../../shared/content";

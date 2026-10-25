@@ -2,7 +2,7 @@
 
 Self-hosted uptime monitoring and status pages on Cloudflare Workers.
 
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Cloudflare Workers](https://img.shields.io/badge/runs%20on-Cloudflare%20Workers-f38020)](https://workers.cloudflare.com/)
 
 <p align="center">
@@ -89,4 +89,6 @@ If you have local branding, use the `upgrade-flarebot` skill and read [brand/MIG
 
 ## License
 
-[AGPL-3.0-only](LICENSE). If you modify Flarebot and offer it as a service, the license requires you to share the corresponding source with the people who use that service.
+[MIT](LICENSE). Copyright (c) 2026 Shinwoo PARK.
+
+The footer shows a source link when `brand/brand.config.ts` sets `links.source`. The stock config points at this repository. Clear that field to hide the link. It is a default, not a license requirement.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 import { afterEach, describe, expect, it } from "vitest";
 import { runCheck } from "./run";

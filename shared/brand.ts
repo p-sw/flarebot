@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 export const BRAND_API = 1;
 
@@ -10,7 +10,7 @@ export type BrandConfig = {
   logo: { light: string; dark: string };
   defaultLocale: "en" | "ko";
   motion: BrandMotionName;
-  links: { home?: string; source: string; docs?: string };
+  links: { home?: string; source?: string; docs?: string };
 };
 
 export function defineBrand<T extends BrandConfig>(config: T): T {

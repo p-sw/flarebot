@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 import { and, desc, eq, gte } from "drizzle-orm";
 import type { Hono } from "hono";

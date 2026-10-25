@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 import { and, eq, lt } from "drizzle-orm";
 import { getDb } from "../db/client";

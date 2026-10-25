@@ -24,7 +24,7 @@ These choices were open in the plan or forced by the free-plan and local-dev con
 20. Password reset and invite mail use the outbox. The test button does not.
 21. Three transitions in 30 minutes produce one unstable alert.
 22. The default theme is IBM Plex, a deep teal primary, a dark sidebar, and a warm paper canvas.
-23. Source files carry `SPDX-License-Identifier: AGPL-3.0-only`. The `LICENSE` file is the unmodified AGPL-3.0 text.
+23. Source files carry `SPDX-License-Identifier: MIT`. The `LICENSE` file is the MIT text, copyright Shinwoo PARK, 2026.
 24. The placeholder D1 id is the all-zero UUID so the deploy button can provision a database.
 25. Setup is unavailable until `SETUP_SECRET` is set.
 26. Five failed logins lock the account for 15 minutes.
@@ -43,3 +43,4 @@ These choices were open in the plan or forced by the free-plan and local-dev con
 39. SMTP tests dial a local mock only when `ALLOW_TEST_MAIL=1`. That flag lets `127.0.0.1` through the private-host check. Production config does not set the flag, so loopback stays blocked.
 40. CI runs lint, typecheck, tests, the production build, and Playwright as separate jobs. A new commit on a pull request cancels the previous run. Playwright drives `vite preview` on port 4173, with two workers and `fullyParallel`. The e2e command copies `.dev.vars` into the preview output only after `pnpm build` has removed it. Without `SETUP_SECRET` the setup route returns 503. Brand screenshots stay on `pnpm brand:preview`.
 41. `pnpm build` deletes every `.dev.vars` file from `dist/` and fails if a secret value remains anywhere in that output, or if a client asset contains `SETUP_SECRET` or `ENCRYPTION_KEY`. The Vite plugin writes `.dev.vars` beside the Worker for local preview. `wrangler deploy` and the Deploy to Cloudflare button run this build, so those values are not part of the uploaded Worker or the client assets. Production reads them from Worker secrets at runtime. The Worker script still mentions the binding names. That is how it reads `env`.
+42. The footer source link is optional and on by default. `links.source` in `brand/brand.config.ts` is the GitHub URL, and the footer renders the link only when that field is set.
