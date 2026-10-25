@@ -11,6 +11,17 @@ async function expectNoHorizontalOverflow(
   expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth);
 }
 
+const widths = [360, 390] as const;
+
+async function expectNoOverflowAtWidths(
+  page: import("@playwright/test").Page,
+) {
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 800 });
+    await expectNoHorizontalOverflow(page);
+  }
+}
+
 test("key pages do not overflow at mobile widths", async ({ page }) => {
   const slug = `mobile-${test.info().parallelIndex}-${Date.now().toString(36)}`;
   await signIn(page);
@@ -55,23 +66,22 @@ test("key pages do not overflow at mobile widths", async ({ page }) => {
   ];
   const signedOut = ["/login", "/forgot", "/setup", `/s/${slug}`];
 
-  for (const width of [360, 390]) {
-    await page.setViewportSize({ width, height: 800 });
-    for (const path of signedIn) {
-      await page.goto(path);
-      await page.waitForLoadState("networkidle");
-      await expectNoHorizontalOverflow(page);
-    }
-    await page.goto("/console");
-    await page.getByRole("button", { name: "Open menu" }).click();
-    await page.getByRole("button", { name: /Account menu/ }).click();
-    await page.getByRole("menuitem", { name: "Sign out" }).click();
-    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
-    for (const path of signedOut) {
-      await page.goto(path);
-      await page.waitForLoadState("networkidle");
-      await expectNoHorizontalOverflow(page);
-    }
-    await signIn(page);
+  // Reload each route once. Measuring both widths on that document stays
+  // inside the suite timeout; a second full pass was what CI aborted.
+  for (const path of signedIn) {
+    await page.goto(path);
+    await page.waitForLoadState("networkidle");
+    await expectNoOverflowAtWidths(page);
+  }
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto("/console");
+  await page.getByRole("button", { name: "Open menu" }).click();
+  await page.getByRole("button", { name: /Account menu/ }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  for (const path of signedOut) {
+    await page.goto(path);
+    await page.waitForLoadState("networkidle");
+    await expectNoOverflowAtWidths(page);
   }
 });
