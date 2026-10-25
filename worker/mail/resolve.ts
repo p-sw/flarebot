@@ -3,7 +3,7 @@
 import { decryptString } from "../crypto/secret";
 import { sendCfEmail } from "./cf-email";
 import type { MailResult, SmtpSettings } from "./smtp";
-import { sendSmtp } from "./smtp";
+import { sendSmtp, smtpSecurity } from "./smtp";
 
 export type ResolvedMail = {
   driver: "smtp" | "cf-email" | "test" | "none";
@@ -27,7 +27,7 @@ export async function resolveMail(
   } | null,
 ): Promise<ResolvedMail> {
   if (env.SMTP_HOST && env.MAIL_FROM) {
-    const security = env.SMTP_SECURE === "tls" ? "tls" : "starttls";
+    const security = smtpSecurity(env.SMTP_SECURE);
     return {
       driver: "smtp",
       fromName: env.MAIL_FROM_NAME || "Flarebot",
@@ -80,7 +80,7 @@ export async function resolveMail(
     smtp: {
       host: row.host || "",
       port: row.port || 587,
-      security: row.security === "tls" ? "tls" : "starttls",
+      security: smtpSecurity(row.security),
       username: row.username || "",
       password,
       fromName: row.fromName || "Flarebot",

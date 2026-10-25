@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { z } from "zod";
+import { isSupportedLocale, LOCALE_COOKIE } from "../shared/locales";
 import type { Action, Role, Scope } from "../shared/permissions";
 import { can, isRole, isScope, scopesForRole } from "../shared/permissions";
 import { sha256Hex, timingSafeEqual } from "./crypto/secret";
@@ -83,6 +84,23 @@ export function clearSessionCookie(c: AppContext): void {
   deleteCookie(c, SESSION_COOKIE, { path: "/" });
 }
 
+const LOCALE_MAX_AGE = 60 * 60 * 24 * 400;
+
+export function writeLocaleCookie(c: AppContext, locale: string): void {
+  if (!isSupportedLocale(locale)) return;
+  setCookie(c, LOCALE_COOKIE, locale, {
+    httpOnly: false,
+    sameSite: "Lax",
+    path: "/",
+    secure: cookieSecure(c),
+    maxAge: LOCALE_MAX_AGE,
+  });
+}
+
+export function clearLocaleCookie(c: AppContext): void {
+  deleteCookie(c, LOCALE_COOKIE, { path: "/" });
+}
+
 export async function createSession(
   c: AppContext,
   userId: string,
@@ -101,6 +119,12 @@ export async function createSession(
     createdAt: now,
   });
   writeSessionCookie(c, token);
+  const user = await db
+    .select({ locale: users.locale })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get();
+  if (user?.locale) writeLocaleCookie(c, user.locale);
 }
 
 async function actorFromUser(

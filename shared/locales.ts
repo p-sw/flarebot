@@ -9,8 +9,36 @@ export const SUPPORTED_LOCALES = [
 
 export const LOCALE_CODES = SUPPORTED_LOCALES.map((locale) => locale.code);
 
+export const LOCALE_COOKIE = "locale";
+
 export function isSupportedLocale(value: string): value is SupportedLocale {
   return LOCALE_CODES.includes(value as SupportedLocale);
+}
+
+export type LocaleSource = "query" | "cookie" | "header" | "default";
+
+/**
+ * An explicit query or saved cookie wins over Accept-Language.
+ * The header is only a fallback for visitors who have not chosen a language.
+ */
+export function resolveRequestedLocale(
+  available: readonly string[],
+  fallback: string,
+  options: {
+    query?: string | null;
+    cookie?: string | null;
+    acceptLanguage?: string | null;
+  },
+): { locale: string; source: LocaleSource } {
+  if (options.query && available.includes(options.query)) {
+    return { locale: options.query, source: "query" };
+  }
+  if (options.cookie && available.includes(options.cookie)) {
+    return { locale: options.cookie, source: "cookie" };
+  }
+  const matched = matchLocale(options.acceptLanguage, available, fallback);
+  if (matched.fromHeader) return { locale: matched.locale, source: "header" };
+  return { locale: matched.locale, source: "default" };
 }
 
 export function matchLocale(

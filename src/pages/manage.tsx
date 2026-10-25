@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: MIT
 
 import AppHeader from "@brand/overrides/AppHeader";
+import { isSupportedLocale } from "@shared/locales";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button } from "@/ui/button";
 import { Card, CardContent } from "@/ui/card";
 import { Input } from "@/ui/input";
+import { PendingButton } from "@/ui/pending-button";
 import { api, errorText } from "../lib/api";
+import { useSubmitGuard } from "../lib/use-submit-guard";
 import { PageEnter } from "../motion/page";
 import { m } from "../paraglide/messages.js";
-import { setLocale } from "../paraglide/runtime.js";
-import { Field } from "./fields";
+import { getLocale, setLocale } from "../paraglide/runtime.js";
+import { controlClass, Field } from "./fields";
 
 export function StatusPagesPage() {
   const pages = useQuery({
@@ -38,47 +41,50 @@ export function StatusPagesPage() {
   const [slug, setSlug] = useState("status");
   const [monitorId, setMonitorId] = useState("");
   const [error, setError] = useState("");
+  const submit = useSubmitGuard();
   return (
     <PageEnter>
       <AppHeader title={m.nav_status_pages()} />
       <form
         className="mb-6 grid max-w-xl gap-3"
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
           setError("");
-          try {
-            const chosen = monitorId || monitors.data?.monitors[0]?.id;
-            await api("/api/status-pages", {
-              method: "POST",
-              body: JSON.stringify({
-                slug,
-                published: true,
-                defaultLocale: "en",
-                locales: ["en", "ko"],
-                sourceLocale: "en",
-                title,
-                description: "",
-                footer: "",
-                banner: "",
-                i18n: { ko: { title: `${title} KO` } },
-                items: chosen
-                  ? [
-                      {
-                        monitorId: chosen,
-                        position: 0,
-                        groupName: "Core",
-                        displayName: "",
-                        sourceLocale: "en",
-                        i18n: {},
-                      },
-                    ]
-                  : [],
-              }),
-            });
-            await client.invalidateQueries({ queryKey: ["pages"] });
-          } catch (cause) {
-            setError(errorText(cause));
-          }
+          void submit.run(async () => {
+            try {
+              const chosen = monitorId || monitors.data?.monitors[0]?.id;
+              await api("/api/status-pages", {
+                method: "POST",
+                body: JSON.stringify({
+                  slug,
+                  published: true,
+                  defaultLocale: "en",
+                  locales: ["en", "ko"],
+                  sourceLocale: "en",
+                  title,
+                  description: "",
+                  footer: "",
+                  banner: "",
+                  i18n: { ko: { title: `${title} KO` } },
+                  items: chosen
+                    ? [
+                        {
+                          monitorId: chosen,
+                          position: 0,
+                          groupName: "Core",
+                          displayName: "",
+                          sourceLocale: "en",
+                          i18n: {},
+                        },
+                      ]
+                    : [],
+                }),
+              });
+              await client.invalidateQueries({ queryKey: ["pages"] });
+            } catch (cause) {
+              setError(errorText(cause));
+            }
+          });
         }}
       >
         <Field label={m.page_title()}>
@@ -99,7 +105,7 @@ export function StatusPagesPage() {
         </Field>
         <Field label={m.page_items()}>
           <select
-            className="h-10 rounded-lg border border-input bg-card px-3"
+            className={controlClass}
             name="monitorId"
             value={monitorId}
             onChange={(event) => setMonitorId(event.target.value)}
@@ -113,7 +119,9 @@ export function StatusPagesPage() {
           </select>
         </Field>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
-        <Button type="submit">{m.page_new()}</Button>
+        <PendingButton type="submit" pending={submit.pending}>
+          {m.page_new()}
+        </PendingButton>
       </form>
       <div className="grid gap-3">
         {pages.data?.pages.map((page) => (
@@ -146,18 +154,22 @@ export function ChannelsPage() {
   const [name, setName] = useState("Ops email");
   const [to, setTo] = useState("");
   const [message, setMessage] = useState("");
+  const submit = useSubmitGuard();
+  const test = useSubmitGuard();
   return (
     <PageEnter>
       <AppHeader title={m.nav_channels()} />
       <form
         className="mb-6 grid max-w-xl gap-3"
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
-          await api("/api/channels", {
-            method: "POST",
-            body: JSON.stringify({ name, type: "email", config: { to } }),
+          void submit.run(async () => {
+            await api("/api/channels", {
+              method: "POST",
+              body: JSON.stringify({ name, type: "email", config: { to } }),
+            });
+            await client.invalidateQueries({ queryKey: ["channels"] });
           });
-          await client.invalidateQueries({ queryKey: ["channels"] });
         }}
       >
         <Field label={m.channel_name()}>
@@ -177,7 +189,9 @@ export function ChannelsPage() {
             required
           />
         </Field>
-        <Button type="submit">{m.channel_new()}</Button>
+        <PendingButton type="submit" pending={submit.pending}>
+          {m.channel_new()}
+        </PendingButton>
       </form>
       {message ? <p className="mb-3 text-sm">{message}</p> : null}
       <div className="grid gap-2">
@@ -189,22 +203,26 @@ export function ChannelsPage() {
             <span>
               {channel.name} · {channel.type}
             </span>
-            <Button
+            <PendingButton
               size="sm"
               variant="outline"
-              onClick={async () => {
-                try {
-                  await api(`/api/channels/${channel.id}/test`, {
-                    method: "POST",
-                  });
-                  setMessage(m.channel_test_sent());
-                } catch (cause) {
-                  setMessage(errorText(cause));
-                }
+              type="button"
+              pending={test.pending}
+              onClick={() => {
+                void test.run(async () => {
+                  try {
+                    await api(`/api/channels/${channel.id}/test`, {
+                      method: "POST",
+                    });
+                    setMessage(m.channel_test_sent());
+                  } catch (cause) {
+                    setMessage(errorText(cause));
+                  }
+                });
               }}
             >
               {m.action_test()}
-            </Button>
+            </PendingButton>
           </div>
         ))}
       </div>
@@ -223,18 +241,21 @@ export function TeamPage() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("viewer");
   const [link, setLink] = useState("");
+  const submit = useSubmitGuard();
   return (
     <PageEnter>
       <AppHeader title={m.nav_team()} />
       <form
         className="mb-6 grid max-w-xl gap-3"
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
-          const created = await api<{ link: string }>("/api/team/invites", {
-            method: "POST",
-            body: JSON.stringify({ email: email || undefined, role }),
+          void submit.run(async () => {
+            const created = await api<{ link: string }>("/api/team/invites", {
+              method: "POST",
+              body: JSON.stringify({ email: email || undefined, role }),
+            });
+            setLink(created.link);
           });
-          setLink(created.link);
         }}
       >
         <Field label={m.team_email_optional()}>
@@ -246,7 +267,7 @@ export function TeamPage() {
         </Field>
         <Field label={m.team_role()}>
           <select
-            className="h-10 rounded-lg border border-input bg-card px-3"
+            className={controlClass}
             value={role}
             onChange={(event) => setRole(event.target.value)}
           >
@@ -255,7 +276,9 @@ export function TeamPage() {
             <option value="viewer">{m.role_viewer()}</option>
           </select>
         </Field>
-        <Button type="submit">{m.team_invite()}</Button>
+        <PendingButton type="submit" pending={submit.pending}>
+          {m.team_invite()}
+        </PendingButton>
       </form>
       {link ? <p className="mb-4 break-all font-mono text-xs">{link}</p> : null}
       <div className="grid gap-2">
@@ -292,19 +315,23 @@ export function TokensPage() {
   const client = useQueryClient();
   const [name, setName] = useState("CI");
   const [raw, setRaw] = useState("");
+  const submit = useSubmitGuard();
+  const revoke = useSubmitGuard();
   return (
     <PageEnter>
       <AppHeader title={m.nav_tokens()} />
       <form
         className="mb-4 grid max-w-xl gap-3"
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
-          const created = await api<{ token: string }>("/api/tokens", {
-            method: "POST",
-            body: JSON.stringify({ name, scopes: ["read"] }),
+          void submit.run(async () => {
+            const created = await api<{ token: string }>("/api/tokens", {
+              method: "POST",
+              body: JSON.stringify({ name, scopes: ["read"] }),
+            });
+            setRaw(created.token);
+            await client.invalidateQueries({ queryKey: ["tokens"] });
           });
-          setRaw(created.token);
-          await client.invalidateQueries({ queryKey: ["tokens"] });
         }}
       >
         <Field label={m.token_name()}>
@@ -315,7 +342,9 @@ export function TokensPage() {
             required
           />
         </Field>
-        <Button type="submit">{m.token_new()}</Button>
+        <PendingButton type="submit" pending={submit.pending}>
+          {m.token_new()}
+        </PendingButton>
       </form>
       {raw ? (
         <p className="mb-4 break-all rounded-lg bg-muted p-3 font-mono text-xs">
@@ -331,16 +360,20 @@ export function TokensPage() {
             <span>
               {token.name} · {token.scopes.join(", ")}
             </span>
-            <Button
+            <PendingButton
               size="sm"
               variant="outline"
-              onClick={async () => {
-                await api(`/api/tokens/${token.id}`, { method: "DELETE" });
-                await client.invalidateQueries({ queryKey: ["tokens"] });
+              type="button"
+              pending={revoke.pending}
+              onClick={() => {
+                void revoke.run(async () => {
+                  await api(`/api/tokens/${token.id}`, { method: "DELETE" });
+                  await client.invalidateQueries({ queryKey: ["tokens"] });
+                });
               }}
             >
               {m.token_revoke()}
-            </Button>
+            </PendingButton>
           </div>
         ))}
       </div>
@@ -371,7 +404,7 @@ export function AuditPage() {
         {audit.data?.events.map((event) => (
           <div
             key={event.id}
-            className="grid grid-cols-3 gap-2 rounded-lg border border-border px-3 py-2 text-sm"
+            className="grid min-w-0 gap-1 rounded-lg border border-border px-3 py-2 text-sm sm:grid-cols-3"
           >
             <span>{new Date(event.createdAt).toISOString()}</span>
             <span>{event.action}</span>
@@ -385,6 +418,72 @@ export function AuditPage() {
   );
 }
 
+type MailDriver = "none" | "smtp" | "cf-email";
+type MailSecurity = "starttls" | "tls" | "none";
+
+type MailSettings = {
+  driver: string;
+  host: string;
+  port: number;
+  security: string;
+  username: string;
+  hasPassword: boolean;
+  fromName: string;
+  fromAddress: string;
+  activeSource: "secrets" | "database" | "cloudflare" | "none";
+  emailBinding: boolean;
+  secretsOverride: boolean;
+};
+
+type MailDraft = {
+  driver: MailDriver;
+  host: string;
+  port: 587 | 465;
+  security: MailSecurity;
+  username: string;
+  password: string;
+  clearPassword: boolean;
+  fromName: string;
+  fromAddress: string;
+  testTo: string;
+};
+
+function asDriver(value: string | undefined): MailDriver {
+  if (value === "smtp" || value === "cf-email") return value;
+  return "none";
+}
+
+function asSecurity(value: string | undefined): MailSecurity {
+  if (value === "tls" || value === "none") return value;
+  return "starttls";
+}
+
+function mailDraft(data: MailSettings | undefined): MailDraft {
+  return {
+    driver: asDriver(data?.driver),
+    host: data?.host ?? "",
+    port: data?.port === 465 ? 465 : 587,
+    security: asSecurity(data?.security),
+    username: data?.username ?? "",
+    password: "",
+    clearPassword: false,
+    fromName: data?.fromName || "Flarebot",
+    fromAddress: data?.fromAddress ?? "",
+    testTo: "",
+  };
+}
+
+function mailSourceText(mail: MailSettings | undefined): string {
+  if (!mail || mail.activeSource === "none")
+    return m.settings_mail_source_none();
+  if (mail.activeSource === "secrets") return m.settings_mail_source_secrets();
+  if (mail.activeSource === "database")
+    return m.settings_mail_source_database();
+  return mail.emailBinding
+    ? m.settings_mail_source_cloudflare()
+    : m.settings_mail_source_cloudflare_unbound();
+}
+
 export function SettingsPage() {
   const settings = useQuery({
     queryKey: ["settings"],
@@ -395,111 +494,293 @@ export function SettingsPage() {
   });
   const mail = useQuery({
     queryKey: ["mail"],
-    queryFn: () =>
-      api<{
-        driver: string;
-        host: string;
-        port: number;
-        fromName: string;
-        fromAddress: string;
-        secretsOverride: boolean;
-      }>("/api/settings/mail"),
+    queryFn: () => api<MailSettings>("/api/settings/mail"),
   });
-  const [name, setName] = useState("");
-  const [host, setHost] = useState("smtp.example.com");
-  const [from, setFrom] = useState("bot@example.com");
+  const [name, setName] = useState<string | null>(null);
+  const [draft, setDraft] = useState<MailDraft | null>(null);
   const [note, setNote] = useState("");
+  const [noteTone, setNoteTone] = useState<"ok" | "error">("ok");
   const client = useQueryClient();
+  const saveInstance = useSubmitGuard();
+  const saveMail = useSubmitGuard();
+  const shownName = name ?? settings.data?.instanceName ?? "";
+  const form = draft ?? mailDraft(mail.data);
+  const patch = (next: Partial<MailDraft>) => setDraft({ ...form, ...next });
+
+  function report(tone: "ok" | "error", text: string) {
+    setNoteTone(tone);
+    setNote(text);
+  }
+
   return (
     <PageEnter>
       <AppHeader title={m.nav_settings()} />
       <form
         className="mb-8 grid max-w-xl gap-3"
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
-          await api("/api/settings", {
-            method: "PUT",
-            body: JSON.stringify({
-              instanceName: name || settings.data?.instanceName,
-            }),
+          void saveInstance.run(async () => {
+            try {
+              await api("/api/settings", {
+                method: "PUT",
+                body: JSON.stringify({ instanceName: shownName }),
+              });
+              await client.invalidateQueries({ queryKey: ["settings"] });
+              report("ok", m.saved());
+            } catch (cause) {
+              report("error", errorText(cause));
+            }
           });
-          await client.invalidateQueries({ queryKey: ["settings"] });
-          setNote(m.saved());
         }}
       >
-        <Field label={m.settings_instance_name()}>
+        <Field
+          label={m.settings_instance_name()}
+          hint={m.settings_instance_hint()}
+        >
           <Input
             name="instanceName"
-            value={name || settings.data?.instanceName || ""}
+            value={shownName}
             onChange={(event) => setName(event.target.value)}
+            required
           />
         </Field>
-        <p className="text-sm text-muted-foreground">
-          {m.settings_access_unavailable()}
-        </p>
-        <Button type="submit">{m.action_save()}</Button>
+        <PendingButton type="submit" pending={saveInstance.pending}>
+          {m.action_save()}
+        </PendingButton>
       </form>
       <h2 className="mb-3 font-medium">{m.settings_mail()}</h2>
-      {mail.data?.secretsOverride ? (
-        <p className="mb-3 text-sm">{m.settings_secrets_override()}</p>
-      ) : null}
+      <p className="mb-3 max-w-xl text-sm text-muted-foreground">
+        {m.settings_mail_intro()}
+      </p>
+      <p
+        className="mb-4 max-w-xl rounded-lg border border-border bg-muted px-3 py-2 text-sm"
+        role="status"
+      >
+        {mailSourceText(mail.data)}
+      </p>
       <form
         className="grid max-w-xl gap-3"
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
-          await api("/api/settings/mail", {
-            method: "PUT",
-            body: JSON.stringify({
-              driver: "smtp",
-              host,
-              port: 587,
-              security: "starttls",
-              username: "",
-              password: "secret",
-              fromName: "Flarebot",
-              fromAddress: from,
-            }),
+          if (!mail.data) return;
+          void saveMail.run(async () => {
+            try {
+              const body =
+                form.driver === "none"
+                  ? { driver: "none" }
+                  : form.driver === "cf-email"
+                    ? {
+                        driver: "cf-email",
+                        fromName: form.fromName,
+                        fromAddress: form.fromAddress,
+                      }
+                    : {
+                        driver: "smtp",
+                        host: form.host,
+                        port: form.port,
+                        security: form.security,
+                        username: form.username,
+                        fromName: form.fromName,
+                        fromAddress: form.fromAddress,
+                        ...(form.clearPassword
+                          ? { clearPassword: true }
+                          : form.password
+                            ? { password: form.password }
+                            : {}),
+                      };
+              await api("/api/settings/mail", {
+                method: "PUT",
+                body: JSON.stringify(body),
+              });
+              setDraft({ ...form, password: "", clearPassword: false });
+              await client.invalidateQueries({ queryKey: ["mail"] });
+              report("ok", m.saved());
+            } catch (cause) {
+              report("error", errorText(cause));
+            }
           });
-          setNote(m.saved());
         }}
       >
-        <Field label={m.settings_host()}>
-          <Input
-            name="smtpHost"
-            value={host}
-            onChange={(event) => setHost(event.target.value)}
-          />
+        <Field label={m.settings_driver()} hint={m.settings_driver_hint()}>
+          <select
+            className={controlClass}
+            name="driver"
+            value={form.driver}
+            onChange={(event) =>
+              patch({ driver: event.target.value as MailDriver })
+            }
+          >
+            <option value="smtp">{m.settings_driver_smtp()}</option>
+            <option value="cf-email">{m.settings_driver_cf()}</option>
+            <option value="none">{m.settings_driver_none()}</option>
+          </select>
         </Field>
-        <Field label={m.settings_from_address()}>
+        {form.driver === "smtp" ? (
+          <>
+            <Field label={m.settings_host()} hint={m.settings_host_hint()}>
+              <Input
+                name="smtpHost"
+                value={form.host}
+                onChange={(event) => patch({ host: event.target.value })}
+                required
+              />
+            </Field>
+            <Field label={m.settings_port()} hint={m.settings_port_hint()}>
+              <select
+                className={controlClass}
+                name="smtpPort"
+                value={form.port}
+                onChange={(event) =>
+                  patch({
+                    port: Number(event.target.value) === 465 ? 465 : 587,
+                  })
+                }
+              >
+                <option value={587}>587</option>
+                <option value={465}>465</option>
+              </select>
+            </Field>
+            <Field
+              label={m.settings_security()}
+              hint={m.settings_security_hint()}
+            >
+              <select
+                className={controlClass}
+                name="smtpSecurity"
+                value={form.security}
+                onChange={(event) =>
+                  patch({ security: event.target.value as MailSecurity })
+                }
+              >
+                <option value="starttls">
+                  {m.settings_security_starttls()}
+                </option>
+                <option value="tls">{m.settings_security_tls()}</option>
+                <option value="none">{m.settings_security_none()}</option>
+              </select>
+            </Field>
+            <Field
+              label={m.settings_username()}
+              hint={m.settings_username_hint()}
+            >
+              <Input
+                name="smtpUser"
+                autoComplete="username"
+                value={form.username}
+                onChange={(event) => patch({ username: event.target.value })}
+              />
+            </Field>
+            <Field
+              label={m.settings_password()}
+              hint={m.settings_password_hint()}
+            >
+              <Input
+                name="smtpPassword"
+                type="password"
+                autoComplete="new-password"
+                value={form.password}
+                onChange={(event) =>
+                  patch({ password: event.target.value, clearPassword: false })
+                }
+              />
+            </Field>
+            {mail.data?.hasPassword ? (
+              <p className="text-sm">{m.settings_password_set()}</p>
+            ) : null}
+            {mail.data?.hasPassword ? (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.clearPassword}
+                  onChange={(event) =>
+                    patch({
+                      clearPassword: event.target.checked,
+                      password: event.target.checked ? "" : form.password,
+                    })
+                  }
+                />
+                {m.settings_password_clear()}
+              </label>
+            ) : null}
+          </>
+        ) : null}
+        {form.driver !== "none" ? (
+          <>
+            <Field
+              label={m.settings_from_name()}
+              hint={m.settings_from_name_hint()}
+            >
+              <Input
+                name="fromName"
+                value={form.fromName}
+                onChange={(event) => patch({ fromName: event.target.value })}
+                required
+              />
+            </Field>
+            <Field
+              label={m.settings_from_address()}
+              hint={m.settings_from_address_hint()}
+            >
+              <Input
+                name="from"
+                type="email"
+                value={form.fromAddress}
+                onChange={(event) => patch({ fromAddress: event.target.value })}
+                required
+              />
+            </Field>
+          </>
+        ) : null}
+        <Field label={m.settings_test_to()} hint={m.settings_test_hint()}>
           <Input
-            name="from"
+            name="testTo"
             type="email"
-            value={from}
-            onChange={(event) => setFrom(event.target.value)}
+            value={form.testTo}
+            onChange={(event) => patch({ testTo: event.target.value })}
+            placeholder={m.settings_test_to_placeholder()}
           />
         </Field>
-        <div className="flex gap-2">
-          <Button type="submit">{m.action_save()}</Button>
-          <Button
+        <div className="flex flex-wrap gap-2">
+          <PendingButton
+            type="submit"
+            pending={saveMail.pending}
+            disabled={!mail.data}
+          >
+            {m.action_save()}
+          </PendingButton>
+          <PendingButton
             type="button"
             variant="outline"
-            onClick={async () => {
-              try {
-                await api("/api/settings/mail/test", {
-                  method: "POST",
-                  body: JSON.stringify({}),
-                });
-                setNote(m.settings_test_ok());
-              } catch (cause) {
-                setNote(errorText(cause));
-              }
+            pending={saveMail.pending}
+            disabled={!mail.data}
+            onClick={() => {
+              void saveMail.run(async () => {
+                try {
+                  await api("/api/settings/mail/test", {
+                    method: "POST",
+                    body: JSON.stringify(
+                      form.testTo ? { email: form.testTo } : {},
+                    ),
+                  });
+                  report("ok", m.settings_test_ok());
+                } catch (cause) {
+                  report("error", errorText(cause));
+                }
+              });
             }}
           >
             {m.action_test()}
-          </Button>
+          </PendingButton>
         </div>
       </form>
-      {note ? <p className="mt-3 text-sm">{note}</p> : null}
+      {note ? (
+        <p
+          className={`mt-3 text-sm ${noteTone === "error" ? "text-destructive" : ""}`}
+          role={noteTone === "error" ? "alert" : "status"}
+        >
+          {note}
+        </p>
+      ) : null}
     </PageEnter>
   );
 }
@@ -516,36 +797,58 @@ export function AccountPage() {
         passkeys: { id: string; deviceName: string | null }[];
       }>("/api/account"),
   });
-  const [locale, setValue] = useState(account.data?.locale ?? "en");
+  const [draft, setDraft] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const submit = useSubmitGuard();
+  const saved = isSupportedLocale(account.data?.locale ?? "")
+    ? account.data?.locale
+    : null;
+  const locale = draft ?? saved ?? getLocale();
   return (
     <PageEnter>
       <AppHeader title={m.nav_account()} />
-      <p className="mb-4 text-sm text-muted-foreground">
+      <p className="mb-4 break-all text-sm text-muted-foreground">
         {account.data?.email}
       </p>
       <form
         className="grid max-w-xl gap-3"
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
-          await api("/api/account", {
-            method: "PATCH",
-            body: JSON.stringify({ locale }),
+          if (!isSupportedLocale(locale)) return;
+          setError("");
+          void submit.run(async () => {
+            try {
+              await api("/api/account", {
+                method: "PATCH",
+                body: JSON.stringify({ locale }),
+              });
+              await setLocale(locale);
+              window.location.reload();
+            } catch (cause) {
+              setError(errorText(cause));
+            }
           });
-          await setLocale(locale as "en" | "ko");
-          window.location.reload();
         }}
       >
-        <Field label={m.account_language()}>
+        <Field label={m.account_language()} hint={m.account_language_hint()}>
           <select
-            className="h-10 rounded-lg border border-input bg-card px-3"
+            className={controlClass}
+            name="accountLocale"
             value={locale}
-            onChange={(event) => setValue(event.target.value)}
+            onChange={(event) => setDraft(event.target.value)}
           >
             <option value="en">{m.language_en()}</option>
             <option value="ko">{m.language_ko()}</option>
           </select>
         </Field>
-        <Button type="submit">{m.action_save()}</Button>
+        {error ? (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <PendingButton type="submit" pending={submit.pending}>
+          {m.action_save()}
+        </PendingButton>
       </form>
       <h2 className="mt-8 mb-2 font-medium">{m.account_passkeys()}</h2>
       {(account.data?.passkeys.length ?? 0) === 0 ? (

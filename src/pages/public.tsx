@@ -2,10 +2,12 @@
 
 import AppFooter from "@brand/overrides/AppFooter";
 import StatusHero from "@brand/overrides/StatusHero";
+import { isSupportedLocale } from "@shared/locales";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { Badge } from "@/ui/badge";
 import { api } from "../lib/api";
+import { useSubmitGuard } from "../lib/use-submit-guard";
 import { m } from "../paraglide/messages.js";
 import { setLocale } from "../paraglide/runtime.js";
 import { statusTone } from "./fields";
@@ -41,6 +43,7 @@ function statusLabel(status: string) {
 export function PublicStatusPage() {
   const { slug } = useParams({ strict: false }) as { slug: string };
   const lang = new URLSearchParams(window.location.search).get("lang");
+  const switching = useSubmitGuard();
   const page = useQuery({
     queryKey: ["public", slug, lang],
     queryFn: () =>
@@ -51,22 +54,34 @@ export function PublicStatusPage() {
   const data = page.data;
   if (!data) return <p className="p-8">{m.loading()}</p>;
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10">
+    <div className="mx-auto min-w-0 max-w-3xl px-4 py-10">
       {data.locales.length > 1 ? (
-        <div className="mb-4 flex justify-end gap-2 text-sm">
+        <div className="mb-4 flex flex-wrap justify-end gap-2 text-sm">
           {data.locales.map((locale) => (
             <button
               key={locale}
               type="button"
+              disabled={switching.pending || !isSupportedLocale(locale)}
+              aria-pressed={locale === data.locale}
               className={
                 locale === data.locale ? "font-medium" : "text-muted-foreground"
               }
               onClick={() => {
-                const url = new URL(window.location.href);
-                url.searchParams.set("lang", locale);
-                window.history.replaceState({}, "", url);
-                void setLocale(locale as "en" | "ko");
-                window.location.assign(url);
+                if (!isSupportedLocale(locale)) return;
+                void switching.run(async () => {
+                  await setLocale(locale);
+                  try {
+                    await api("/api/account", {
+                      method: "PATCH",
+                      body: JSON.stringify({ locale }),
+                    });
+                  } catch {
+                    // Public visitors are not signed in. The cookie still records the choice.
+                  }
+                  const url = new URL(window.location.href);
+                  url.searchParams.set("lang", locale);
+                  window.location.assign(url.toString());
+                });
               }}
             >
               {locale === "ko" ? m.language_ko() : m.language_en()}
@@ -92,10 +107,12 @@ export function PublicStatusPage() {
               {group.items.map((item) => (
                 <article
                   key={item.id}
-                  className="rounded-lg border border-border bg-card p-4"
+                  className="min-w-0 rounded-lg border border-border bg-card p-4"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="font-medium">{item.name}</h3>
+                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+                    <h3 className="min-w-0 break-words font-medium">
+                      {item.name}
+                    </h3>
                     <Badge tone={statusTone(item.status)}>
                       {statusLabel(item.status)}
                     </Badge>
@@ -105,14 +122,14 @@ export function PublicStatusPage() {
                     {item.uptime90 === null ? "—" : `${item.uptime90}%`}
                   </p>
                   <div
-                    className="mt-3 flex h-6 items-end gap-px"
+                    className="mt-3 flex h-6 min-w-0 items-end gap-px"
                     aria-hidden="true"
                   >
                     {item.bars.map((bar) => (
                       <div
                         key={bar.day}
                         title={bar.uptime === null ? "" : `${bar.uptime}%`}
-                        className={
+                        className={`min-w-0 flex-1 ${
                           bar.uptime === null
                             ? "bg-muted"
                             : bar.uptime >= 99
@@ -120,8 +137,8 @@ export function PublicStatusPage() {
                               : bar.uptime >= 90
                                 ? "bg-status-pending"
                                 : "bg-status-down"
-                        }
-                        style={{ height: 16, width: 3 }}
+                        }`}
+                        style={{ height: 16 }}
                       />
                     ))}
                   </div>

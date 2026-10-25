@@ -17,10 +17,12 @@ import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent } from "@/ui/card";
 import { Input } from "@/ui/input";
+import { PendingButton } from "@/ui/pending-button";
 import { api, errorText } from "../lib/api";
+import { useSubmitGuard } from "../lib/use-submit-guard";
 import { PageEnter } from "../motion/page";
 import { m } from "../paraglide/messages.js";
-import { Field, statusTone } from "./fields";
+import { controlClass, Field, statusTone } from "./fields";
 
 type MonitorListItem = {
   id: string;
@@ -98,14 +100,14 @@ export function DashboardPage() {
               className="block"
             >
               <Card>
-                <CardContent className="flex items-center justify-between gap-4 p-5">
-                  <div>
-                    <p className="font-medium">{row.name}</p>
+                <CardContent className="flex min-w-0 flex-wrap items-center justify-between gap-4 p-5">
+                  <div className="min-w-0">
+                    <p className="break-words font-medium">{row.name}</p>
                     <p className="text-sm text-muted-foreground">
                       {typeLabel(row.type)}
                     </p>
                   </div>
-                  <div className="flex items-center gap-4 text-sm">
+                  <div className="flex flex-wrap items-center gap-4 text-sm">
                     <span>
                       {row.uptime24 === null ? "—" : `${row.uptime24}%`}
                     </span>
@@ -189,6 +191,7 @@ export function MonitorFormPage() {
   const [draft, setDraft] = useState<Draft>(blank);
   const [error, setError] = useState("");
   const [pushUrl, setPushUrl] = useState("");
+  const submit = useSubmitGuard();
   const save = useMutation({
     mutationFn: () =>
       api<{ id: string; pushUrl?: string }>("/api/monitors", {
@@ -217,7 +220,13 @@ export function MonitorFormPage() {
         className="grid max-w-xl gap-3"
         onSubmit={(event) => {
           event.preventDefault();
-          save.mutate();
+          void submit.run(async () => {
+            try {
+              await save.mutateAsync();
+            } catch {
+              // onError records the message.
+            }
+          });
         }}
       >
         <Field label={m.monitor_name()}>
@@ -232,7 +241,7 @@ export function MonitorFormPage() {
         </Field>
         <Field label={m.monitor_type()}>
           <select
-            className="h-10 rounded-lg border border-input bg-card px-3"
+            className={controlClass}
             name="type"
             value={draft.type}
             onChange={(event) =>
@@ -378,7 +387,9 @@ export function MonitorFormPage() {
             </p>
           </div>
         ) : (
-          <Button type="submit">{m.action_create()}</Button>
+          <PendingButton type="submit" pending={submit.pending}>
+            {m.action_create()}
+          </PendingButton>
         )}
       </form>
     </PageEnter>
@@ -421,6 +432,7 @@ export function MonitorDetailPage() {
       }>(`/api/monitors/${id}/outages`),
   });
   const row = monitor.data;
+  const action = useSubmitGuard();
   const pause = useMutation({
     mutationFn: async () => {
       if (!row) return;
@@ -449,19 +461,36 @@ export function MonitorDetailPage() {
         title={row.name}
         actions={
           <>
-            <Button variant="outline" onClick={() => pause.mutate()}>
+            <PendingButton
+              variant="outline"
+              type="button"
+              pending={action.pending}
+              onClick={() => {
+                void action.run(async () => {
+                  try {
+                    await pause.mutateAsync();
+                  } catch {
+                    // The detail query stays on the last successful row.
+                  }
+                });
+              }}
+            >
               {row.paused ? m.action_resume() : m.action_pause()}
-            </Button>
-            <Button
+            </PendingButton>
+            <PendingButton
               variant="destructive"
-              onClick={async () => {
+              type="button"
+              pending={action.pending}
+              onClick={() => {
                 if (!confirm(m.monitor_delete_confirm())) return;
-                await api(`/api/monitors/${id}`, { method: "DELETE" });
-                await navigate({ to: "/" });
+                void action.run(async () => {
+                  await api(`/api/monitors/${id}`, { method: "DELETE" });
+                  await navigate({ to: "/" });
+                });
               }}
             >
               {m.action_delete()}
-            </Button>
+            </PendingButton>
           </>
         }
       />
@@ -507,7 +536,7 @@ export function MonitorDetailPage() {
           {recent.length === 0 ? (
             <p className="text-sm text-muted-foreground">{m.chart_empty()}</p>
           ) : (
-            <div className="h-48">
+            <div className="h-48 min-w-0 overflow-hidden">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
                   data={recent.map((point) => ({
@@ -530,17 +559,16 @@ export function MonitorDetailPage() {
             </div>
           )}
           <div
-            className="mt-3 flex h-8 items-end gap-px"
+            className="mt-3 flex h-8 min-w-0 items-end gap-px"
             role="img"
             aria-label={m.chart_recent()}
           >
             {recent.slice(-60).map((point) => (
               <div
                 key={point.t}
-                className={point.ok ? "bg-status-up" : "bg-status-down"}
+                className={`min-w-0 flex-1 ${point.ok ? "bg-status-up" : "bg-status-down"}`}
                 style={{
                   height: Math.max(4, Math.min(32, point.ms / 30)),
-                  width: 4,
                 }}
               />
             ))}
@@ -566,18 +594,24 @@ export function MonitorDetailPage() {
                 : m.outage_ongoing()}
             </span>
             {!outage.acknowledgedAt ? (
-              <Button
+              <PendingButton
                 size="sm"
                 variant="outline"
-                onClick={async () => {
-                  await api(`/api/outages/${outage.id}/ack`, {
-                    method: "POST",
+                type="button"
+                pending={action.pending}
+                onClick={() => {
+                  void action.run(async () => {
+                    await api(`/api/outages/${outage.id}/ack`, {
+                      method: "POST",
+                    });
+                    await client.invalidateQueries({
+                      queryKey: ["outages", id],
+                    });
                   });
-                  await client.invalidateQueries({ queryKey: ["outages", id] });
                 }}
               >
                 {m.monitor_ack()}
-              </Button>
+              </PendingButton>
             ) : null}
           </div>
         ))}

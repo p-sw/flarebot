@@ -41,6 +41,8 @@ describe("auth", () => {
       .first<{ password_hash: string }>();
     expect(row?.password_hash.startsWith("pbkdf2-sha256$")).toBe(true);
     expect(row?.password_hash).not.toContain("correct-horse");
+    const cookies = setup.headers.getSetCookie();
+    expect(cookies.some((item) => item.startsWith("locale=en"))).toBe(true);
   });
 
   it("locks a password after five failures and expires a session", async () => {

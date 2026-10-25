@@ -2,9 +2,11 @@
 
 import { and, desc, eq, ne } from "drizzle-orm";
 import type { Hono } from "hono";
-import { setCookie } from "hono/cookie";
+import { getCookie } from "hono/cookie";
 import { z } from "zod";
 import { missingTranslationCount } from "../../shared/content";
+import { LOCALE_COOKIE } from "../../shared/locales";
+import { describeMailSource } from "../../shared/mail-source";
 import {
   assertScopesWithinRole,
   can,
@@ -56,11 +58,13 @@ import {
   type AppEnv,
   assertMutationOrigin,
   audit,
+  clearLocaleCookie,
   clientIp,
   parseBody,
   requestOrigin,
   requireActor,
   requireCan,
+  writeLocaleCookie,
 } from "../http";
 import { enqueueMail } from "../mail/mailer";
 import { deliverWith, resolveMail } from "../mail/resolve";
@@ -493,10 +497,12 @@ export function registerManage(app: Hono<AppEnv>): void {
       c.req.param("slug"),
       c.req.header("accept-language") ?? null,
       c.req.query("lang") ?? null,
+      getCookie(c, LOCALE_COOKIE) ?? null,
     );
     if (!page) throw new ApiError(404, "not_found", "Status page not found.");
     const headers: Record<string, string> = {};
-    if (page.fromHeader) headers.vary = "Accept-Language";
+    if (page.localeSource === "header") headers.vary = "Accept-Language";
+    if (page.localeSource === "cookie") headers.vary = "Cookie";
     return c.json(page, 200, headers);
   });
 
@@ -964,6 +970,8 @@ export function registerManage(app: Hono<AppEnv>): void {
       fromName: row?.fromName ?? "",
       fromAddress: row?.fromAddress ?? "",
       secretsOverride: Boolean(c.env.SMTP_HOST && c.env.MAIL_FROM),
+      activeSource: describeMailSource(c.env, row?.driver),
+      emailBinding: Boolean(c.env.EMAIL),
       lastTestOk: row?.lastTestOk ?? null,
       lastTestError: row?.lastTestError ?? null,
     });
@@ -981,10 +989,14 @@ export function registerManage(app: Hono<AppEnv>): void {
       .where(eq(mailSettings.id, 1))
       .get();
     let passwordEncrypted = existing?.passwordEncrypted ?? null;
-    if (body.driver === "smtp" && body.password) {
+    const nextPassword =
+      body.driver === "smtp" ? (body.password?.trim() ?? "") : "";
+    if (body.driver === "smtp" && body.clearPassword) {
+      passwordEncrypted = null;
+    } else if (nextPassword) {
       passwordEncrypted = await encryptString(
         requireEncryptionKey(c.env),
-        body.password,
+        nextPassword,
       );
     }
     const value = {
@@ -1105,13 +1117,8 @@ export function registerManage(app: Hono<AppEnv>): void {
       .update(users)
       .set(patch)
       .where(eq(users.id, actor.userId));
-    if (body.locale) {
-      setCookie(c, "locale", body.locale, {
-        path: "/",
-        sameSite: "Lax",
-        maxAge: 365 * 86_400,
-      });
-    }
+    if (body.locale) writeLocaleCookie(c, body.locale);
+    else if (body.locale === null) clearLocaleCookie(c);
     return c.json({ ok: true });
   });
 
