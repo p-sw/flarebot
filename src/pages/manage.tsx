@@ -695,7 +695,9 @@ export function SettingsPage() {
               inputMode="numeric"
               value={shownHistory.custom}
               disabled={saveHistory.pending}
-              aria-invalid={shownHistory.choice === "custom" && historyValue === null}
+              aria-invalid={
+                shownHistory.choice === "custom" && historyValue === null
+              }
               onChange={(event) => {
                 setHistoryNote("");
                 setHistory({
