@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+import { isSupportedLocale } from "@shared/locales";
 import { QueryClient } from "@tanstack/react-query";
 import {
   createRootRoute,
@@ -32,6 +33,7 @@ import {
   MonitorFormPage,
 } from "./pages/monitors";
 import { PublicStatusPage } from "./pages/public";
+import { getLocale, setLocale } from "./paraglide/runtime.js";
 import { type SessionUser, Shell } from "./shell";
 
 export const queryClient = new QueryClient({
@@ -54,6 +56,11 @@ async function session() {
     queryKey: ["session"],
     queryFn: () => api<{ user: SessionUser | null }>("/api/auth/session"),
   });
+}
+
+async function applyExplicitLocale(locale: string | null | undefined) {
+  if (!locale || !isSupportedLocale(locale) || getLocale() === locale) return;
+  await setLocale(locale);
 }
 
 const rootRoute = createRootRoute({
@@ -98,6 +105,10 @@ const inviteRoute = createRoute({
 const publicRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/s/$slug",
+  beforeLoad: async () => {
+    const lang = new URLSearchParams(window.location.search).get("lang");
+    await applyExplicitLocale(lang);
+  },
   component: PublicStatusPage,
 });
 
@@ -108,6 +119,7 @@ const appRoute = createRoute({
     if ((await meta()).setupRequired) throw redirect({ to: "/setup" });
     const current = await session();
     if (!current.user) throw redirect({ to: "/login" });
+    await applyExplicitLocale(current.user.locale);
     return { user: current.user };
   },
   component: function AppShell() {

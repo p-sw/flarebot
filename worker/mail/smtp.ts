@@ -4,10 +4,17 @@ import { LogLevel, WorkerMailer } from "worker-mailer";
 import { isBlockedHost } from "../../shared/schemas";
 import { classifyMailError, inferSmtpStage, type MailStage } from "./retry";
 
+export type SmtpSecurity = "starttls" | "tls" | "none";
+
+export function smtpSecurity(value: string | null | undefined): SmtpSecurity {
+  if (value === "tls" || value === "none") return value;
+  return "starttls";
+}
+
 export type SmtpSettings = {
   host: string;
   port: number;
-  security: "starttls" | "tls";
+  security: SmtpSecurity;
   username: string;
   password: string;
   fromName: string;
@@ -62,13 +69,14 @@ export async function sendSmtp(
     };
   }
   const secure = settings.security === "tls";
+  const startTls = settings.security === "starttls";
   const started = Date.now();
   try {
     const mailer = await WorkerMailer.connect({
       host: settings.host,
       port: settings.port,
       secure,
-      startTls: settings.security === "starttls",
+      startTls,
       credentials: settings.username
         ? { username: settings.username, password: settings.password }
         : undefined,

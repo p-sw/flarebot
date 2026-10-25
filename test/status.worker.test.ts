@@ -91,6 +91,27 @@ describe("status pages", () => {
       "Status KO",
     );
 
+    const cookieWins = await api("/api/public/status/public-page", {
+      headers: {
+        "accept-language": "ko-KR,ko;q=0.9,en;q=0.4",
+        cookie: "locale=en",
+      },
+    });
+    expect(((await cookieWins.json()) as { title: string }).title).toBe(
+      "Source title",
+    );
+    expect(cookieWins.headers.get("vary")).toBe("Cookie");
+
+    const queryWins = await api("/api/public/status/public-page?lang=ko", {
+      headers: {
+        cookie: "locale=en",
+        "accept-language": "en",
+      },
+    });
+    expect(((await queryWins.json()) as { title: string }).title).toBe(
+      "Status KO",
+    );
+
     const html = await api("/s/public-page?lang=ko");
     expect(html.status).toBe(200);
     const text = await html.text();

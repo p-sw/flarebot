@@ -2,7 +2,10 @@
 
 import { and, eq, gte, inArray } from "drizzle-orm";
 import { type I18nMap, pickLocalized } from "../../shared/content";
-import { matchLocale } from "../../shared/locales";
+import {
+  type LocaleSource,
+  resolveRequestedLocale,
+} from "../../shared/locales";
 import { getDb } from "../db/client";
 import {
   monitorState,
@@ -23,6 +26,7 @@ export type PublicStatus = {
   locales: string[];
   defaultLocale: string;
   fromHeader: boolean;
+  localeSource: LocaleSource;
   title: string;
   description: string;
   footer: string;
@@ -55,6 +59,7 @@ export async function loadPublicStatus(
   slug: string,
   acceptLanguage: string | null,
   queryLang: string | null,
+  cookieLocale: string | null = null,
 ): Promise<PublicStatus | null> {
   const db = getDb(env.DB);
   const page = await db
@@ -64,10 +69,11 @@ export async function loadPublicStatus(
     .get();
   if (!page?.published) return null;
   const locales = JSON.parse(page.localesJson) as string[];
-  const requested =
-    queryLang && locales.includes(queryLang)
-      ? { locale: queryLang, fromHeader: false }
-      : matchLocale(acceptLanguage, locales, page.defaultLocale);
+  const requested = resolveRequestedLocale(locales, page.defaultLocale, {
+    query: queryLang,
+    cookie: cookieLocale,
+    acceptLanguage,
+  });
   const i18n = JSON.parse(page.i18nJson) as I18nMap;
   const picked = pickLocalized(
     PAGE_FIELDS,
@@ -210,7 +216,8 @@ export async function loadPublicStatus(
     locale: requested.locale,
     locales,
     defaultLocale: page.defaultLocale,
-    fromHeader: requested.fromHeader && !queryLang,
+    fromHeader: requested.source === "header",
+    localeSource: requested.source,
     title: picked.values.title ?? page.title,
     description: picked.values.description ?? "",
     footer: picked.values.footer ?? "",
@@ -283,7 +290,8 @@ export async function statusDocument(
   }
   const canonical = `${new URL(request.url).origin}/s/${page.slug}`;
   const headers = new Headers({ "content-type": "text/html; charset=utf-8" });
-  if (page.fromHeader) headers.set("vary", "Accept-Language");
+  if (page.localeSource === "header") headers.set("vary", "Accept-Language");
+  if (page.localeSource === "cookie") headers.set("vary", "Cookie");
   return new Response(injectDocument(html, page, canonical), { headers });
 }
 

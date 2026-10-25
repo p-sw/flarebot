@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MIT
 
 import { env } from "cloudflare:test";
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../worker/app";
+import { getDb } from "../worker/db/client";
+import { mailSettings } from "../worker/db/schema";
 import { schedulerStub } from "../worker/monitors/sync";
 
 const app = createApp();
@@ -276,6 +279,70 @@ describe("flarebot API", () => {
       owner,
     );
     expect(saved.status).toBe(200);
+    const listed = await api("/api/settings/mail", {}, owner);
+    const listedText = await listed.text();
+    const listedBody = JSON.parse(listedText) as {
+      hasPassword: boolean;
+      activeSource: string;
+      security: string;
+      password?: string;
+    };
+    expect(listed.status).toBe(200);
+    expect(listedBody.hasPassword).toBe(true);
+    expect(listedBody.activeSource).toBe("database");
+    expect(listedBody.security).toBe("starttls");
+    expect(listedBody.password).toBeUndefined();
+    expect(listedText).not.toMatch(/"password"\s*:/);
+    const row = await getDb(env.DB)
+      .select()
+      .from(mailSettings)
+      .where(eq(mailSettings.id, 1))
+      .get();
+    expect(row?.passwordEncrypted?.startsWith("v1.")).toBe(true);
+    expect(row?.passwordEncrypted).not.toBe("secret");
+
+    const cleared = await api(
+      "/api/settings/mail",
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          driver: "smtp",
+          host: "192.0.2.1",
+          port: 587,
+          security: "none",
+          username: "bot",
+          clearPassword: true,
+          fromName: "Flarebot",
+          fromAddress: "bot@example.com",
+        }),
+      },
+      owner,
+    );
+    expect(cleared.status).toBe(200);
+    const afterClear = (await (
+      await api("/api/settings/mail", {}, owner)
+    ).json()) as { hasPassword: boolean; security: string };
+    expect(afterClear.hasPassword).toBe(false);
+    expect(afterClear.security).toBe("none");
+
+    const restored = await api(
+      "/api/settings/mail",
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          driver: "smtp",
+          host: "192.0.2.1",
+          port: 587,
+          security: "starttls",
+          username: "bot",
+          password: "secret",
+          fromName: "Flarebot",
+          fromAddress: "bot@example.com",
+        }),
+      },
+      owner,
+    );
+    expect(restored.status).toBe(200);
     const test = await api(
       "/api/settings/mail/test",
       { method: "POST", body: JSON.stringify({}) },
@@ -286,5 +353,38 @@ describe("flarebot API", () => {
     expect(["connect", "tls", "config", "timeout"]).toContain(
       payload.error.stage,
     );
+  });
+
+  it("persists the account language and returns it after reload", async () => {
+    const owner = await (async () => {
+      const login = await api("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          email: "ada@example.com",
+          password: "correct-horse",
+        }),
+      });
+      expect(login.status).toBe(200);
+      const match = /flarebot_session=([^;]+)/.exec(
+        login.headers.get("set-cookie") ?? "",
+      );
+      if (!match?.[1]) throw new Error("missing session");
+      return match[1];
+    })();
+    const patched = await api(
+      "/api/account",
+      { method: "PATCH", body: JSON.stringify({ locale: "ko" }) },
+      owner,
+    );
+    expect(patched.status).toBe(200);
+    expect(
+      patched.headers
+        .getSetCookie()
+        .some((item) => item.startsWith("locale=ko")),
+    ).toBe(true);
+    const account = (await (await api("/api/account", {}, owner)).json()) as {
+      locale: string;
+    };
+    expect(account.locale).toBe("ko");
   });
 });

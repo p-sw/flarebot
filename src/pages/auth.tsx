@@ -11,7 +11,9 @@ import { useState } from "react";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
+import { PendingButton } from "@/ui/pending-button";
 import { ApiClientError, api, errorText } from "../lib/api";
+import { useSubmitGuard } from "../lib/use-submit-guard";
 import { m } from "../paraglide/messages.js";
 import type { SessionUser } from "../shell";
 import { Field } from "./fields";
@@ -42,6 +44,7 @@ export function SetupPage() {
   });
   const [error, setError] = useState("");
   const [pushUrl, setPushUrl] = useState("");
+  const submit = useSubmitGuard();
 
   const setup = useMutation({
     mutationFn: () =>
@@ -96,7 +99,7 @@ export function SetupPage() {
 
   return (
     <LoginBackdrop>
-      <Card className="w-full max-w-md">
+      <Card className="w-full min-w-0 max-w-md">
         <CardHeader>
           <CardTitle>{m.setup_title()}</CardTitle>
           <p className="text-sm text-muted-foreground">{m.setup_intro()}</p>
@@ -108,7 +111,13 @@ export function SetupPage() {
               onSubmit={(event) => {
                 event.preventDefault();
                 setError("");
-                setup.mutate();
+                void submit.run(async () => {
+                  try {
+                    await setup.mutateAsync();
+                  } catch {
+                    // onError records the message.
+                  }
+                });
               }}
             >
               <Field label={m.setup_secret()}>
@@ -167,7 +176,9 @@ export function SetupPage() {
               {error ? (
                 <p className="text-sm text-destructive">{error}</p>
               ) : null}
-              <Button type="submit">{m.action_continue()}</Button>
+              <PendingButton type="submit" pending={submit.pending}>
+                {m.action_continue()}
+              </PendingButton>
             </form>
           ) : null}
           {step === 1 ? (
@@ -176,13 +187,22 @@ export function SetupPage() {
               <p className="text-sm text-muted-foreground">
                 {m.setup_mail_body()}
               </p>
-              <Button
+              <PendingButton
                 type="button"
                 variant="outline"
-                onClick={() => saveMail.mutate({ driver: "none" })}
+                pending={submit.pending}
+                onClick={() => {
+                  void submit.run(async () => {
+                    try {
+                      await saveMail.mutateAsync({ driver: "none" });
+                    } catch {
+                      // onError records the message.
+                    }
+                  });
+                }}
               >
                 {m.setup_mail_skip()}
-              </Button>
+              </PendingButton>
               {error ? (
                 <p className="text-sm text-destructive">{error}</p>
               ) : null}
@@ -191,12 +211,25 @@ export function SetupPage() {
           {step === 2 ? (
             <div className="grid gap-3">
               <h2 className="font-medium">{m.setup_monitor_title()}</h2>
-              <Button type="button" onClick={() => createMonitor.mutate()}>
+              <PendingButton
+                type="button"
+                pending={submit.pending}
+                onClick={() => {
+                  void submit.run(async () => {
+                    try {
+                      await createMonitor.mutateAsync();
+                    } catch {
+                      // onError records the message.
+                    }
+                  });
+                }}
+              >
                 {m.action_create()}
-              </Button>
+              </PendingButton>
               <Button
                 type="button"
                 variant="outline"
+                disabled={submit.pending}
                 onClick={() => setStep(3)}
               >
                 {m.action_skip()}
@@ -209,30 +242,34 @@ export function SetupPage() {
               {pushUrl ? (
                 <p className="break-all font-mono text-xs">{pushUrl}</p>
               ) : null}
-              <Button
+              <PendingButton
                 type="button"
-                onClick={async () => {
-                  const options = await api<
-                    Parameters<typeof startRegistration>[0]["optionsJSON"]
-                  >("/api/account/passkey/options", { method: "POST" });
-                  const response = await startRegistration({
-                    optionsJSON: options,
+                pending={submit.pending}
+                onClick={() => {
+                  void submit.run(async () => {
+                    const options = await api<
+                      Parameters<typeof startRegistration>[0]["optionsJSON"]
+                    >("/api/account/passkey/options", { method: "POST" });
+                    const response = await startRegistration({
+                      optionsJSON: options,
+                    });
+                    await api("/api/account/passkey/verify", {
+                      method: "POST",
+                      body: JSON.stringify({
+                        response,
+                        deviceName: "This device",
+                      }),
+                    });
+                    setStep(4);
                   });
-                  await api("/api/account/passkey/verify", {
-                    method: "POST",
-                    body: JSON.stringify({
-                      response,
-                      deviceName: "This device",
-                    }),
-                  });
-                  setStep(4);
                 }}
               >
                 {m.account_passkey_add()}
-              </Button>
+              </PendingButton>
               <Button
                 type="button"
                 variant="outline"
+                disabled={submit.pending}
                 onClick={() => setStep(4)}
               >
                 {m.action_skip()}
@@ -262,6 +299,7 @@ export function LoginPage() {
   const [form, setForm] = useState({ email: "", password: "", totp: "" });
   const [needTotp, setNeedTotp] = useState(false);
   const [error, setError] = useState("");
+  const submit = useSubmitGuard();
   const login = useMutation({
     mutationFn: () =>
       api<{ user: SessionUser }>("/api/auth/login", {
@@ -280,7 +318,7 @@ export function LoginPage() {
   });
   return (
     <LoginBackdrop>
-      <Card className="w-full max-w-md">
+      <Card className="w-full min-w-0 max-w-md">
         <CardHeader>
           <CardTitle>{m.login_title()}</CardTitle>
         </CardHeader>
@@ -290,7 +328,13 @@ export function LoginPage() {
             onSubmit={(event) => {
               event.preventDefault();
               setError("");
-              login.mutate();
+              void submit.run(async () => {
+                try {
+                  await login.mutateAsync();
+                } catch {
+                  // onError records the message.
+                }
+              });
             }}
           >
             <Field label={m.login_email()}>
@@ -328,30 +372,39 @@ export function LoginPage() {
               </Field>
             ) : null}
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            <Button type="submit">{m.action_sign_in()}</Button>
-            <Button
+            <PendingButton type="submit" pending={submit.pending}>
+              {m.action_sign_in()}
+            </PendingButton>
+            <PendingButton
               type="button"
               variant="outline"
-              onClick={async () => {
-                const options = await api<
-                  Parameters<typeof startAuthentication>[0]["optionsJSON"]
-                >("/api/auth/passkey/options", { method: "POST" });
-                const response = await startAuthentication({
-                  optionsJSON: options,
+              pending={submit.pending}
+              onClick={() => {
+                void submit.run(async () => {
+                  try {
+                    const options = await api<
+                      Parameters<typeof startAuthentication>[0]["optionsJSON"]
+                    >("/api/auth/passkey/options", { method: "POST" });
+                    const response = await startAuthentication({
+                      optionsJSON: options,
+                    });
+                    const session = await api<{ user: SessionUser }>(
+                      "/api/auth/passkey/verify",
+                      {
+                        method: "POST",
+                        body: JSON.stringify({ response }),
+                      },
+                    );
+                    client.setQueryData(["session"], session);
+                    await navigate({ to: "/" });
+                  } catch (cause) {
+                    setError(errorText(cause));
+                  }
                 });
-                const session = await api<{ user: SessionUser }>(
-                  "/api/auth/passkey/verify",
-                  {
-                    method: "POST",
-                    body: JSON.stringify({ response }),
-                  },
-                );
-                client.setQueryData(["session"], session);
-                await navigate({ to: "/" });
               }}
             >
               {m.login_passkey()}
-            </Button>
+            </PendingButton>
             <Link
               to="/forgot"
               className="text-sm text-muted-foreground underline-offset-2 hover:underline"
@@ -368,6 +421,7 @@ export function LoginPage() {
 export function ForgotPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const submit = useSubmitGuard();
   const send = useMutation({
     mutationFn: () =>
       api("/api/auth/forgot", {
@@ -378,7 +432,7 @@ export function ForgotPage() {
   });
   return (
     <LoginBackdrop>
-      <Card className="w-full max-w-md">
+      <Card className="w-full min-w-0 max-w-md">
         <CardHeader>
           <CardTitle>{m.reset_request()}</CardTitle>
         </CardHeader>
@@ -390,7 +444,13 @@ export function ForgotPage() {
               className="grid gap-3"
               onSubmit={(event) => {
                 event.preventDefault();
-                send.mutate();
+                void submit.run(async () => {
+                  try {
+                    await send.mutateAsync();
+                  } catch {
+                    // The form stays available after a failure.
+                  }
+                });
               }}
             >
               <Field label={m.login_email()}>
@@ -401,7 +461,9 @@ export function ForgotPage() {
                   required
                 />
               </Field>
-              <Button type="submit">{m.reset_request()}</Button>
+              <PendingButton type="submit" pending={submit.pending}>
+                {m.reset_request()}
+              </PendingButton>
             </form>
           )}
         </CardContent>
@@ -415,26 +477,30 @@ export function ResetPage() {
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const submit = useSubmitGuard();
   return (
     <LoginBackdrop>
-      <Card className="w-full max-w-md">
+      <Card className="w-full min-w-0 max-w-md">
         <CardHeader>
           <CardTitle>{m.reset_title()}</CardTitle>
         </CardHeader>
         <CardContent>
           <form
             className="grid gap-3"
-            onSubmit={async (event) => {
+            onSubmit={(event) => {
               event.preventDefault();
-              try {
-                await api("/api/auth/reset", {
-                  method: "POST",
-                  body: JSON.stringify({ token, password }),
-                });
-                await navigate({ to: "/login" });
-              } catch (cause) {
-                setError(errorText(cause));
-              }
+              setError("");
+              void submit.run(async () => {
+                try {
+                  await api("/api/auth/reset", {
+                    method: "POST",
+                    body: JSON.stringify({ token, password }),
+                  });
+                  await navigate({ to: "/login" });
+                } catch (cause) {
+                  setError(errorText(cause));
+                }
+              });
             }}
           >
             <Field label={m.account_new_password()}>
@@ -447,7 +513,9 @@ export function ResetPage() {
               />
             </Field>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            <Button type="submit">{m.action_save()}</Button>
+            <PendingButton type="submit" pending={submit.pending}>
+              {m.action_save()}
+            </PendingButton>
           </form>
         </CardContent>
       </Card>
@@ -469,9 +537,10 @@ export function InvitePage() {
   });
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [error, setError] = useState("");
+  const submit = useSubmitGuard();
   return (
     <LoginBackdrop>
-      <Card className="w-full max-w-md">
+      <Card className="w-full min-w-0 max-w-md">
         <CardHeader>
           <CardTitle>{m.invite_title()}</CardTitle>
           <p className="text-sm text-muted-foreground">{preview.data?.role}</p>
@@ -479,25 +548,28 @@ export function InvitePage() {
         <CardContent>
           <form
             className="grid gap-3"
-            onSubmit={async (event) => {
+            onSubmit={(event) => {
               event.preventDefault();
-              try {
-                const session = await api<{ user: SessionUser }>(
-                  "/api/invites/accept",
-                  {
-                    method: "POST",
-                    body: JSON.stringify({
-                      token,
-                      ...form,
-                      email: form.email || preview.data?.email,
-                    }),
-                  },
-                );
-                client.setQueryData(["session"], session);
-                await navigate({ to: "/" });
-              } catch (cause) {
-                setError(errorText(cause));
-              }
+              setError("");
+              void submit.run(async () => {
+                try {
+                  const session = await api<{ user: SessionUser }>(
+                    "/api/invites/accept",
+                    {
+                      method: "POST",
+                      body: JSON.stringify({
+                        token,
+                        ...form,
+                        email: form.email || preview.data?.email,
+                      }),
+                    },
+                  );
+                  client.setQueryData(["session"], session);
+                  await navigate({ to: "/" });
+                } catch (cause) {
+                  setError(errorText(cause));
+                }
+              });
             }}
           >
             <Field label={m.setup_name()}>
@@ -531,7 +603,9 @@ export function InvitePage() {
               />
             </Field>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            <Button type="submit">{m.action_continue()}</Button>
+            <PendingButton type="submit" pending={submit.pending}>
+              {m.action_continue()}
+            </PendingButton>
           </form>
         </CardContent>
       </Card>

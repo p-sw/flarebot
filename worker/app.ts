@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 import { Hono } from "hono";
+import { getCookie } from "hono/cookie";
+import { LOCALE_COOKIE } from "../shared/locales";
 import { ApiError, type AppEnv } from "./http";
 import { registerAuth } from "./routes/auth";
 import { registerManage } from "./routes/manage";
@@ -31,6 +33,7 @@ export function createApp(): Hono<AppEnv> {
       c.req.param("slug"),
       c.req.header("accept-language") ?? null,
       c.req.query("lang") ?? null,
+      getCookie(c, LOCALE_COOKIE) ?? null,
     );
     if (!page) return c.notFound();
     return statusDocument(c.env, c.req.raw, page);
