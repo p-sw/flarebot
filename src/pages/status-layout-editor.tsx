@@ -133,8 +133,8 @@ export function StatusLayoutEditor({
               : ""
           }`}
         >
-          <div className="flex min-w-0 flex-wrap items-end gap-2">
-            <div className="min-w-0 flex-1">
+          <div className="grid min-w-0 gap-2">
+            <div className="min-w-0">
               <Field label={m.page_section_name()} hint={m.page_section_hint()}>
                 <Input
                   value={section.name}
@@ -152,7 +152,7 @@ export function StatusLayoutEditor({
                 />
               </Field>
             </div>
-            <div className="flex shrink-0 flex-wrap gap-1">
+            <div className="flex min-w-0 flex-wrap gap-1">
               <Button
                 type="button"
                 size="icon"
@@ -240,33 +240,35 @@ export function StatusLayoutEditor({
                         : ""
                     }`}
                   >
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 touch-none"
-                        aria-label={m.page_drag({ name: label })}
-                        disabled={disabled}
-                        onPointerDown={(event) =>
-                          start(event, {
-                            kind: "item",
-                            section: sectionIndex,
-                            item: itemIndex,
-                          })
-                        }
-                        onPointerUp={finish}
-                        onPointerCancel={() => {
-                          drag.current = null;
-                          setActive(null);
-                        }}
-                      >
-                        <GripVertical className="h-4 w-4" aria-hidden />
-                      </Button>
-                      <p className="min-w-0 flex-1 break-words text-sm font-medium">
-                        {label}
-                      </p>
-                      <div className="flex shrink-0 flex-wrap gap-1">
+                    <div className="grid min-w-0 gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 touch-none"
+                          aria-label={m.page_drag({ name: label })}
+                          disabled={disabled}
+                          onPointerDown={(event) =>
+                            start(event, {
+                              kind: "item",
+                              section: sectionIndex,
+                              item: itemIndex,
+                            })
+                          }
+                          onPointerUp={finish}
+                          onPointerCancel={() => {
+                            drag.current = null;
+                            setActive(null);
+                          }}
+                        >
+                          <GripVertical className="h-4 w-4" aria-hidden />
+                        </Button>
+                        <p className="min-w-0 flex-1 break-words text-sm font-medium">
+                          {label}
+                        </p>
+                      </div>
+                      <div className="flex min-w-0 flex-wrap gap-1">
                         <Button
                           type="button"
                           size="icon"
@@ -357,6 +359,7 @@ export function StatusLayoutEditor({
                           type="button"
                           size="sm"
                           variant="outline"
+                          aria-label={m.page_remove({ name: label })}
                           disabled={disabled}
                           onClick={() =>
                             onChange(
@@ -373,7 +376,7 @@ export function StatusLayoutEditor({
                             )
                           }
                         >
-                          {m.page_remove({ name: label })}
+                          {m.page_remove_short()}
                         </Button>
                       </div>
                     </div>
@@ -411,8 +414,8 @@ export function StatusLayoutEditor({
               })}
             </ul>
           )}
-          <div className="flex min-w-0 flex-wrap items-end gap-2">
-            <div className="min-w-0 flex-1">
+          <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <div className="min-w-0">
               <Field label={m.page_monitor_pick()} hint={m.page_monitor_hint()}>
                 <select
                   className={controlClass}
