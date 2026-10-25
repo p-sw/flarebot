@@ -3,6 +3,11 @@
 import { and, desc, eq, gte } from "drizzle-orm";
 import type { Hono } from "hono";
 import { t } from "../../shared/copy";
+import { monitorTargetLabel } from "../../shared/monitor-draft";
+import {
+  monitorTargetKey,
+  nextCheckAfterEdit,
+} from "../../shared/monitor-schedule";
 import { visibleStatus } from "../../shared/monitor-status";
 import { can } from "../../shared/permissions";
 import { monitorWriteSchema, parseMonitorConfig } from "../../shared/schemas";
@@ -13,6 +18,8 @@ import {
   monitorState,
   monitors,
   outages,
+  statusPageItems,
+  statusPages,
   uptimeDaily,
   uptimeHourly,
 } from "../db/schema";
@@ -110,6 +117,7 @@ export function registerMonitors(app: Hono<AppEnv>): void {
         type: row.type,
         paused: row.paused,
         intervalSeconds: row.intervalSeconds,
+        target: targetOf(row.type, row.configJson),
         status: visibleStatus(
           row.paused,
           memory?.state.status ?? runtime?.status,
@@ -309,7 +317,7 @@ export function registerMonitors(app: Hono<AppEnv>): void {
       .get();
     if (!row)
       throw new ApiError(500, "internal", t("error_monitor_not_stored"));
-    await scheduleMonitor(c.env, row);
+    await rescheduleAfterEdit(c.env, row, current);
     await audit(
       c.env,
       actor,
@@ -569,6 +577,48 @@ async function scheduleMonitor(
   );
 }
 
+async function rescheduleAfterEdit(
+  env: Env,
+  row: typeof monitors.$inferSelect,
+  previous: typeof monitors.$inferSelect,
+): Promise<void> {
+  const db = getDb(env.DB);
+  const live = await schedulerStub(env, row.shardId)
+    .getOne(row.id)
+    .catch(() => null);
+  const stored = await db
+    .select()
+    .from(monitorState)
+    .where(eq(monitorState.monitorId, row.id))
+    .get();
+  const now = Date.now();
+  const normalized = runtimeForPause(
+    runtimeFrom(live?.state, stored),
+    row.paused,
+    now,
+  );
+  const nextCheckAt = nextCheckAfterEdit({
+    now,
+    paused: row.paused,
+    wasPaused: previous.paused,
+    intervalMs: row.intervalSeconds * 1000,
+    previousIntervalMs: previous.intervalSeconds * 1000,
+    previousNextCheckAt: live?.nextCheckAt ?? null,
+    previousTarget: monitorTargetKey(
+      previous.type,
+      JSON.parse(previous.configJson) as unknown,
+    ),
+    nextTarget: monitorTargetKey(
+      row.type,
+      JSON.parse(row.configJson) as unknown,
+    ),
+  });
+  await saveRuntime(env.DB, row.id, normalized);
+  await schedulerStub(env, row.shardId).upsert(
+    snapshotFromRow(row, normalized, nextCheckAt, live?.lastPushAt ?? null),
+  );
+}
+
 async function readMonitor(
   c: AppContext,
   organizationId: string,
@@ -587,6 +637,22 @@ async function readMonitor(
     .select()
     .from(monitorChannels)
     .where(eq(monitorChannels.monitorId, row.id));
+  const pages = await db
+    .select({
+      id: statusPages.id,
+      title: statusPages.title,
+      slug: statusPages.slug,
+      published: statusPages.published,
+    })
+    .from(statusPageItems)
+    .innerJoin(statusPages, eq(statusPageItems.pageId, statusPages.id))
+    .where(
+      and(
+        eq(statusPageItems.monitorId, row.id),
+        eq(statusPages.organizationId, organizationId),
+      ),
+    );
+  pages.sort((left, right) => left.title.localeCompare(right.title));
   const live = await schedulerStub(c.env, row.shardId)
     .getOne(row.id)
     .catch(() => null);
@@ -612,9 +678,21 @@ async function readMonitor(
     lastResponseMs: live?.state.lastResponseMs ?? state?.lastResponseMs ?? null,
     lastCheckAt: live?.state.lastCheckAt ?? state?.lastCheckAt ?? null,
     lastError: live?.state.lastError ?? state?.lastError ?? null,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    target: targetOf(row.type, row.configJson),
     pushUrl,
     channelIds: links.map((link) => link.channelId),
+    statusPages: pages,
   };
+}
+
+function targetOf(type: string, configJson: string): string {
+  try {
+    return monitorTargetLabel(type, JSON.parse(configJson) as unknown);
+  } catch {
+    return "";
+  }
 }
 
 function runtimeFrom(

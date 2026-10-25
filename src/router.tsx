@@ -48,11 +48,8 @@ import {
   TeamPage,
   TokensPage,
 } from "./pages/manage";
-import {
-  DashboardPage,
-  MonitorDetailPage,
-  MonitorFormPage,
-} from "./pages/monitors";
+import { MonitorEditPage, MonitorFormPage } from "./pages/monitor-form";
+import { DashboardPage, MonitorDetailPage } from "./pages/monitors";
 import { PublicStatusPage } from "./pages/public";
 import {
   StatusPageCreatePage,
@@ -241,6 +238,8 @@ const newMonitorRoute = createRoute({
 const monitorRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/monitors/$id",
+  validateSearch: (search: Record<string, unknown>): { saved?: 1 } =>
+    search.saved === 1 || search.saved === "1" ? { saved: 1 } : {},
   loader: ({ params }) =>
     Promise.all([
       loadQuery(queryClient, monitorQuery(params.id)),
@@ -249,6 +248,17 @@ const monitorRoute = createRoute({
     ]).catch(() => undefined),
   ...pending,
   component: MonitorDetailPage,
+});
+const editMonitorRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: "/monitors/$id/edit",
+  loader: ({ params }) =>
+    Promise.all([
+      loadQuery(queryClient, monitorQuery(params.id)),
+      loadQuery(queryClient, channelsQuery),
+    ]).catch(() => undefined),
+  ...pending,
+  component: MonitorEditPage,
 });
 const pagesRoute = createRoute({
   getParentRoute: () => consoleRoute,
@@ -335,6 +345,7 @@ const routeTree = rootRoute.addChildren([
   consoleRoute.addChildren([
     indexRoute,
     newMonitorRoute,
+    editMonitorRoute,
     monitorRoute,
     pagesRoute,
     newPageRoute,

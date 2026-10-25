@@ -150,6 +150,25 @@ export class SchedulerShard extends DurableObject<Env> {
     };
   }
 
+  async scheduleOf(id: string): Promise<{
+    intervalMs: number;
+    timeoutMs: number;
+    config: unknown;
+    nextCheckAt: number;
+    paused: boolean;
+  } | null> {
+    const store = await this.load();
+    const monitor = store.monitors[id];
+    if (!monitor) return null;
+    return {
+      intervalMs: monitor.intervalMs,
+      timeoutMs: monitor.timeoutMs,
+      config: monitor.config,
+      nextCheckAt: monitor.nextCheckAt,
+      paused: monitor.paused,
+    };
+  }
+
   async alarmAt(): Promise<number | null> {
     return this.ctx.storage.getAlarm();
   }

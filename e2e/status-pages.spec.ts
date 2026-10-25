@@ -112,6 +112,35 @@ test.describe("status page editor", () => {
     await expect(monitors.nth(1)).toHaveText(alpha);
   });
 
+  test("keeps the monitor name visible after a display name is set", async ({
+    page,
+  }) => {
+    await signIn(page);
+    const stamp = Date.now().toString(36);
+    const name = `Main Web ${stamp}`;
+    await createHeartbeat(page, name);
+    await page.goto("/console/status-pages/new");
+    await page.getByRole("button", { name: "Add section" }).click();
+    const section = page.locator("article").first();
+    await section.getByLabel("Choose a monitor").selectOption({ label: name });
+    await section.getByRole("button", { name: "Add monitor" }).click();
+    const display = section.getByRole("textbox", { name: "Display name" });
+    await display.fill("Public edge");
+    await expect(section.getByText("Public edge")).toBeVisible();
+    await expect(section.getByText(`Monitor: ${name}`)).toBeVisible();
+    await expect(display).toHaveAttribute("placeholder", name);
+    mkdirSync(shots, { recursive: true });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.screenshot({
+      path: `${shots}/status-editor-display-name.png`,
+      fullPage: true,
+    });
+    await display.fill("");
+    await expect(section.getByText(name, { exact: true })).toBeVisible();
+    await expect(section.getByText(`Monitor: ${name}`)).toBeVisible();
+    await expect(section.getByText("Public edge")).toHaveCount(0);
+  });
+
   test("creates a page with two ordered sections and monitor names", async ({
     page,
   }) => {

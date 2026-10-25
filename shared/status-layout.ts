@@ -60,6 +60,18 @@ export function statusItemLabel(
   return monitorName.trim();
 }
 
+export function editorItemHeading(
+  monitorName: string,
+  displayName: string,
+): { title: string; monitorName: string } {
+  const monitor = monitorName.trim();
+  const override = displayName.trim();
+  return {
+    title: override || monitor,
+    monitorName: monitor,
+  };
+}
+
 export function nextSectionName(
   names: readonly string[],
   base: string,

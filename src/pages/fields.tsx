@@ -8,10 +8,12 @@ export const controlClass =
 export function Field({
   label,
   hint,
+  error,
   children,
 }: {
   label: string;
   hint?: string;
+  error?: string;
   children: ReactNode;
 }) {
   return (
@@ -20,6 +22,11 @@ export function Field({
     <label className="grid min-w-0 gap-1.5 text-sm">
       <span className="font-medium">{label}</span>
       {children}
+      {error ? (
+        <span role="alert" className="text-xs font-normal text-destructive">
+          {error}
+        </span>
+      ) : null}
       {hint ? (
         <span className="text-xs font-normal text-muted-foreground">
           {hint}

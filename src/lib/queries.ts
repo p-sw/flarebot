@@ -14,16 +14,30 @@ export type MonitorListItem = {
   lastResponseMs: number | null;
   lastError: string | null;
   paused: boolean;
+  intervalSeconds: number;
+  target: string;
   pushUrl?: string;
+};
+
+export type MonitorStatusPageRef = {
+  id: string;
+  title: string;
+  slug: string;
+  published: boolean;
 };
 
 export type MonitorDetail = MonitorListItem & {
   config: Record<string, unknown>;
-  intervalSeconds: number;
   timeoutSeconds: number;
   retries: number;
   recoveryThreshold: number;
   channelIds: string[];
+  regions: string[];
+  since: number | null;
+  lastCheckAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+  statusPages: MonitorStatusPageRef[];
 };
 
 export const monitorsQuery = queryOptions({

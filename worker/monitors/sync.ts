@@ -59,6 +59,13 @@ export type SchedulerApi = {
   ensureAlarm(): Promise<void>;
   alarmAt(): Promise<number | null>;
   runDue(now: number): Promise<{ ran: number }>;
+  scheduleOf(id: string): Promise<{
+    intervalMs: number;
+    timeoutMs: number;
+    config: unknown;
+    nextCheckAt: number;
+    paused: boolean;
+  } | null>;
   noteSample(
     id: string,
     sample: { t: number; ok: boolean; ms: number; internal: boolean },
