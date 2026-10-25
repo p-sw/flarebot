@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import LoginBackdrop from "@brand/overrides/LoginBackdrop";
+import { t } from "@shared/copy";
 import { safeReturnPath } from "@shared/front-door";
 import {
   startAuthentication,
@@ -15,7 +16,6 @@ import { Input } from "@/ui/input";
 import { PendingButton } from "@/ui/pending-button";
 import { ApiClientError, api, errorText } from "../lib/api";
 import { useSubmitGuard } from "../lib/use-submit-guard";
-import { m } from "../paraglide/messages.js";
 import type { SessionUser } from "../shell";
 import { Field } from "./fields";
 
@@ -115,8 +115,8 @@ export function SetupPage() {
     <LoginBackdrop>
       <Card className="w-full min-w-0 max-w-md">
         <CardHeader>
-          <CardTitle>{m.setup_title()}</CardTitle>
-          <p className="text-sm text-muted-foreground">{m.setup_intro()}</p>
+          <CardTitle>{t("setup_title")}</CardTitle>
+          <p className="text-sm text-muted-foreground">{t("setup_intro")}</p>
         </CardHeader>
         <CardContent className="grid gap-4">
           {step === 0 ? (
@@ -134,7 +134,7 @@ export function SetupPage() {
                 });
               }}
             >
-              <Field label={m.setup_secret()}>
+              <Field label={t("setup_secret")}>
                 <Input
                   name="setupSecret"
                   value={form.setupSecret}
@@ -144,7 +144,7 @@ export function SetupPage() {
                   required
                 />
               </Field>
-              <Field label={m.setup_name()}>
+              <Field label={t("setup_name")}>
                 <Input
                   name="name"
                   value={form.name}
@@ -154,7 +154,7 @@ export function SetupPage() {
                   required
                 />
               </Field>
-              <Field label={m.setup_email()}>
+              <Field label={t("setup_email")}>
                 <Input
                   name="email"
                   type="email"
@@ -165,7 +165,7 @@ export function SetupPage() {
                   required
                 />
               </Field>
-              <Field label={m.setup_password()}>
+              <Field label={t("setup_password")}>
                 <Input
                   name="password"
                   type="password"
@@ -178,7 +178,7 @@ export function SetupPage() {
                 />
               </Field>
               <p className="text-xs text-muted-foreground">
-                {m.setup_password_hint()}
+                {t("setup_password_hint")}
               </p>
               {meta.data?.turnstileSiteKey ? (
                 <div
@@ -191,15 +191,15 @@ export function SetupPage() {
                 <p className="text-sm text-destructive">{error}</p>
               ) : null}
               <PendingButton type="submit" pending={submit.pending}>
-                {m.action_continue()}
+                {t("action_continue")}
               </PendingButton>
             </form>
           ) : null}
           {step === 1 ? (
             <div className="grid gap-3">
-              <h2 className="font-medium">{m.setup_mail_title()}</h2>
+              <h2 className="font-medium">{t("setup_mail_title")}</h2>
               <p className="text-sm text-muted-foreground">
-                {m.setup_mail_body()}
+                {t("setup_mail_body")}
               </p>
               <PendingButton
                 type="button"
@@ -215,7 +215,7 @@ export function SetupPage() {
                   });
                 }}
               >
-                {m.setup_mail_skip()}
+                {t("setup_mail_skip")}
               </PendingButton>
               {error ? (
                 <p className="text-sm text-destructive">{error}</p>
@@ -224,7 +224,7 @@ export function SetupPage() {
           ) : null}
           {step === 2 ? (
             <div className="grid gap-3">
-              <h2 className="font-medium">{m.setup_monitor_title()}</h2>
+              <h2 className="font-medium">{t("setup_monitor_title")}</h2>
               <PendingButton
                 type="button"
                 pending={submit.pending}
@@ -238,7 +238,7 @@ export function SetupPage() {
                   });
                 }}
               >
-                {m.action_create()}
+                {t("action_create")}
               </PendingButton>
               <Button
                 type="button"
@@ -246,13 +246,13 @@ export function SetupPage() {
                 disabled={submit.pending}
                 onClick={() => setStep(3)}
               >
-                {m.action_skip()}
+                {t("action_skip")}
               </Button>
             </div>
           ) : null}
           {step === 3 ? (
             <div className="grid gap-3">
-              <h2 className="font-medium">{m.account_passkey_add()}</h2>
+              <h2 className="font-medium">{t("account_passkey_add")}</h2>
               {pushUrl ? (
                 <p className="break-all font-mono text-xs">{pushUrl}</p>
               ) : null}
@@ -271,14 +271,14 @@ export function SetupPage() {
                       method: "POST",
                       body: JSON.stringify({
                         response,
-                        deviceName: "This device",
+                        deviceName: t("passkey_this_device"),
                       }),
                     });
                     setStep(4);
                   });
                 }}
               >
-                {m.account_passkey_add()}
+                {t("account_passkey_add")}
               </PendingButton>
               <Button
                 type="button"
@@ -286,21 +286,21 @@ export function SetupPage() {
                 disabled={submit.pending}
                 onClick={() => setStep(4)}
               >
-                {m.action_skip()}
+                {t("action_skip")}
               </Button>
             </div>
           ) : null}
           {step === 4 ? (
             <div className="grid gap-3">
-              <h2 className="font-medium">{m.setup_done_title()}</h2>
+              <h2 className="font-medium">{t("setup_done_title")}</h2>
               <p className="text-sm text-muted-foreground">
-                {m.setup_done_body()}
+                {t("setup_done_body")}
               </p>
               <Button
                 type="button"
                 onClick={() => navigate({ to: "/console" })}
               >
-                {m.nav_dashboard()}
+                {t("nav_dashboard")}
               </Button>
             </div>
           ) : null}
@@ -337,7 +337,7 @@ export function LoginPage() {
     <LoginBackdrop>
       <Card className="w-full min-w-0 max-w-md">
         <CardHeader>
-          <CardTitle>{m.login_title()}</CardTitle>
+          <CardTitle>{t("login_title")}</CardTitle>
         </CardHeader>
         <CardContent>
           <form
@@ -354,7 +354,7 @@ export function LoginPage() {
               });
             }}
           >
-            <Field label={m.login_email()}>
+            <Field label={t("login_email")}>
               <Input
                 name="email"
                 type="email"
@@ -365,7 +365,7 @@ export function LoginPage() {
                 required
               />
             </Field>
-            <Field label={m.login_password()}>
+            <Field label={t("login_password")}>
               <Input
                 name="password"
                 type="password"
@@ -377,7 +377,7 @@ export function LoginPage() {
               />
             </Field>
             {needTotp ? (
-              <Field label={m.login_totp()}>
+              <Field label={t("login_totp")}>
                 <Input
                   name="totp"
                   inputMode="numeric"
@@ -390,7 +390,7 @@ export function LoginPage() {
             ) : null}
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
             <PendingButton type="submit" pending={submit.pending}>
-              {m.action_sign_in()}
+              {t("action_sign_in")}
             </PendingButton>
             <PendingButton
               type="button"
@@ -420,13 +420,13 @@ export function LoginPage() {
                 });
               }}
             >
-              {m.login_passkey()}
+              {t("login_passkey")}
             </PendingButton>
             <Link
               to="/forgot"
               className="text-sm text-muted-foreground underline-offset-2 hover:underline"
             >
-              {m.login_forgot()}
+              {t("login_forgot")}
             </Link>
           </form>
         </CardContent>
@@ -451,11 +451,11 @@ export function ForgotPage() {
     <LoginBackdrop>
       <Card className="w-full min-w-0 max-w-md">
         <CardHeader>
-          <CardTitle>{m.reset_request()}</CardTitle>
+          <CardTitle>{t("reset_request")}</CardTitle>
         </CardHeader>
         <CardContent>
           {sent ? (
-            <p>{m.forgot_sent()}</p>
+            <p>{t("forgot_sent")}</p>
           ) : (
             <form
               className="grid gap-3"
@@ -470,7 +470,7 @@ export function ForgotPage() {
                 });
               }}
             >
-              <Field label={m.login_email()}>
+              <Field label={t("login_email")}>
                 <Input
                   type="email"
                   value={email}
@@ -479,7 +479,7 @@ export function ForgotPage() {
                 />
               </Field>
               <PendingButton type="submit" pending={submit.pending}>
-                {m.reset_request()}
+                {t("reset_request")}
               </PendingButton>
             </form>
           )}
@@ -499,7 +499,7 @@ export function ResetPage() {
     <LoginBackdrop>
       <Card className="w-full min-w-0 max-w-md">
         <CardHeader>
-          <CardTitle>{m.reset_title()}</CardTitle>
+          <CardTitle>{t("reset_title")}</CardTitle>
         </CardHeader>
         <CardContent>
           <form
@@ -520,7 +520,7 @@ export function ResetPage() {
               });
             }}
           >
-            <Field label={m.account_new_password()}>
+            <Field label={t("account_new_password")}>
               <Input
                 type="password"
                 minLength={10}
@@ -531,7 +531,7 @@ export function ResetPage() {
             </Field>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
             <PendingButton type="submit" pending={submit.pending}>
-              {m.action_save()}
+              {t("action_save")}
             </PendingButton>
           </form>
         </CardContent>
@@ -559,7 +559,7 @@ export function InvitePage() {
     <LoginBackdrop>
       <Card className="w-full min-w-0 max-w-md">
         <CardHeader>
-          <CardTitle>{m.invite_title()}</CardTitle>
+          <CardTitle>{t("invite_title")}</CardTitle>
           <p className="text-sm text-muted-foreground">{preview.data?.role}</p>
         </CardHeader>
         <CardContent>
@@ -589,7 +589,7 @@ export function InvitePage() {
               });
             }}
           >
-            <Field label={m.setup_name()}>
+            <Field label={t("setup_name")}>
               <Input
                 value={form.name}
                 onChange={(event) =>
@@ -598,7 +598,7 @@ export function InvitePage() {
                 required
               />
             </Field>
-            <Field label={m.setup_email()}>
+            <Field label={t("setup_email")}>
               <Input
                 type="email"
                 value={form.email || preview.data?.email || ""}
@@ -608,7 +608,7 @@ export function InvitePage() {
                 required
               />
             </Field>
-            <Field label={m.setup_password()}>
+            <Field label={t("setup_password")}>
               <Input
                 type="password"
                 minLength={10}
@@ -621,7 +621,7 @@ export function InvitePage() {
             </Field>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
             <PendingButton type="submit" pending={submit.pending}>
-              {m.action_continue()}
+              {t("action_continue")}
             </PendingButton>
           </form>
         </CardContent>

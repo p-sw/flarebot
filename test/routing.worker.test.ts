@@ -201,9 +201,16 @@ describe("root status page routing", () => {
     expect(await other.text()).toContain(`${origin}/s/root-a-${stamp}`);
 
     const korean = await api("/", {
-      headers: { "accept-language": "ko-KR,ko;q=0.9" },
+      headers: {
+        "accept-language": "ko-KR,ko;q=0.9",
+        cookie: "locale=ko",
+      },
     });
-    expect(korean.headers.get("vary")).toBe("Accept-Language");
+    expect(korean.headers.get("vary")).toBeNull();
+    const koreanText = await korean.text();
+    expect(koreanText).toContain('<html lang="en"');
+    expect(koreanText).toContain("<title>Root Beta</title>");
+    expect(koreanText).not.toContain("hreflang");
 
     const unpublished = await api(
       `/api/status-pages/${beta}`,
@@ -212,9 +219,6 @@ describe("root status page routing", () => {
         body: JSON.stringify({
           slug: `root-b-${stamp}`,
           published: false,
-          defaultLocale: "en",
-          locales: ["en", "ko"],
-          sourceLocale: "en",
           title: "Root Beta",
           items: [],
         }),
@@ -245,9 +249,6 @@ async function createPage(
       body: JSON.stringify({
         slug,
         published,
-        defaultLocale: "en",
-        locales: ["en", "ko"],
-        sourceLocale: "en",
         title,
         description: "",
         items: [],

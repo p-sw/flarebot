@@ -26,6 +26,7 @@ export const users = sqliteTable("users", {
     .notNull()
     .default(false),
   disabled: integer("disabled", { mode: "boolean" }).notNull().default(false),
+  // Deprecated. The product language is brand/locale.json. The column stays so existing rows remain valid.
   locale: text("locale"),
   createdAt: integer("created_at").notNull(),
 });
@@ -149,6 +150,7 @@ export const notificationChannels = sqliteTable("notification_channels", {
   name: text("name").notNull(),
   type: text("type").notNull(),
   configEncrypted: text("config_encrypted").notNull(),
+  // Deprecated. Notification copy uses brand/locale.json. The column stays so existing rows remain valid.
   locale: text("locale"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
@@ -175,6 +177,7 @@ export const statusPages = sqliteTable(
     serveAtRoot: integer("serve_at_root", { mode: "boolean" })
       .notNull()
       .default(false),
+    // Deprecated. Public pages render title, description, footer, and banner only.
     defaultLocale: text("default_locale").notNull(),
     localesJson: text("locales_json").notNull(),
     sourceLocale: text("source_locale").notNull(),
@@ -182,6 +185,7 @@ export const statusPages = sqliteTable(
     description: text("description").notNull(),
     footer: text("footer").notNull(),
     banner: text("banner").notNull(),
+    // Deprecated. Per-language status page text is no longer read.
     i18nJson: text("i18n_json").notNull(),
     logoUrl: text("logo_url"),
     accent: text("accent"),
@@ -202,6 +206,7 @@ export const statusPageItems = sqliteTable("status_page_items", {
   position: integer("position").notNull(),
   groupName: text("group_name").notNull(),
   displayName: text("display_name").notNull(),
+  // Deprecated. Item names come from group_name and display_name.
   sourceLocale: text("source_locale").notNull(),
   i18nJson: text("i18n_json").notNull(),
 });

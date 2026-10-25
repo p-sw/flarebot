@@ -8,7 +8,6 @@ export type BrandConfig = {
   brandApi: number;
   name: string;
   logo: { light: string; dark: string };
-  defaultLocale: "en" | "ko";
   motion: BrandMotionName;
   links: { home?: string; source?: string; docs?: string };
 };

@@ -142,9 +142,7 @@ export const auditQuery = queryOptions({
 export const settingsQuery = queryOptions({
   queryKey: ["settings"],
   queryFn: () =>
-    api<{ instanceName: string; defaultLocale: string; authMode: string }>(
-      "/api/settings",
-    ),
+    api<{ instanceName: string; authMode: string }>("/api/settings"),
   staleTime: fresh,
 });
 
@@ -174,7 +172,6 @@ export const accountQuery = queryOptions({
     api<{
       name: string;
       email: string;
-      locale: string | null;
       totpEnabled: boolean;
       passkeys: { id: string; deviceName: string | null }[];
     }>("/api/account"),

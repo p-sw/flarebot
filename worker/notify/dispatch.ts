@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 
+import { t } from "../../shared/copy";
 import { channelTestText, type NoticeKind, notificationText } from "./copy";
 
 export type ChannelDelivery = {
   type: "email" | "discord" | "slack" | "telegram" | "webhook";
-  locale: string | null;
   config: Record<string, unknown>;
 };
 
@@ -21,7 +21,6 @@ export async function deliverChannel(
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const text = notificationText(
-    channel.locale,
     message.kind,
     message.monitorName,
     message.reason,
@@ -32,7 +31,7 @@ export async function deliverChannel(
       case "email": {
         const to = String(channel.config.to ?? "");
         if (!to || !deps.enqueueEmail)
-          return { ok: false, error: "Email is not configured" };
+          return { ok: false, error: t("error_email_not_configured") };
         await deps.enqueueEmail({ to, subject: text.subject, text: text.body });
         return { ok: true };
       }
@@ -48,7 +47,10 @@ export async function deliverChannel(
           ),
         });
         if (!response.ok)
-          return { ok: false, error: `Webhook returned ${response.status}` };
+          return {
+            ok: false,
+            error: t("error_webhook_status", { status: response.status }),
+          };
         return { ok: true };
       }
       case "telegram": {
@@ -65,7 +67,10 @@ export async function deliverChannel(
           },
         );
         if (!response.ok)
-          return { ok: false, error: `Telegram returned ${response.status}` };
+          return {
+            ok: false,
+            error: t("error_telegram_status", { status: response.status }),
+          };
         return { ok: true };
       }
       case "webhook": {
@@ -86,22 +91,26 @@ export async function deliverChannel(
           }),
         });
         if (!response.ok)
-          return { ok: false, error: `Webhook returned ${response.status}` };
+          return {
+            ok: false,
+            error: t("error_webhook_status", { status: response.status }),
+          };
         return { ok: true };
       }
     }
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Delivery failed",
+      error:
+        error instanceof Error ? error.message : t("error_delivery_failed"),
     };
   }
 }
 
-export function sampleChannelText(
-  locale: string | null,
-  name: string,
-): { subject: string; body: string } {
-  const body = channelTestText(locale, name);
+export function sampleChannelText(name: string): {
+  subject: string;
+  body: string;
+} {
+  const body = channelTestText(name);
   return { subject: body, body };
 }

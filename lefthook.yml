@@ -22,7 +22,7 @@ pre-push:
   jobs:
     - name: test
       run: pnpm test
-    - name: i18n
-      run: pnpm i18n:check
+    - name: copy
+      run: pnpm copy:check
     - name: build
       run: pnpm build

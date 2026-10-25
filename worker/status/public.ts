@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { and, eq, gte, inArray } from "drizzle-orm";
-import { type I18nMap, pickLocalized } from "../../shared/content";
-import {
-  type LocaleSource,
-  resolveRequestedLocale,
-} from "../../shared/locales";
+import { t, textLang } from "../../shared/copy";
 import { getDb } from "../db/client";
 import {
   monitorState,
@@ -17,21 +13,12 @@ import {
 } from "../db/schema";
 import { schedulerStub } from "../monitors/sync";
 
-const PAGE_FIELDS = ["title", "description", "footer", "banner"] as const;
-const ITEM_FIELDS = ["groupName", "displayName"] as const;
-
 export type PublicStatus = {
   slug: string;
-  locale: string;
-  locales: string[];
-  defaultLocale: string;
-  fromHeader: boolean;
-  localeSource: LocaleSource;
   title: string;
   description: string;
   footer: string;
   banner: string;
-  langs: Record<string, string>;
   logoUrl: string | null;
   accent: string | null;
   serveAtRoot: boolean;
@@ -44,7 +31,6 @@ export type PublicStatus = {
       status: string;
       uptime90: number | null;
       bars: { day: number; uptime: number | null }[];
-      langs: Record<string, string>;
     }[];
   }[];
 };
@@ -58,9 +44,6 @@ function percent(ok: number, fail: number): number | null {
 export async function loadPublicStatus(
   env: Env,
   slug: string,
-  acceptLanguage: string | null,
-  queryLang: string | null,
-  cookieLocale: string | null = null,
 ): Promise<PublicStatus | null> {
   const db = getDb(env.DB);
   const page = await db
@@ -69,26 +52,6 @@ export async function loadPublicStatus(
     .where(eq(statusPages.slug, slug))
     .get();
   if (!page?.published) return null;
-  const locales = JSON.parse(page.localesJson) as string[];
-  const requested = resolveRequestedLocale(locales, page.defaultLocale, {
-    query: queryLang,
-    cookie: cookieLocale,
-    acceptLanguage,
-  });
-  const i18n = JSON.parse(page.i18nJson) as I18nMap;
-  const picked = pickLocalized(
-    PAGE_FIELDS,
-    {
-      title: page.title,
-      description: page.description,
-      footer: page.footer,
-      banner: page.banner,
-    },
-    page.sourceLocale,
-    i18n,
-    requested.locale,
-    page.defaultLocale,
-  );
   const items = await db
     .select()
     .from(statusPageItems)
@@ -147,17 +110,9 @@ export async function loadPublicStatus(
   const stateById = new Map(states.map((row) => [row.monitorId, row.status]));
   const groups = new Map<string, PublicStatus["groups"][number]["items"]>();
   for (const item of items) {
-    const itemI18n = JSON.parse(item.i18nJson) as I18nMap;
-    const text = pickLocalized(
-      ITEM_FIELDS,
-      { groupName: item.groupName, displayName: item.displayName },
-      item.sourceLocale,
-      itemI18n,
-      requested.locale,
-      page.defaultLocale,
-    );
-    const name = text.values.displayName || text.values.groupName || "Monitor";
-    const groupName = text.values.groupName || "";
+    const name =
+      item.displayName || item.groupName || t("monitor_fallback_name");
+    const groupName = item.groupName || "";
     const rows = daily.filter((row) => row.monitorId === item.monitorId);
     const todayHours = hourly.filter((row) => row.monitorId === item.monitorId);
     const pending = live.get(item.monitorId) ?? { ok: 0, fail: 0 };
@@ -199,7 +154,6 @@ export async function loadPublicStatus(
       status: stateById.get(item.monitorId) ?? "unknown",
       uptime90: percent(ok, fail),
       bars,
-      langs: text.langs,
     });
     groups.set(groupName, list);
   }
@@ -214,16 +168,10 @@ export async function loadPublicStatus(
         : "operational";
   return {
     slug: page.slug,
-    locale: requested.locale,
-    locales,
-    defaultLocale: page.defaultLocale,
-    fromHeader: requested.source === "header",
-    localeSource: requested.source,
-    title: picked.values.title ?? page.title,
-    description: picked.values.description ?? "",
-    footer: picked.values.footer ?? "",
-    banner: picked.values.banner ?? "",
-    langs: picked.langs,
+    title: page.title,
+    description: page.description,
+    footer: page.footer,
+    banner: page.banner,
     logoUrl: page.logoUrl,
     accent: page.accent,
     serveAtRoot: page.serveAtRoot,
@@ -237,9 +185,6 @@ export async function loadPublicStatus(
 
 export async function loadRootPublicStatus(
   env: Env,
-  acceptLanguage: string | null,
-  queryLang: string | null,
-  cookieLocale: string | null = null,
 ): Promise<PublicStatus | null> {
   const page = await getDb(env.DB)
     .select({ slug: statusPages.slug })
@@ -249,13 +194,7 @@ export async function loadRootPublicStatus(
     )
     .get();
   if (!page) return null;
-  return loadPublicStatus(
-    env,
-    page.slug,
-    acceptLanguage,
-    queryLang,
-    cookieLocale,
-  );
+  return loadPublicStatus(env, page.slug);
 }
 
 export function escapeHtml(value: string): string {
@@ -274,18 +213,11 @@ export function injectDocument(
   canonical: string,
 ): string {
   const title = `<title>${escapeHtml(page.title)}</title>`;
-  const links = page.locales
-    .map(
-      (locale) =>
-        `<link rel="alternate" hreflang="${escapeHtml(locale)}" href="${escapeHtml(`${canonical}?lang=${locale}`)}" />`,
-    )
-    .join("");
   const meta = [
     `<meta name="description" content="${escapeHtml(page.description)}" />`,
     `<meta property="og:title" content="${escapeHtml(page.title)}" />`,
     `<meta property="og:description" content="${escapeHtml(page.description)}" />`,
     `<link rel="canonical" href="${escapeHtml(canonical)}" />`,
-    links,
   ].join("");
   let next = html;
   const hadTitle = /<title>[\s\S]*?<\/title>/.test(next);
@@ -294,7 +226,7 @@ export function injectDocument(
   next = next.includes("<!--flarebot-meta-->")
     ? next.replace("<!--flarebot-meta-->", head)
     : next.replace("</head>", `${head}</head>`);
-  next = next.replace("<html", `<html lang="${escapeHtml(page.locale)}"`);
+  next = next.replace(/<html\b[^>]*>/, `<html lang="${escapeHtml(textLang)}">`);
   return next;
 }
 
@@ -325,8 +257,6 @@ export async function statusDocument(
     "content-type": "text/html; charset=utf-8",
     "cache-control": "private, no-store",
   });
-  if (page.localeSource === "header") headers.set("vary", "Accept-Language");
-  if (page.localeSource === "cookie") headers.set("vary", "Cookie");
   return new Response(injectDocument(html, page, canonical), { headers });
 }
 

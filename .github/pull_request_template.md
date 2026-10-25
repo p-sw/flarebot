@@ -8,4 +8,4 @@
 
 - [ ] `pnpm test`
 - [ ] `pnpm typecheck`
-- [ ] `pnpm lint:lang` and `pnpm i18n:check`
+- [ ] `pnpm lint:lang` and `pnpm copy:check`

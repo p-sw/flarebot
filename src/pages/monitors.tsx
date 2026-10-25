@@ -2,6 +2,7 @@
 
 import AppHeader from "@brand/overrides/AppHeader";
 import EmptyState from "@brand/overrides/EmptyState";
+import { formatDateTime, formatTime, t } from "@shared/copy";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useState } from "react";
@@ -27,7 +28,6 @@ import {
 } from "../lib/queries";
 import { useSubmitGuard } from "../lib/use-submit-guard";
 import { Stagger, StaggerItem } from "../motion/page";
-import { m } from "../paraglide/messages.js";
 import { ConfirmDialog } from "../ui/confirm-dialog";
 import { ContentSkeleton } from "../ui/skeleton";
 import { controlClass, Field, statusTone } from "./fields";
@@ -35,19 +35,19 @@ import { controlClass, Field, statusTone } from "./fields";
 const types = ["http", "tcp", "dns", "ssl", "heartbeat"] as const;
 
 function typeLabel(type: string) {
-  if (type === "http") return m.monitor_type_http();
-  if (type === "tcp") return m.monitor_type_tcp();
-  if (type === "dns") return m.monitor_type_dns();
-  if (type === "ssl") return m.monitor_type_ssl();
-  return m.monitor_type_heartbeat();
+  if (type === "http") return t("monitor_type_http");
+  if (type === "tcp") return t("monitor_type_tcp");
+  if (type === "dns") return t("monitor_type_dns");
+  if (type === "ssl") return t("monitor_type_ssl");
+  return t("monitor_type_heartbeat");
 }
 
 function statusLabel(status: string) {
-  if (status === "up") return m.status_up();
-  if (status === "down") return m.status_down();
-  if (status === "pending") return m.status_pending();
-  if (status === "paused") return m.status_paused();
-  return m.status_unknown();
+  if (status === "up") return t("status_up");
+  if (status === "down") return t("status_down");
+  if (status === "pending") return t("status_pending");
+  if (status === "paused") return t("status_paused");
+  return t("status_unknown");
 }
 
 export function DashboardPage() {
@@ -56,15 +56,15 @@ export function DashboardPage() {
   return (
     <>
       <AppHeader
-        title={m.nav_dashboard()}
+        title={t("nav_dashboard")}
         actions={
           <Link to="/console/monitors/new">
-            <Button>{m.monitor_new()}</Button>
+            <Button>{t("monitor_new")}</Button>
           </Link>
         }
       />
       <p className="mb-4 text-sm text-muted-foreground">
-        {m.monitors_count({ count: rows.length })}
+        {t("monitors_count", { count: rows.length })}
       </p>
       {monitors.isPending ? (
         <ContentSkeleton />
@@ -72,7 +72,7 @@ export function DashboardPage() {
         <EmptyState
           action={
             <Link to="/console/monitors/new">
-              <Button>{m.monitor_new()}</Button>
+              <Button>{t("monitor_new")}</Button>
             </Link>
           }
         />
@@ -95,10 +95,14 @@ export function DashboardPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-4 text-sm">
                       <span>
-                        {row.uptime24 === null ? "—" : `${row.uptime24}%`}
+                        {row.uptime24 === null
+                          ? t("uptime_empty")
+                          : t("uptime_percent", { value: row.uptime24 })}
                       </span>
                       <span className="font-mono text-muted-foreground">
-                        {row.lastResponseMs ?? "—"} ms
+                        {row.lastResponseMs == null
+                          ? t("uptime_empty")
+                          : t("response_ms", { value: row.lastResponseMs })}
                       </span>
                       <Badge tone={statusTone(row.status)}>
                         {statusLabel(row.status)}
@@ -204,7 +208,7 @@ export function MonitorFormPage() {
   });
   return (
     <>
-      <AppHeader title={m.monitor_new()} />
+      <AppHeader title={t("monitor_new")} />
       <form
         className="grid max-w-xl gap-3"
         onSubmit={(event) => {
@@ -218,7 +222,7 @@ export function MonitorFormPage() {
           });
         }}
       >
-        <Field label={m.monitor_name()}>
+        <Field label={t("monitor_name")}>
           <Input
             name="name"
             value={draft.name}
@@ -228,7 +232,7 @@ export function MonitorFormPage() {
             required
           />
         </Field>
-        <Field label={m.monitor_type()}>
+        <Field label={t("monitor_type")}>
           <select
             className={controlClass}
             name="type"
@@ -245,7 +249,7 @@ export function MonitorFormPage() {
           </select>
         </Field>
         {draft.type === "http" ? (
-          <Field label={m.monitor_url()}>
+          <Field label={t("monitor_url")}>
             <Input
               name="url"
               value={draft.url}
@@ -256,7 +260,7 @@ export function MonitorFormPage() {
           </Field>
         ) : null}
         {draft.type === "tcp" || draft.type === "ssl" ? (
-          <Field label={m.monitor_host()}>
+          <Field label={t("monitor_host")}>
             <Input
               name="host"
               value={draft.host}
@@ -267,7 +271,7 @@ export function MonitorFormPage() {
           </Field>
         ) : null}
         {draft.type === "tcp" ? (
-          <Field label={m.monitor_port()}>
+          <Field label={t("monitor_port")}>
             <Input
               name="port"
               type="number"
@@ -280,7 +284,7 @@ export function MonitorFormPage() {
         ) : null}
         {draft.type === "dns" ? (
           <>
-            <Field label={m.monitor_dns_name()}>
+            <Field label={t("monitor_dns_name")}>
               <Input
                 name="dnsName"
                 value={draft.dnsName}
@@ -289,7 +293,7 @@ export function MonitorFormPage() {
                 }
               />
             </Field>
-            <Field label={m.monitor_dns_type()}>
+            <Field label={t("monitor_dns_type")}>
               <Input
                 name="dnsType"
                 value={draft.dnsType}
@@ -301,7 +305,7 @@ export function MonitorFormPage() {
                 }
               />
             </Field>
-            <Field label={m.monitor_dns_expected()}>
+            <Field label={t("monitor_dns_expected")}>
               <Input
                 name="expected"
                 value={draft.expected}
@@ -314,7 +318,7 @@ export function MonitorFormPage() {
         ) : null}
         {draft.type === "ssl" ? (
           <>
-            <Field label={m.monitor_ssl_warn()}>
+            <Field label={t("monitor_ssl_warn")}>
               <Input
                 name="warnDays"
                 type="number"
@@ -325,12 +329,12 @@ export function MonitorFormPage() {
               />
             </Field>
             <p className="text-xs text-muted-foreground">
-              {m.monitor_ssl_estimate()}
+              {t("monitor_ssl_estimate")}
             </p>
           </>
         ) : null}
         {draft.type === "heartbeat" ? (
-          <Field label={m.monitor_interval()}>
+          <Field label={t("monitor_interval")}>
             <Input
               name="grace"
               type="number"
@@ -341,7 +345,7 @@ export function MonitorFormPage() {
             />
           </Field>
         ) : null}
-        <Field label={m.monitor_interval()}>
+        <Field label={t("monitor_interval")}>
           <Input
             name="interval"
             type="number"
@@ -355,7 +359,7 @@ export function MonitorFormPage() {
             }
           />
         </Field>
-        <Field label={m.monitor_retries()}>
+        <Field label={t("monitor_retries")}>
           <Input
             name="retries"
             type="number"
@@ -369,15 +373,15 @@ export function MonitorFormPage() {
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {pushUrl ? (
           <div className="rounded-lg bg-muted p-3 text-sm">
-            <p className="font-medium">{m.monitor_push_url()}</p>
+            <p className="font-medium">{t("monitor_push_url")}</p>
             <p className="mt-1 break-all font-mono text-xs">{pushUrl}</p>
             <p className="mt-2 text-muted-foreground">
-              {m.monitor_push_hint()}
+              {t("monitor_push_hint")}
             </p>
           </div>
         ) : (
           <PendingButton type="submit" pending={submit.pending}>
-            {m.action_create()}
+            {t("action_create")}
           </PendingButton>
         )}
       </form>
@@ -419,7 +423,7 @@ export function MonitorDetailPage() {
   });
   const [confirmDelete, setConfirmDelete] = useState(false);
   if (monitor.isPending) return <ContentSkeleton />;
-  if (!row) return <p>{m.loading()}</p>;
+  if (!row) return <p>{t("loading")}</p>;
   const recent = stats.data?.recent ?? [];
   return (
     <>
@@ -441,7 +445,7 @@ export function MonitorDetailPage() {
                 });
               }}
             >
-              {row.paused ? m.action_resume() : m.action_pause()}
+              {row.paused ? t("action_resume") : t("action_pause")}
             </PendingButton>
             <PendingButton
               variant="destructive"
@@ -449,15 +453,15 @@ export function MonitorDetailPage() {
               pending={action.pending}
               onClick={() => setConfirmDelete(true)}
             >
-              {m.action_delete()}
+              {t("action_delete")}
             </PendingButton>
             <ConfirmDialog
               open={confirmDelete}
               onOpenChange={setConfirmDelete}
-              title={m.action_delete()}
-              description={m.monitor_delete_confirm()}
-              confirmLabel={m.action_delete()}
-              cancelLabel={m.action_cancel()}
+              title={t("action_delete")}
+              description={t("monitor_delete_confirm")}
+              confirmLabel={t("action_delete")}
+              cancelLabel={t("action_cancel")}
               pending={action.pending}
               onConfirm={() => {
                 void action.run(async () => {
@@ -482,7 +486,7 @@ export function MonitorDetailPage() {
       </div>
       {row.pushUrl ? (
         <p className="mb-4 break-all rounded-lg bg-muted p-3 font-mono text-xs">
-          {m.monitor_push_url()}: {row.pushUrl}
+          {t("monitor_push_url")}: {row.pushUrl}
         </p>
       ) : null}
       <Stagger className="mb-4 grid gap-3 sm:grid-cols-4">
@@ -492,15 +496,17 @@ export function MonitorDetailPage() {
               <CardContent className="p-4">
                 <p className="text-xs text-muted-foreground">
                   {key === "h24"
-                    ? m.range_24h()
+                    ? t("range_24h")
                     : key === "d7"
-                      ? m.range_7d()
+                      ? t("range_7d")
                       : key === "d30"
-                        ? m.range_30d()
-                        : m.range_90d()}
+                        ? t("range_30d")
+                        : t("range_90d")}
                 </p>
                 <p className="text-2xl font-medium">
-                  {stats.data?.uptime[key] ?? "—"}%
+                  {stats.data?.uptime[key] == null
+                    ? t("uptime_empty")
+                    : t("uptime_percent", { value: stats.data.uptime[key] })}
                 </p>
               </CardContent>
             </Card>
@@ -510,17 +516,18 @@ export function MonitorDetailPage() {
       <Card className="mb-4">
         <CardContent className="p-4">
           <p className="mb-2 text-sm text-muted-foreground">
-            {m.chart_response()} · p95 {stats.data?.p95 ?? 0} ms
+            {t("chart_response")} ·{" "}
+            {t("chart_p95", { value: stats.data?.p95 ?? 0 })}
           </p>
           {recent.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{m.chart_empty()}</p>
+            <p className="text-sm text-muted-foreground">{t("chart_empty")}</p>
           ) : (
             <div className="h-48 min-w-0 overflow-hidden">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
                   data={recent.map((point) => ({
                     ...point,
-                    label: new Date(point.t).toISOString().slice(11, 19),
+                    label: formatTime(point.t),
                   }))}
                 >
                   <XAxis dataKey="label" hide />
@@ -528,6 +535,7 @@ export function MonitorDetailPage() {
                   <Tooltip />
                   <Area
                     dataKey="ms"
+                    name={t("chart_series_ms")}
                     stroke="var(--primary)"
                     fill="var(--primary)"
                     fillOpacity={0.2}
@@ -540,7 +548,7 @@ export function MonitorDetailPage() {
           <div
             className="mt-3 flex h-8 min-w-0 items-end gap-px"
             role="img"
-            aria-label={m.chart_recent()}
+            aria-label={t("chart_recent")}
           >
             {recent.slice(-60).map((point) => (
               <div
@@ -554,10 +562,10 @@ export function MonitorDetailPage() {
           </div>
         </CardContent>
       </Card>
-      <h2 className="mb-2 font-medium">{m.monitor_outages()}</h2>
+      <h2 className="mb-2 font-medium">{t("monitor_outages")}</h2>
       {(outages.data?.outages.length ?? 0) === 0 ? (
         <p className="text-sm text-muted-foreground">
-          {m.monitor_no_outages()}
+          {t("monitor_no_outages")}
         </p>
       ) : null}
       {outages.isPending ? <ContentSkeleton /> : null}
@@ -565,11 +573,11 @@ export function MonitorDetailPage() {
         {outages.data?.outages.map((outage) => (
           <StaggerItem key={outage.id}>
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm">
-              <span>{outage.cause || m.outage_cause()}</span>
+              <span>{outage.cause || t("outage_cause")}</span>
               <span className="text-muted-foreground">
                 {outage.endedAt
-                  ? new Date(outage.endedAt).toISOString()
-                  : m.outage_ongoing()}
+                  ? formatDateTime(outage.endedAt)
+                  : t("outage_ongoing")}
               </span>
               {!outage.acknowledgedAt ? (
                 <PendingButton
@@ -588,7 +596,7 @@ export function MonitorDetailPage() {
                     });
                   }}
                 >
-                  {m.monitor_ack()}
+                  {t("monitor_ack")}
                 </PendingButton>
               ) : null}
             </div>

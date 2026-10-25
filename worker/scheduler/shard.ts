@@ -343,7 +343,6 @@ export class SchedulerShard extends DurableObject<Env> {
       }
       const delivery: ChannelDelivery = {
         type: channel.type as ChannelDelivery["type"],
-        locale: channel.locale,
         config,
       };
       await deliverChannel(

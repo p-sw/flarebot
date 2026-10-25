@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 
+import { t } from "@shared/copy";
 import type { ButtonHTMLAttributes } from "react";
 import { pendingButtonProps } from "../lib/submit-guard";
-import { m } from "../paraglide/messages.js";
 import { Button } from "./button";
 
 export function PendingButton({
@@ -26,7 +26,7 @@ export function PendingButton({
       disabled={disabled || state.disabled}
       aria-busy={state["aria-busy"]}
     >
-      {pending ? m.action_working() : children}
+      {pending ? t("action_working") : children}
     </Button>
   );
 }

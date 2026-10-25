@@ -10,7 +10,15 @@ D1 stores configuration, incidents, and hourly/daily rollups. Analytics Engine r
 
 Authorization is `can(actor, action, resource)` in `shared/permissions.ts`. The resource argument is ignored in this version. API tokens are stored as SHA-256 hashes. At use time their scopes are intersected with the creator's current role. Viewers can mint only the `read` scope.
 
-Status page text is per field: requested language, then the page default, then the source string. The public JSON does not include target URLs. `GET /s/:slug` injects `lang`, title, description, canonical, and `hreflang` into the SPA shell and sets `Vary: Accept-Language` when the language came from the header. Responses that choose a page, including `/`, use `Cache-Control: private, no-store` so a shared cache cannot pin the wrong document.
+Status page text is the stored title, description, footer, banner, group name, and display name. The public page ignores `Accept-Language`, the `locale` cookie, and `?lang=`. The public JSON does not include target URLs. `GET /s/:slug` injects `lang` from `brand/locale.json`, plus title, description, and canonical, into the SPA shell. It does not emit `hreflang` or `Vary: Accept-Language`. Responses that choose a page, including `/`, use `Cache-Control: private, no-store` so a shared cache cannot pin the wrong document.
+
+These D1 columns are deprecated and unused. They stay so existing production rows, including a status page named `monit` and users that already have a `locale` value, keep working. Migrations do not drop them. New status-page inserts still fill the `NOT NULL` ones with the locale file's `lang` and an empty translation map. Updates do not clear stored values.
+
+| Column                                                         | Table                            |
+| -------------------------------------------------------------- | -------------------------------- |
+| `locale`                                                       | `users`, `notification_channels` |
+| `default_locale`, `locales_json`, `source_locale`, `i18n_json` | `status_pages`                   |
+| `source_locale`, `i18n_json`                                   | `status_page_items`              |
 
 ## URLs
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { api, origin, ownerSession } from "./helpers";
 
@@ -28,9 +29,6 @@ describe("status pages", () => {
         body: JSON.stringify({
           slug: "hidden-page",
           published: false,
-          defaultLocale: "en",
-          locales: ["en", "ko"],
-          sourceLocale: "en",
           title: "Hidden",
           description: "secret target https://internal.example",
           items: [],
@@ -48,21 +46,15 @@ describe("status pages", () => {
         body: JSON.stringify({
           slug: "public-page",
           published: true,
-          defaultLocale: "en",
-          locales: ["en", "ko"],
-          sourceLocale: "en",
           title: "Source title",
           description: "Source description",
           footer: "",
-          i18n: { ko: { title: "Status KO" } },
           items: [
             {
               monitorId,
               position: 0,
               groupName: "Core",
               displayName: "Heartbeat",
-              sourceLocale: "en",
-              i18n: { ko: { displayName: "Heartbeat KO" } },
             },
           ],
         }),
@@ -70,55 +62,59 @@ describe("status pages", () => {
       owner,
     );
     expect(page.status).toBe(201);
-    const korean = await api("/api/public/status/public-page?lang=ko");
+    await env.DB.prepare(
+      "UPDATE status_pages SET i18n_json = ?, locales_json = ?, default_locale = ? WHERE slug = ?",
+    )
+      .bind(
+        JSON.stringify({
+          ko: { title: "Status KO", description: "Ignored description" },
+        }),
+        JSON.stringify(["en", "ko"]),
+        "ko",
+        "public-page",
+      )
+      .run();
+    await env.DB.prepare(
+      "UPDATE status_page_items SET i18n_json = ? WHERE display_name = ?",
+    )
+      .bind(
+        JSON.stringify({ ko: { displayName: "Heartbeat KO" } }),
+        "Heartbeat",
+      )
+      .run();
+
+    const korean = await api("/api/public/status/public-page?lang=ko", {
+      headers: {
+        "accept-language": "ko-KR,ko;q=0.9,en;q=0.4",
+        cookie: "locale=ko",
+      },
+    });
     const body = (await korean.json()) as {
       title: string;
       description: string;
-      langs: Record<string, string>;
       groups: { items: { name: string; status: string }[] }[];
     };
-    expect(body.title).toBe("Status KO");
+    expect(body.title).toBe("Source title");
     expect(body.description).toBe("Source description");
-    expect(body.langs.title).toBe("ko");
-    expect(body.langs.description).toBe("en");
-    expect(body.groups[0]?.items[0]?.name).toBe("Heartbeat KO");
+    expect(body.groups[0]?.items[0]?.name).toBe("Heartbeat");
+    expect(JSON.stringify(body)).not.toContain("Status KO");
     expect(JSON.stringify(body)).not.toContain("https://");
+    expect(korean.headers.get("vary")).toBeNull();
 
-    const header = await api("/api/public/status/public-page", {
-      headers: { "accept-language": "ko-KR,ko;q=0.9,en;q=0.4" },
-    });
-    expect(((await header.json()) as { title: string }).title).toBe(
-      "Status KO",
-    );
-
-    const cookieWins = await api("/api/public/status/public-page", {
+    const html = await api("/s/public-page?lang=ko", {
       headers: {
-        "accept-language": "ko-KR,ko;q=0.9,en;q=0.4",
-        cookie: "locale=en",
+        "accept-language": "ko-KR,ko;q=0.9",
+        cookie: "locale=ko",
       },
     });
-    expect(((await cookieWins.json()) as { title: string }).title).toBe(
-      "Source title",
-    );
-    expect(cookieWins.headers.get("vary")).toBe("Cookie");
-
-    const queryWins = await api("/api/public/status/public-page?lang=ko", {
-      headers: {
-        cookie: "locale=en",
-        "accept-language": "en",
-      },
-    });
-    expect(((await queryWins.json()) as { title: string }).title).toBe(
-      "Status KO",
-    );
-
-    const html = await api("/s/public-page?lang=ko");
     expect(html.status).toBe(200);
     const text = await html.text();
-    expect(text).toContain('<html lang="ko"');
-    expect(text).toContain("Status KO");
-    expect(text).toContain(`hreflang="ko"`);
+    expect(text).toContain('<html lang="en"');
+    expect(text).toContain("Source title");
+    expect(text).not.toContain("hreflang");
+    expect(text).not.toContain("Status KO");
     expect(text).toContain(`${origin}/s/public-page`);
+    expect(html.headers.get("vary")).toBeNull();
     expect((await api("/s/hidden-page")).status).toBe(404);
   });
 });

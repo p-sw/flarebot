@@ -42,7 +42,21 @@ describe("auth", () => {
     expect(row?.password_hash.startsWith("pbkdf2-sha256$")).toBe(true);
     expect(row?.password_hash).not.toContain("correct-horse");
     const cookies = setup.headers.getSetCookie();
-    expect(cookies.some((item) => item.startsWith("locale=en"))).toBe(true);
+    expect(cookies.some((item) => item.startsWith("flarebot_session="))).toBe(
+      true,
+    );
+    expect(cookies.some((item) => item.startsWith("locale="))).toBe(false);
+    await env.DB.prepare("UPDATE users SET locale = ? WHERE email = ?")
+      .bind("ko", "ada@example.com")
+      .run();
+    const signedIn = await api("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "ada@example.com",
+        password: "correct-horse",
+      }),
+    });
+    expect(signedIn.status).toBe(200);
   });
 
   it("locks a password after five failures and expires a session", async () => {

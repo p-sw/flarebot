@@ -13,7 +13,7 @@ description: Add a monitor check type. Use when extending Flarebot with a new pr
 - `worker/checks/run.ts` (the only file that may import `cloudflare:sockets`)
 - `worker/scheduler/shard.ts` if the snapshot needs a new field
 - `migrations/` and `worker/db/schema.ts` if the type needs its own table. Certificate rows already use `cert_info`.
-- `locales/en.json`, `locales/ko.json`
+- `brand/locale.json` for new user-facing strings
 - `src/pages/monitors.tsx`
 
 ## Steps

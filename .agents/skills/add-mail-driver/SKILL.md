@@ -12,7 +12,7 @@ description: Add an outbound mail driver behind MailTransport. Use when a deploy
 - `shared/schemas.ts` `mailSettingsSchema` if the driver has settings
 - `worker/db/schema.ts` and a new migration only if the single `mail_settings` row cannot store the settings in existing columns
 - `src/pages/manage.tsx` settings form
-- `locales/en.json` and `locales/ko.json`
+- `brand/locale.json` for new user-facing strings
 
 ## Steps
 

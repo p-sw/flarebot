@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import AppHeader from "@brand/overrides/AppHeader";
-import { isSupportedLocale } from "@shared/locales";
+import { formatDateTime, t } from "@shared/copy";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -23,8 +23,6 @@ import {
 } from "../lib/queries";
 import { useSubmitGuard } from "../lib/use-submit-guard";
 import { Stagger, StaggerItem } from "../motion/page";
-import { m } from "../paraglide/messages.js";
-import { getLocale, setLocale } from "../paraglide/runtime.js";
 import { ContentSkeleton } from "../ui/skeleton";
 import { controlClass, Field } from "./fields";
 
@@ -32,7 +30,7 @@ export function StatusPagesPage() {
   const pages = useQuery(statusPagesQuery);
   const monitors = useQuery(monitorsQuery);
   const client = useQueryClient();
-  const [title, setTitle] = useState("Status");
+  const [title, setTitle] = useState(() => t("page_title_default"));
   const [slug, setSlug] = useState("status");
   const [monitorId, setMonitorId] = useState("");
   const [error, setError] = useState("");
@@ -55,7 +53,7 @@ export function StatusPagesPage() {
   }
   return (
     <>
-      <AppHeader title={m.nav_status_pages()} />
+      <AppHeader title={t("nav_status_pages")} />
       <form
         className="mb-6 grid max-w-xl gap-3"
         onSubmit={(event) => {
@@ -69,23 +67,17 @@ export function StatusPagesPage() {
                 body: JSON.stringify({
                   slug,
                   published: true,
-                  defaultLocale: "en",
-                  locales: ["en", "ko"],
-                  sourceLocale: "en",
                   title,
                   description: "",
                   footer: "",
                   banner: "",
-                  i18n: { ko: { title: `${title} KO` } },
                   items: chosen
                     ? [
                         {
                           monitorId: chosen,
                           position: 0,
-                          groupName: "Core",
+                          groupName: t("page_group_default"),
                           displayName: "",
-                          sourceLocale: "en",
-                          i18n: {},
                         },
                       ]
                     : [],
@@ -98,7 +90,7 @@ export function StatusPagesPage() {
           });
         }}
       >
-        <Field label={m.page_title()}>
+        <Field label={t("page_title")}>
           <Input
             name="title"
             value={title}
@@ -106,7 +98,7 @@ export function StatusPagesPage() {
             required
           />
         </Field>
-        <Field label={m.page_slug()}>
+        <Field label={t("page_slug")}>
           <Input
             name="slug"
             value={slug}
@@ -114,14 +106,14 @@ export function StatusPagesPage() {
             required
           />
         </Field>
-        <Field label={m.page_items()}>
+        <Field label={t("page_items")}>
           <select
             className={controlClass}
             name="monitorId"
             value={monitorId}
             onChange={(event) => setMonitorId(event.target.value)}
           >
-            <option value="">{m.action_add()}</option>
+            <option value="">{t("action_add")}</option>
             {monitors.data?.monitors.map((row) => (
               <option key={row.id} value={row.id}>
                 {row.name}
@@ -131,7 +123,7 @@ export function StatusPagesPage() {
         </Field>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <PendingButton type="submit" pending={submit.pending}>
-          {m.page_new()}
+          {t("page_new")}
         </PendingButton>
       </form>
       {pages.isPending ? (
@@ -145,12 +137,11 @@ export function StatusPagesPage() {
                   <div className="min-w-0">
                     <p className="font-medium">{page.title}</p>
                     <p className="text-sm break-all text-muted-foreground">
-                      /s/{page.slug} ·{" "}
-                      {m.missing_count({ count: page.missing })}
+                      /s/{page.slug}
                     </p>
                   </div>
                   <a className="text-sm" href={`/s/${page.slug}`}>
-                    {m.page_public_link()}
+                    {t("page_public_link")}
                   </a>
                 </div>
                 <div className="mt-4 grid gap-2 border-t border-border pt-4">
@@ -166,17 +157,17 @@ export function StatusPagesPage() {
                         void setRoot(page.id, checked)
                       }
                     />
-                    <span>{m.page_root_label()}</span>
+                    <span>{t("page_root_label")}</span>
                   </label>
                   <p className="text-sm text-muted-foreground">
-                    {m.page_root_note({ slug: page.slug })}
+                    {t("page_root_note", { slug: page.slug })}
                   </p>
                   {page.serveAtRoot ? (
-                    <p className="text-sm">{m.page_root_current()}</p>
+                    <p className="text-sm">{t("page_root_current")}</p>
                   ) : null}
                   {page.published ? null : (
                     <p className="text-sm text-muted-foreground">
-                      {m.page_root_unpublished()}
+                      {t("page_root_unpublished")}
                     </p>
                   )}
                 </div>
@@ -192,14 +183,14 @@ export function StatusPagesPage() {
 export function ChannelsPage() {
   const channels = useQuery(channelsQuery);
   const client = useQueryClient();
-  const [name, setName] = useState("Ops email");
+  const [name, setName] = useState(() => t("channel_name_default"));
   const [to, setTo] = useState("");
   const [message, setMessage] = useState("");
   const submit = useSubmitGuard();
   const test = useSubmitGuard();
   return (
     <>
-      <AppHeader title={m.nav_channels()} />
+      <AppHeader title={t("nav_channels")} />
       <form
         className="mb-6 grid max-w-xl gap-3"
         onSubmit={(event) => {
@@ -213,7 +204,7 @@ export function ChannelsPage() {
           });
         }}
       >
-        <Field label={m.channel_name()}>
+        <Field label={t("channel_name")}>
           <Input
             name="channelName"
             value={name}
@@ -221,7 +212,7 @@ export function ChannelsPage() {
             required
           />
         </Field>
-        <Field label={m.channel_email_to()}>
+        <Field label={t("channel_email_to")}>
           <Input
             name="to"
             type="email"
@@ -231,7 +222,7 @@ export function ChannelsPage() {
           />
         </Field>
         <PendingButton type="submit" pending={submit.pending}>
-          {m.channel_new()}
+          {t("channel_new")}
         </PendingButton>
       </form>
       {message ? <p className="mb-3 text-sm">{message}</p> : null}
@@ -256,14 +247,14 @@ export function ChannelsPage() {
                         await api(`/api/channels/${channel.id}/test`, {
                           method: "POST",
                         });
-                        setMessage(m.channel_test_sent());
+                        setMessage(t("channel_test_sent"));
                       } catch (cause) {
                         setMessage(errorText(cause));
                       }
                     });
                   }}
                 >
-                  {m.action_test()}
+                  {t("action_test")}
                 </PendingButton>
               </div>
             </StaggerItem>
@@ -282,7 +273,7 @@ export function TeamPage() {
   const submit = useSubmitGuard();
   return (
     <>
-      <AppHeader title={m.nav_team()} />
+      <AppHeader title={t("nav_team")} />
       <form
         className="mb-6 grid max-w-xl gap-3"
         onSubmit={(event) => {
@@ -296,26 +287,26 @@ export function TeamPage() {
           });
         }}
       >
-        <Field label={m.team_email_optional()}>
+        <Field label={t("team_email_optional")}>
           <Input
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />
         </Field>
-        <Field label={m.team_role()}>
+        <Field label={t("team_role")}>
           <select
             className={controlClass}
             value={role}
             onChange={(event) => setRole(event.target.value)}
           >
-            <option value="admin">{m.role_admin()}</option>
-            <option value="editor">{m.role_editor()}</option>
-            <option value="viewer">{m.role_viewer()}</option>
+            <option value="admin">{t("role_admin")}</option>
+            <option value="editor">{t("role_editor")}</option>
+            <option value="viewer">{t("role_viewer")}</option>
           </select>
         </Field>
         <PendingButton type="submit" pending={submit.pending}>
-          {m.team_invite()}
+          {t("team_invite")}
         </PendingButton>
       </form>
       {link ? <p className="mb-4 break-all font-mono text-xs">{link}</p> : null}
@@ -348,7 +339,7 @@ export function TokensPage() {
   const revoke = useSubmitGuard();
   return (
     <>
-      <AppHeader title={m.nav_tokens()} />
+      <AppHeader title={t("nav_tokens")} />
       <form
         className="mb-4 grid max-w-xl gap-3"
         onSubmit={(event) => {
@@ -363,7 +354,7 @@ export function TokensPage() {
           });
         }}
       >
-        <Field label={m.token_name()}>
+        <Field label={t("token_name")}>
           <Input
             name="tokenName"
             value={name}
@@ -372,12 +363,12 @@ export function TokensPage() {
           />
         </Field>
         <PendingButton type="submit" pending={submit.pending}>
-          {m.token_new()}
+          {t("token_new")}
         </PendingButton>
       </form>
       {raw ? (
         <p className="mb-4 break-all rounded-lg bg-muted p-3 font-mono text-xs">
-          {m.token_once()} {raw}
+          {t("token_once")} {raw}
         </p>
       ) : null}
       {tokens.isPending ? (
@@ -404,7 +395,7 @@ export function TokensPage() {
                     });
                   }}
                 >
-                  {m.token_revoke()}
+                  {t("token_revoke")}
                 </PendingButton>
               </div>
             </StaggerItem>
@@ -419,16 +410,16 @@ export function AuditPage() {
   const audit = useQuery(auditQuery);
   return (
     <>
-      <AppHeader title={m.nav_audit()} />
+      <AppHeader title={t("nav_audit")} />
       {audit.isPending ? <ContentSkeleton /> : null}
       {!audit.isPending && (audit.data?.events.length ?? 0) === 0 ? (
-        <p className="text-sm text-muted-foreground">{m.audit_empty()}</p>
+        <p className="text-sm text-muted-foreground">{t("audit_empty")}</p>
       ) : null}
       <Stagger className="grid gap-2">
         {audit.data?.events.map((event) => (
           <StaggerItem key={event.id}>
             <div className="grid min-w-0 gap-1 rounded-lg border border-border px-3 py-2 text-sm sm:grid-cols-3">
-              <span>{new Date(event.createdAt).toISOString()}</span>
+              <span>{formatDateTime(event.createdAt)}</span>
               <span>{event.action}</span>
               <span className="truncate text-muted-foreground">
                 {event.target}
@@ -498,13 +489,13 @@ function mailDraft(data: MailSettings | undefined): MailDraft {
 
 function mailSourceText(mail: MailSettings | undefined): string {
   if (!mail || mail.activeSource === "none")
-    return m.settings_mail_source_none();
-  if (mail.activeSource === "secrets") return m.settings_mail_source_secrets();
+    return t("settings_mail_source_none");
+  if (mail.activeSource === "secrets") return t("settings_mail_source_secrets");
   if (mail.activeSource === "database")
-    return m.settings_mail_source_database();
+    return t("settings_mail_source_database");
   return mail.emailBinding
-    ? m.settings_mail_source_cloudflare()
-    : m.settings_mail_source_cloudflare_unbound();
+    ? t("settings_mail_source_cloudflare")
+    : t("settings_mail_source_cloudflare_unbound");
 }
 
 export function SettingsPage() {
@@ -528,7 +519,7 @@ export function SettingsPage() {
 
   return (
     <>
-      <AppHeader title={m.nav_settings()} />
+      <AppHeader title={t("nav_settings")} />
       {settings.isPending || mail.isPending ? <ContentSkeleton /> : null}
       <form
         className="mb-8 grid max-w-xl gap-3"
@@ -541,7 +532,7 @@ export function SettingsPage() {
                 body: JSON.stringify({ instanceName: shownName }),
               });
               await client.invalidateQueries({ queryKey: ["settings"] });
-              report("ok", m.saved());
+              report("ok", t("saved"));
             } catch (cause) {
               report("error", errorText(cause));
             }
@@ -549,8 +540,8 @@ export function SettingsPage() {
         }}
       >
         <Field
-          label={m.settings_instance_name()}
-          hint={m.settings_instance_hint()}
+          label={t("settings_instance_name")}
+          hint={t("settings_instance_hint")}
         >
           <Input
             name="instanceName"
@@ -560,12 +551,12 @@ export function SettingsPage() {
           />
         </Field>
         <PendingButton type="submit" pending={saveInstance.pending}>
-          {m.action_save()}
+          {t("action_save")}
         </PendingButton>
       </form>
-      <h2 className="mb-3 font-medium">{m.settings_mail()}</h2>
+      <h2 className="mb-3 font-medium">{t("settings_mail")}</h2>
       <p className="mb-3 max-w-xl text-sm text-muted-foreground">
-        {m.settings_mail_intro()}
+        {t("settings_mail_intro")}
       </p>
       <p
         className="mb-4 max-w-xl rounded-lg border border-border bg-muted px-3 py-2 text-sm"
@@ -609,14 +600,14 @@ export function SettingsPage() {
               });
               setDraft({ ...form, password: "", clearPassword: false });
               await client.invalidateQueries({ queryKey: ["mail"] });
-              report("ok", m.saved());
+              report("ok", t("saved"));
             } catch (cause) {
               report("error", errorText(cause));
             }
           });
         }}
       >
-        <Field label={m.settings_driver()} hint={m.settings_driver_hint()}>
+        <Field label={t("settings_driver")} hint={t("settings_driver_hint")}>
           <select
             className={controlClass}
             name="driver"
@@ -625,14 +616,14 @@ export function SettingsPage() {
               patch({ driver: event.target.value as MailDriver })
             }
           >
-            <option value="smtp">{m.settings_driver_smtp()}</option>
-            <option value="cf-email">{m.settings_driver_cf()}</option>
-            <option value="none">{m.settings_driver_none()}</option>
+            <option value="smtp">{t("settings_driver_smtp")}</option>
+            <option value="cf-email">{t("settings_driver_cf")}</option>
+            <option value="none">{t("settings_driver_none")}</option>
           </select>
         </Field>
         {form.driver === "smtp" ? (
           <>
-            <Field label={m.settings_host()} hint={m.settings_host_hint()}>
+            <Field label={t("settings_host")} hint={t("settings_host_hint")}>
               <Input
                 name="smtpHost"
                 value={form.host}
@@ -640,7 +631,7 @@ export function SettingsPage() {
                 required
               />
             </Field>
-            <Field label={m.settings_port()} hint={m.settings_port_hint()}>
+            <Field label={t("settings_port")} hint={t("settings_port_hint")}>
               <select
                 className={controlClass}
                 name="smtpPort"
@@ -656,8 +647,8 @@ export function SettingsPage() {
               </select>
             </Field>
             <Field
-              label={m.settings_security()}
-              hint={m.settings_security_hint()}
+              label={t("settings_security")}
+              hint={t("settings_security_hint")}
             >
               <select
                 className={controlClass}
@@ -668,15 +659,15 @@ export function SettingsPage() {
                 }
               >
                 <option value="starttls">
-                  {m.settings_security_starttls()}
+                  {t("settings_security_starttls")}
                 </option>
-                <option value="tls">{m.settings_security_tls()}</option>
-                <option value="none">{m.settings_security_none()}</option>
+                <option value="tls">{t("settings_security_tls")}</option>
+                <option value="none">{t("settings_security_none")}</option>
               </select>
             </Field>
             <Field
-              label={m.settings_username()}
-              hint={m.settings_username_hint()}
+              label={t("settings_username")}
+              hint={t("settings_username_hint")}
             >
               <Input
                 name="smtpUser"
@@ -686,8 +677,8 @@ export function SettingsPage() {
               />
             </Field>
             <Field
-              label={m.settings_password()}
-              hint={m.settings_password_hint()}
+              label={t("settings_password")}
+              hint={t("settings_password_hint")}
             >
               <Input
                 name="smtpPassword"
@@ -700,7 +691,7 @@ export function SettingsPage() {
               />
             </Field>
             {mail.data?.hasPassword ? (
-              <p className="text-sm">{m.settings_password_set()}</p>
+              <p className="text-sm">{t("settings_password_set")}</p>
             ) : null}
             {mail.data?.hasPassword ? (
               <label className="flex items-center gap-2 text-sm">
@@ -714,7 +705,7 @@ export function SettingsPage() {
                     })
                   }
                 />
-                {m.settings_password_clear()}
+                {t("settings_password_clear")}
               </label>
             ) : null}
           </>
@@ -722,8 +713,8 @@ export function SettingsPage() {
         {form.driver !== "none" ? (
           <>
             <Field
-              label={m.settings_from_name()}
-              hint={m.settings_from_name_hint()}
+              label={t("settings_from_name")}
+              hint={t("settings_from_name_hint")}
             >
               <Input
                 name="fromName"
@@ -733,8 +724,8 @@ export function SettingsPage() {
               />
             </Field>
             <Field
-              label={m.settings_from_address()}
-              hint={m.settings_from_address_hint()}
+              label={t("settings_from_address")}
+              hint={t("settings_from_address_hint")}
             >
               <Input
                 name="from"
@@ -746,13 +737,13 @@ export function SettingsPage() {
             </Field>
           </>
         ) : null}
-        <Field label={m.settings_test_to()} hint={m.settings_test_hint()}>
+        <Field label={t("settings_test_to")} hint={t("settings_test_hint")}>
           <Input
             name="testTo"
             type="email"
             value={form.testTo}
             onChange={(event) => patch({ testTo: event.target.value })}
-            placeholder={m.settings_test_to_placeholder()}
+            placeholder={t("settings_test_to_placeholder")}
           />
         </Field>
         <div className="flex flex-wrap gap-2">
@@ -761,7 +752,7 @@ export function SettingsPage() {
             pending={saveMail.pending}
             disabled={!mail.data}
           >
-            {m.action_save()}
+            {t("action_save")}
           </PendingButton>
           <PendingButton
             type="button"
@@ -777,14 +768,14 @@ export function SettingsPage() {
                       form.testTo ? { email: form.testTo } : {},
                     ),
                   });
-                  report("ok", m.settings_test_ok());
+                  report("ok", t("settings_test_ok"));
                 } catch (cause) {
                   report("error", errorText(cause));
                 }
               });
             }}
           >
-            {m.action_test()}
+            {t("action_test")}
           </PendingButton>
         </div>
       </form>
@@ -802,64 +793,17 @@ export function SettingsPage() {
 
 export function AccountPage() {
   const account = useQuery(accountQuery);
-  const [draft, setDraft] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const submit = useSubmitGuard();
-  const saved = isSupportedLocale(account.data?.locale ?? "")
-    ? account.data?.locale
-    : null;
-  const locale = draft ?? saved ?? getLocale();
   return (
     <>
-      <AppHeader title={m.nav_account()} />
+      <AppHeader title={t("nav_account")} />
       {account.isPending ? <ContentSkeleton /> : null}
       <p className="mb-4 break-all text-sm text-muted-foreground">
         {account.data?.email}
       </p>
-      <form
-        className="grid max-w-xl gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!isSupportedLocale(locale)) return;
-          setError("");
-          void submit.run(async () => {
-            try {
-              await api("/api/account", {
-                method: "PATCH",
-                body: JSON.stringify({ locale }),
-              });
-              await setLocale(locale);
-              window.location.reload();
-            } catch (cause) {
-              setError(errorText(cause));
-            }
-          });
-        }}
-      >
-        <Field label={m.account_language()} hint={m.account_language_hint()}>
-          <select
-            className={controlClass}
-            name="accountLocale"
-            value={locale}
-            onChange={(event) => setDraft(event.target.value)}
-          >
-            <option value="en">{m.language_en()}</option>
-            <option value="ko">{m.language_ko()}</option>
-          </select>
-        </Field>
-        {error ? (
-          <p className="text-sm text-destructive" role="alert">
-            {error}
-          </p>
-        ) : null}
-        <PendingButton type="submit" pending={submit.pending}>
-          {m.action_save()}
-        </PendingButton>
-      </form>
-      <h2 className="mt-8 mb-2 font-medium">{m.account_passkeys()}</h2>
+      <h2 className="mt-8 mb-2 font-medium">{t("account_passkeys")}</h2>
       {(account.data?.passkeys.length ?? 0) === 0 ? (
         <p className="text-sm text-muted-foreground">
-          {m.account_passkey_empty()}
+          {t("account_passkey_empty")}
         </p>
       ) : null}
       {account.data?.passkeys.map((key) => (
@@ -869,8 +813,8 @@ export function AccountPage() {
       ))}
       <p className="mt-4 text-sm">
         {account.data?.totpEnabled
-          ? m.account_totp_disable()
-          : m.account_totp_enable()}
+          ? t("account_totp_disable")
+          : t("account_totp_enable")}
       </p>
     </>
   );
@@ -880,12 +824,12 @@ export function NotFoundPage() {
   const navigate = useNavigate();
   return (
     <div className="p-10">
-      <p>{m.error_not_found()}</p>
+      <p>{t("error_not_found")}</p>
       <Button className="mt-4" onClick={() => navigate({ to: "/console" })}>
-        {m.nav_dashboard()}
+        {t("nav_dashboard")}
       </Button>
       <Link to="/login" className="ml-3 text-sm">
-        {m.action_sign_in()}
+        {t("action_sign_in")}
       </Link>
     </div>
   );

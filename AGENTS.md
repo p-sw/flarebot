@@ -6,10 +6,10 @@ Flarebot is a self-hosted uptime monitor and status page that runs on Cloudflare
 
 Edit only `brand/` when the task is a rebrand, a copy change, a motion change, or an ejected component. That directory holds:
 
-- `brand/brand.config.ts` — product name, logo paths, default locale, motion preset name, links
+- `brand/brand.config.ts` — logo paths, motion preset name, links. The visible product name is `messages.app_name` in the locale file
 - `brand/tokens.css` — colors mapped onto the shadcn variables
 - `brand/motion.ts` — springs (soft, snappy, drawer), page transition, stagger, distance, sidebar duration
-- `brand/copy/<locale>.json` — strings that override the locale catalogs
+- `brand/locale.json` — the only user-facing copy file. `lang` sets `<html lang>` and `Intl` formatting
 - `brand/assets/` — logos
 - `brand/overrides/` — slot components (header, footer, status hero, empty state, login backdrop)
 - `brand/ui/` — components copied out of `src/ui/` with `pnpm eject`
@@ -24,7 +24,7 @@ cp .dev.vars.example .dev.vars
 pnpm dev
 pnpm typecheck
 pnpm test
-pnpm i18n:check
+pnpm copy:check
 pnpm lint:lang
 pnpm brand:check
 pnpm brand:preview
@@ -34,21 +34,21 @@ pnpm brand:preview
 
 ## Skills
 
-| Skill                      | Use when                                              |
-| -------------------------- | ----------------------------------------------------- |
-| `rebrand`                  | Changing name, color, type, motion, or marketing copy |
-| `eject-component`          | A deployer needs to restyle one control               |
-| `upgrade-flarebot`         | Pulling upstream without losing `brand/`              |
-| `add-locale`               | Adding an admin UI language                           |
-| `add-notification-channel` | Adding a notification driver                          |
-| `add-monitor-type`         | Adding a check type                                   |
-| `add-mail-driver`          | Adding an outbound mail transport                     |
+| Skill                      | Use when                                               |
+| -------------------------- | ------------------------------------------------------ |
+| `rebrand`                  | Changing name, color, type, motion, or marketing copy  |
+| `eject-component`          | A deployer needs to restyle one control                |
+| `upgrade-flarebot`         | Pulling upstream without losing `brand/`               |
+| `translate-ui`             | Translating the product by editing `brand/locale.json` |
+| `add-notification-channel` | Adding a notification driver                           |
+| `add-monitor-type`         | Adding a check type                                    |
+| `add-mail-driver`          | Adding an outbound mail transport                      |
 
 Claude Code reads the same files through `CLAUDE.md` and `.claude/skills`, which point at this guide and `.agents/skills`.
 
 ## Repository language
 
-English is the language of the repository: docs, skills, comments, commit messages, and pull requests. Other languages belong in `locales/<code>.json`, `brand/copy/<code>.json`, and optional `README.<locale>.md` files. `pnpm lint:lang` enforces that.
+English is the language of the repository: docs, skills, comments, commit messages, and pull requests. The one place a fork may use another language is `brand/locale.json`. `pnpm lint:lang` enforces that. There is no language picker and no second catalog.
 
 ## Checks and alerts
 

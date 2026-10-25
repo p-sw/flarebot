@@ -4,7 +4,7 @@ Flarebot is licensed under MIT. By contributing you agree that your changes are 
 
 ## Language
 
-Write issues, pull requests, commit messages, docs, skills, and code comments in English. Translations belong in `locales/` and `brand/copy/`. Optional translated readmes use the name `README.<locale>.md`.
+Write issues, pull requests, commit messages, docs, skills, and code comments in English. The only translated file a fork keeps is `brand/locale.json`.
 
 ## Commits
 
@@ -17,13 +17,13 @@ Before you open a pull request:
 ```bash
 pnpm lint
 pnpm lint:lang
-pnpm i18n:check
+pnpm copy:check
 pnpm typecheck
 pnpm test
 pnpm build
 ```
 
-GitHub Actions runs those commands as parallel jobs, plus Playwright. Pre-push runs the Vitest suites, `i18n:check`, and the production build. `pnpm test:e2e` is the browser smoke test (`pnpm exec playwright install chromium` first). `pnpm brand:preview` is separate and is not part of that smoke test.
+GitHub Actions runs those commands as parallel jobs, plus Playwright. Pre-push runs the Vitest suites, `copy:check`, and the production build. `pnpm test:e2e` is the browser smoke test (`pnpm exec playwright install chromium` first). `pnpm brand:preview` is separate and is not part of that smoke test.
 
 ## Branding versus product code
 
