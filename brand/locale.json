@@ -270,7 +270,7 @@
     "monitor_fallback_name": "Monitor",
     "notify_reason_unknown": "unknown",
     "notify_reason_test": "test",
-    "error_setup_unavailable": "SETUP_SECRET is not configured.",
+    "error_setup_unavailable": "The setup secret is not configured.",
     "error_session_not_stored": "Session was not stored.",
     "error_bad_credentials": "Email or password is incorrect.",
     "error_passkey_missing": "Missing passkey response",
