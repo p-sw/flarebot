@@ -30,7 +30,7 @@ test("email test uses the unsaved form and explains a blocked host", async ({
   await mail.getByLabel("Username").fill("bot");
   await mail.getByLabel("Password").fill("secret");
   await mail.getByLabel("From name").fill("Flarebot");
-  await mail.getByLabel("From address").fill("bot@example.com");
+  await mail.locator('input[name="from"]').fill("bot@example.com");
   await expect(mail.getByLabel("Send a test to")).toHaveValue("");
   await expect(
     page.getByText("Send test uses the values in this form."),
