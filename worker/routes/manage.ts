@@ -73,6 +73,7 @@ import {
 import { inviteMail, resetMail, testMail } from "../notify/copy";
 import { deliverChannel, sampleChannelText } from "../notify/dispatch";
 import { instanceName, readSetting, writeSetting } from "../settings-store";
+import { createStatusPage, replaceStatusPage } from "../status/persist";
 import { loadPublicStatus, loadRootPublicStatus } from "../status/public";
 import { setServeAtRoot } from "../status/root";
 
@@ -333,34 +334,37 @@ export function registerManage(app: Hono<AppEnv>): void {
     if (clash) throw new ApiError(409, "conflict", t("error_slug_taken"));
     const id = crypto.randomUUID();
     const now = Date.now();
-    await db.insert(statusPages).values({
-      id,
-      organizationId: actor.organizationId,
-      slug: body.slug,
-      published: body.published,
-      ...legacyLocaleColumns(),
-      title: body.title,
-      description: body.description,
-      footer: body.footer,
-      banner: body.banner,
-      logoUrl: body.logoUrl || null,
-      accent: body.accent || null,
-      createdAt: now,
-      updatedAt: now,
-    });
-    for (const item of body.items) {
-      await db.insert(statusPageItems).values({
+    const legacy = legacyLocaleColumns();
+    await createStatusPage(
+      c.env,
+      {
+        id,
+        organizationId: actor.organizationId,
+        slug: body.slug,
+        published: body.published,
+        serveAtRoot: Boolean(body.serveAtRoot),
+        defaultLocale: legacy.defaultLocale,
+        localesJson: legacy.localesJson,
+        sourceLocale: legacy.sourceLocale,
+        title: body.title,
+        description: body.description,
+        footer: body.footer,
+        banner: body.banner,
+        i18nJson: legacy.i18nJson,
+        logoUrl: body.logoUrl || null,
+        accent: body.accent || null,
+        createdAt: now,
+        updatedAt: now,
+      },
+      body.items.map((item) => ({
         id: item.id ?? crypto.randomUUID(),
         pageId: id,
         monitorId: item.monitorId,
         position: item.position,
         groupName: item.groupName,
         displayName: item.displayName,
-        sourceLocale: textLang,
-        i18nJson: "{}",
-      });
-    }
-    if (body.serveAtRoot) await setServeAtRoot(c.env, id, true);
+      })),
+    );
     await audit(
       c.env,
       actor,
@@ -381,11 +385,17 @@ export function registerManage(app: Hono<AppEnv>): void {
       actor.organizationId,
       c.req.param("id"),
     );
-    const items = await getDb(c.env.DB)
+    const db = getDb(c.env.DB);
+    const items = await db
       .select()
       .from(statusPageItems)
       .where(eq(statusPageItems.pageId, page.id));
     items.sort((a, b) => a.position - b.position);
+    const names = await db
+      .select({ id: monitors.id, name: monitors.name })
+      .from(monitors)
+      .where(eq(monitors.organizationId, actor.organizationId));
+    const nameById = new Map(names.map((row) => [row.id, row.name]));
     return c.json({
       id: page.id,
       slug: page.slug,
@@ -400,6 +410,7 @@ export function registerManage(app: Hono<AppEnv>): void {
       items: items.map((item) => ({
         id: item.id,
         monitorId: item.monitorId,
+        monitorName: nameById.get(item.monitorId) ?? "",
         position: item.position,
         groupName: item.groupName,
         displayName: item.displayName,
@@ -434,43 +445,36 @@ export function registerManage(app: Hono<AppEnv>): void {
       )
       .get();
     if (clash) throw new ApiError(409, "conflict", t("error_slug_taken"));
-    await db
-      .update(statusPages)
-      .set({
+    const now = Date.now();
+    const touchRoot = !body.published || typeof body.serveAtRoot === "boolean";
+    const serveAtRoot = body.published
+      ? (body.serveAtRoot ?? current.serveAtRoot)
+      : false;
+    await replaceStatusPage(
+      c.env,
+      {
+        id: current.id,
         slug: body.slug,
         published: body.published,
+        serveAtRoot,
+        touchRoot,
         title: body.title,
         description: body.description,
         footer: body.footer,
         banner: body.banner,
         logoUrl: body.logoUrl || null,
         accent: body.accent || null,
-        updatedAt: Date.now(),
-      })
-      .where(eq(statusPages.id, current.id));
-    await db
-      .delete(statusPageItems)
-      .where(eq(statusPageItems.pageId, current.id));
-    for (const item of body.items) {
-      await db.insert(statusPageItems).values({
+        updatedAt: now,
+      },
+      body.items.map((item) => ({
         id: item.id ?? crypto.randomUUID(),
         pageId: current.id,
         monitorId: item.monitorId,
         position: item.position,
         groupName: item.groupName,
         displayName: item.displayName,
-        sourceLocale: textLang,
-        i18nJson: "{}",
-      });
-    }
-    const serveAtRoot = body.published
-      ? (body.serveAtRoot ?? current.serveAtRoot)
-      : false;
-    if (!body.published) {
-      if (current.serveAtRoot) await setServeAtRoot(c.env, current.id, false);
-    } else if (typeof body.serveAtRoot === "boolean") {
-      await setServeAtRoot(c.env, current.id, body.serveAtRoot);
-    }
+      })),
+    );
     await audit(
       c.env,
       actor,

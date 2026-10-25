@@ -1,0 +1,760 @@
+// SPDX-License-Identifier: MIT
+
+import AppHeader from "@brand/overrides/AppHeader";
+import {
+  duplicateSectionNames,
+  isStatusSlug,
+  itemsFromSections,
+  type LayoutSection,
+  sectionsFromItems,
+  slugFromTitle,
+  statusItemLabel,
+  type TextMap,
+} from "@shared/status-layout";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Link,
+  useBlocker,
+  useNavigate,
+  useParams,
+  useSearch,
+} from "@tanstack/react-router";
+import { motion } from "motion/react";
+import { type ReactNode, useId, useRef, useState } from "react";
+import { ApiClientError, api } from "../lib/api";
+import {
+  monitorsQuery,
+  type StatusPageDetail,
+  statusPageQuery,
+} from "../lib/queries";
+import { useToggleLock } from "../lib/toggle-guard";
+import { useSubmitGuard } from "../lib/use-submit-guard";
+import { useMotionPrefs } from "../motion/page";
+import { m } from "../paraglide/messages.js";
+import { Button } from "../ui/button";
+import { ConfirmDialog } from "../ui/confirm-dialog";
+import { Input } from "../ui/input";
+import { PendingButton } from "../ui/pending-button";
+import { ContentSkeleton } from "../ui/skeleton";
+import { Switch } from "../ui/switch";
+import { Textarea } from "../ui/textarea";
+import { Field } from "./fields";
+import { RootSwitch, rootToggleError } from "./root-switch";
+import { StatusLayoutEditor } from "./status-layout-editor";
+
+type Draft = {
+  title: string;
+  slug: string;
+  description: string;
+  footer: string;
+  banner: string;
+  published: boolean;
+  serveAtRoot: boolean;
+  logoUrl: string;
+  accent: string;
+  defaultLocale: string;
+  sourceLocale: string;
+  locales: string[];
+  i18n: TextMap;
+  sections: LayoutSection[];
+};
+
+type FieldErrors = {
+  title?: string;
+  slug?: string;
+  logoUrl?: string;
+  accent?: string;
+  sections?: string;
+};
+
+function emptyDraft(): Draft {
+  return {
+    title: "",
+    slug: "",
+    description: "",
+    footer: "",
+    banner: "",
+    published: true,
+    serveAtRoot: false,
+    logoUrl: "",
+    accent: "",
+    defaultLocale: "en",
+    sourceLocale: "en",
+    locales: ["en"],
+    i18n: {},
+    sections: [],
+  };
+}
+
+function draftFromPage(page: StatusPageDetail): Draft {
+  return {
+    title: page.title,
+    slug: page.slug,
+    description: page.description,
+    footer: page.footer,
+    banner: page.banner,
+    published: page.published,
+    serveAtRoot: page.serveAtRoot,
+    logoUrl: page.logoUrl ?? "",
+    accent: page.accent ?? "",
+    defaultLocale: page.defaultLocale,
+    sourceLocale: page.sourceLocale,
+    locales: page.locales,
+    i18n: page.i18n ?? {},
+    sections: sectionsFromItems(page.items),
+  };
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function validate(draft: Draft): FieldErrors {
+  const errors: FieldErrors = {};
+  if (!draft.title.trim()) errors.title = m.page_title_required();
+  if (!isStatusSlug(draft.slug.trim().toLowerCase()))
+    errors.slug = m.page_slug_invalid();
+  if (draft.logoUrl.trim() && !isHttpUrl(draft.logoUrl.trim()))
+    errors.logoUrl = m.page_logo_invalid();
+  if (draft.accent.trim() && !/^#[0-9a-fA-F]{6}$/.test(draft.accent.trim()))
+    errors.accent = m.page_accent_invalid();
+  if (duplicateSectionNames(draft.sections))
+    errors.sections = m.page_sections_duplicate();
+  return errors;
+}
+
+function commit(draft: Draft): Draft {
+  return {
+    ...draft,
+    title: draft.title.trim(),
+    slug: draft.slug.trim().toLowerCase(),
+    logoUrl: draft.logoUrl.trim(),
+    accent: draft.accent.trim(),
+    sections: draft.sections
+      .filter((section) => section.items.length > 0)
+      .map((section) => ({
+        ...section,
+        name: section.name.trim(),
+        items: section.items.map((item) => ({
+          ...item,
+          displayName: item.displayName.trim(),
+        })),
+      })),
+  };
+}
+
+function Described({
+  label,
+  hint,
+  error,
+  children,
+}: {
+  label: string;
+  hint: string;
+  error?: string;
+  children: (describedBy: string) => ReactNode;
+}) {
+  const hintId = useId();
+  const errorId = useId();
+  const describedBy = error ? `${hintId} ${errorId}` : hintId;
+  return (
+    <div className="grid min-w-0 gap-1.5">
+      <Field label={label}>{children(describedBy)}</Field>
+      <p id={hintId} className="text-xs text-muted-foreground">
+        {hint}
+      </p>
+      {error ? (
+        <p id={errorId} role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function StatusPageForm({
+  mode,
+  page,
+  monitors,
+  created,
+}: {
+  mode: "create" | "edit";
+  page?: StatusPageDetail;
+  monitors: { id: string; name: string }[];
+  created?: boolean;
+}) {
+  const navigate = useNavigate();
+  const client = useQueryClient();
+  const motionPrefs = useMotionPrefs();
+  const submit = useSubmitGuard();
+  const toggles = useToggleLock();
+  const skip = useRef(false);
+  const slugEdited = useRef(mode === "edit");
+  const loaded = useRef(page?.id ?? "");
+  const [snapshot, setSnapshot] = useState(() => {
+    const draft =
+      mode === "create" ? emptyDraft() : page ? draftFromPage(page) : null;
+    return { draft, baseline: JSON.stringify(draft) };
+  });
+  const draft = snapshot.draft;
+  const baseline = snapshot.baseline;
+  function setDraft(
+    next: Draft | null | ((current: Draft | null) => Draft | null),
+  ) {
+    setSnapshot((current) => {
+      const resolved = typeof next === "function" ? next(current.draft) : next;
+      return { ...current, draft: resolved };
+    });
+  }
+  function setBaseline(next: string) {
+    setSnapshot((current) => ({ ...current, baseline: next }));
+  }
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [rootError, setRootError] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  if (mode === "edit" && page && loaded.current !== page.id) {
+    loaded.current = page.id;
+    const next = draftFromPage(page);
+    setDraft(next);
+    setBaseline(JSON.stringify(next));
+  }
+  const dirty = JSON.stringify(draft) !== baseline;
+  const blocker = useBlocker({
+    shouldBlockFn: () => dirty && !skip.current,
+    withResolver: true,
+    enableBeforeUnload: () => dirty && !skip.current,
+  });
+  if (!draft) return <ContentSkeleton />;
+  const droppedEmpty =
+    draft.sections.some((section) => section.items.length === 0) &&
+    draft.sections.some((section) => section.items.length > 0);
+
+  function update(patch: Partial<Draft>) {
+    setDraft((current) => (current ? { ...current, ...patch } : current));
+    setNotice("");
+  }
+
+  async function save() {
+    if (!draft) return;
+    const nextErrors = validate(draft);
+    setErrors(nextErrors);
+    setFormError("");
+    if (Object.keys(nextErrors).length > 0 || !draft) return;
+    const saved = commit(draft);
+    const emptyRemoved = draft.sections.length !== saved.sections.length;
+    await submit.run(async () => {
+      try {
+        const body = {
+          slug: saved.slug,
+          published: saved.published,
+          ...(mode === "create"
+            ? { serveAtRoot: saved.published && saved.serveAtRoot }
+            : {}),
+          defaultLocale: saved.defaultLocale,
+          locales: saved.locales,
+          sourceLocale: saved.sourceLocale,
+          title: saved.title,
+          description: saved.description,
+          footer: saved.footer,
+          banner: saved.banner,
+          i18n: saved.i18n,
+          logoUrl: saved.logoUrl,
+          accent: saved.accent,
+          items: itemsFromSections(saved.sections, saved.sourceLocale),
+        };
+        if (mode === "create") {
+          const createdPage = await api<{ id: string }>("/api/status-pages", {
+            method: "POST",
+            body: JSON.stringify(body),
+          });
+          skip.current = true;
+          await client.invalidateQueries({ queryKey: ["pages"] });
+          await navigate({
+            to: "/console/status-pages/$id",
+            params: { id: createdPage.id },
+            search: { created: 1 },
+          });
+          return;
+        }
+        if (!page) return;
+        await api(`/api/status-pages/${page.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        });
+        setDraft(saved);
+        setBaseline(JSON.stringify(saved));
+        setNotice(
+          emptyRemoved ? `${m.saved()} ${m.page_empty_sections()}` : m.saved(),
+        );
+        await client.invalidateQueries({ queryKey: ["pages"] });
+        await client.invalidateQueries({ queryKey: ["status-page", page.id] });
+      } catch (cause) {
+        if (cause instanceof ApiClientError && cause.status === 409) {
+          setErrors((current) => ({
+            ...current,
+            slug: m.page_slug_conflict(),
+          }));
+          return;
+        }
+        setFormError(
+          cause instanceof ApiClientError ? cause.message : m.error_generic(),
+        );
+      }
+    });
+  }
+
+  async function setRoot(serveAtRoot: boolean) {
+    if (!page) return;
+    setRootError("");
+    await toggles.run("root", async () => {
+      try {
+        await api(`/api/status-pages/${page.id}/root`, {
+          method: "PUT",
+          body: JSON.stringify({ serveAtRoot }),
+        });
+        await client.invalidateQueries({ queryKey: ["pages"] });
+        await client.invalidateQueries({ queryKey: ["status-page", page.id] });
+      } catch (cause) {
+        setRootError(rootToggleError(cause));
+        await client.invalidateQueries({ queryKey: ["pages"] });
+        await client.invalidateQueries({ queryKey: ["status-page", page.id] });
+      }
+    });
+  }
+
+  const publicHref = page ? (page.serveAtRoot ? "/" : `/s/${page.slug}`) : "";
+  const slugDirty = page ? draft.slug.trim() !== page.slug : false;
+
+  return (
+    <>
+      <AppHeader
+        title={mode === "create" ? m.page_new() : draft.title || m.page_edit()}
+        actions={
+          <PendingButton
+            type="button"
+            pending={submit.pending}
+            disabled={!dirty}
+            onClick={() => void save()}
+          >
+            {mode === "create" ? m.page_create() : m.action_save()}
+          </PendingButton>
+        }
+      />
+      <Link
+        to="/console/status-pages"
+        className="mb-4 inline-block text-sm text-muted-foreground"
+      >
+        {m.page_back()}
+      </Link>
+      <p className="mb-4 max-w-2xl text-sm text-muted-foreground">
+        {mode === "create" ? m.page_create_intro() : m.page_edit_intro()}
+      </p>
+      {created ? (
+        <motion.p
+          role="status"
+          className="mb-4 rounded-lg border border-border bg-card px-3 py-2 text-sm"
+          initial={
+            motionPrefs.still ? false : { opacity: 0, y: motionPrefs.distance }
+          }
+          animate={{ opacity: 1, y: 0 }}
+          transition={motionPrefs.snappy}
+        >
+          {m.page_created()}
+        </motion.p>
+      ) : null}
+      <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <form
+          className="grid min-w-0 gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save();
+          }}
+        >
+          <Described
+            label={m.page_title()}
+            hint={m.page_title_hint()}
+            error={errors.title}
+          >
+            {(describedBy) => (
+              <Input
+                name="title"
+                value={draft.title}
+                maxLength={160}
+                aria-describedby={describedBy}
+                aria-invalid={Boolean(errors.title)}
+                onChange={(event) => {
+                  const title = event.target.value;
+                  const slug =
+                    mode === "create" && !slugEdited.current
+                      ? slugFromTitle(title)
+                      : draft.slug;
+                  update({ title, slug });
+                  setErrors((current) => ({ ...current, title: undefined }));
+                }}
+              />
+            )}
+          </Described>
+          <Described
+            label={m.page_slug()}
+            hint={m.page_slug_hint()}
+            error={errors.slug}
+          >
+            {(describedBy) => (
+              <Input
+                name="slug"
+                value={draft.slug}
+                maxLength={60}
+                aria-describedby={describedBy}
+                aria-invalid={Boolean(errors.slug)}
+                onChange={(event) => {
+                  slugEdited.current = true;
+                  update({ slug: event.target.value });
+                  setErrors((current) => ({ ...current, slug: undefined }));
+                }}
+              />
+            )}
+          </Described>
+          <Described
+            label={m.page_description()}
+            hint={m.page_description_hint()}
+          >
+            {(describedBy) => (
+              <Textarea
+                name="description"
+                value={draft.description}
+                maxLength={2000}
+                aria-describedby={describedBy}
+                onChange={(event) =>
+                  update({ description: event.target.value })
+                }
+              />
+            )}
+          </Described>
+          <Described
+            label={m.page_announcement()}
+            hint={m.page_announcement_hint()}
+          >
+            {(describedBy) => (
+              <Textarea
+                name="announcement"
+                value={draft.banner}
+                maxLength={500}
+                aria-describedby={describedBy}
+                onChange={(event) => update({ banner: event.target.value })}
+              />
+            )}
+          </Described>
+          <Described label={m.page_footer()} hint={m.page_footer_hint()}>
+            {(describedBy) => (
+              <Textarea
+                name="footer"
+                value={draft.footer}
+                maxLength={2000}
+                aria-describedby={describedBy}
+                onChange={(event) => update({ footer: event.target.value })}
+              />
+            )}
+          </Described>
+          <Described
+            label={m.page_logo()}
+            hint={m.page_logo_hint()}
+            error={errors.logoUrl}
+          >
+            {(describedBy) => (
+              <Input
+                name="logoUrl"
+                value={draft.logoUrl}
+                maxLength={2000}
+                placeholder="https://"
+                aria-describedby={describedBy}
+                aria-invalid={Boolean(errors.logoUrl)}
+                onChange={(event) => {
+                  update({ logoUrl: event.target.value });
+                  setErrors((current) => ({ ...current, logoUrl: undefined }));
+                }}
+              />
+            )}
+          </Described>
+          <Described
+            label={m.page_accent()}
+            hint={m.page_accent_hint()}
+            error={errors.accent}
+          >
+            {(describedBy) => (
+              <Input
+                name="accent"
+                value={draft.accent}
+                maxLength={7}
+                placeholder="#2563eb"
+                aria-describedby={describedBy}
+                aria-invalid={Boolean(errors.accent)}
+                onChange={(event) => {
+                  update({ accent: event.target.value });
+                  setErrors((current) => ({ ...current, accent: undefined }));
+                }}
+              />
+            )}
+          </Described>
+          <div className="grid gap-2 rounded-lg border border-border p-3">
+            {/* biome-ignore lint/a11y/noLabelWithoutControl: Switch is the control */}
+            <label className="flex items-center gap-3 text-sm">
+              <Switch
+                checked={draft.published}
+                disabled={submit.pending}
+                onCheckedChange={(checked) =>
+                  update({
+                    published: checked,
+                    serveAtRoot: checked ? draft.serveAtRoot : false,
+                  })
+                }
+              />
+              <span>{m.page_published()}</span>
+            </label>
+            <p className="text-xs text-muted-foreground">
+              {m.page_published_hint()}
+            </p>
+            {mode === "create" ? (
+              <>
+                {/* biome-ignore lint/a11y/noLabelWithoutControl: Switch is the control */}
+                <label className="mt-2 flex items-center gap-3 text-sm">
+                  <Switch
+                    checked={draft.serveAtRoot}
+                    disabled={submit.pending || !draft.published}
+                    onCheckedChange={(checked) =>
+                      update({ serveAtRoot: checked })
+                    }
+                  />
+                  <span>{m.page_root_label()}</span>
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  {m.page_root_create_hint()}
+                </p>
+              </>
+            ) : page ? (
+              <div className="mt-2 grid gap-2">
+                <RootSwitch
+                  checked={page.serveAtRoot}
+                  pending={toggles.pendingKey === "root"}
+                  disabled={
+                    submit.pending ||
+                    toggles.pending ||
+                    !page.published ||
+                    !draft.published
+                  }
+                  onCheckedChange={(checked) => void setRoot(checked)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {m.page_root_note({ slug: page.slug })}
+                </p>
+                {!draft.published && page.serveAtRoot ? (
+                  <p className="text-xs text-muted-foreground">
+                    {m.page_root_unpublish_hint()}
+                  </p>
+                ) : null}
+                {rootError ? (
+                  <p role="alert" className="text-sm text-destructive">
+                    {rootError}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+          <StatusLayoutEditor
+            sections={draft.sections}
+            monitors={monitors}
+            disabled={submit.pending}
+            onChange={(sections) => {
+              update({ sections });
+              setErrors((current) => ({ ...current, sections: undefined }));
+            }}
+          />
+          {errors.sections ? (
+            <p role="alert" className="text-sm text-destructive">
+              {errors.sections}
+            </p>
+          ) : null}
+          {droppedEmpty ? (
+            <p className="text-xs text-muted-foreground">
+              {m.page_empty_sections()}
+            </p>
+          ) : null}
+          {formError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {formError}
+            </p>
+          ) : null}
+          {notice ? (
+            <p role="status" className="text-sm">
+              {notice}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+              {dirty ? m.page_unsaved() : m.page_saved_clean()}
+            </p>
+            <PendingButton
+              type="submit"
+              pending={submit.pending}
+              disabled={!dirty}
+            >
+              {mode === "create" ? m.page_create() : m.action_save()}
+            </PendingButton>
+            {mode === "edit" && page ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={submit.pending}
+                onClick={() => setConfirmDelete(true)}
+              >
+                {m.page_delete()}
+              </Button>
+            ) : null}
+          </div>
+        </form>
+        <aside className="min-w-0 rounded-lg border border-border bg-card p-4 lg:sticky lg:top-20 lg:self-start">
+          <h2 className="font-medium">{m.page_preview()}</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {m.page_preview_hint()}
+          </p>
+          {draft.logoUrl.trim() && isHttpUrl(draft.logoUrl.trim()) ? (
+            <img
+              src={draft.logoUrl.trim()}
+              alt=""
+              className="mt-4 h-10 max-w-full object-contain"
+            />
+          ) : null}
+          {/^#[0-9a-fA-F]{6}$/.test(draft.accent.trim()) ? (
+            <div
+              className="mt-4 h-1 w-16 rounded-full"
+              style={{ backgroundColor: draft.accent.trim() }}
+            />
+          ) : null}
+          <h3 className="mt-4 break-words text-xl font-medium">
+            {draft.title.trim() || m.page_title()}
+          </h3>
+          {draft.description.trim() ? (
+            <p className="mt-2 break-words text-sm text-muted-foreground">
+              {draft.description}
+            </p>
+          ) : null}
+          {draft.banner.trim() ? (
+            <p className="mt-3 break-words rounded-lg bg-muted px-3 py-2 text-sm">
+              {draft.banner}
+            </p>
+          ) : null}
+          <div className="mt-4 grid gap-3">
+            {draft.sections.map((section) => (
+              <section key={section.key} className="min-w-0">
+                {section.name.trim() ? (
+                  <h4 className="break-words text-sm font-medium text-muted-foreground">
+                    {section.name.trim()}
+                  </h4>
+                ) : null}
+                <ol className="mt-1 grid gap-1">
+                  {section.items.map((item) => (
+                    <li key={item.key} className="break-words text-sm">
+                      {statusItemLabel(item.displayName, item.monitorName) ||
+                        m.page_name_fallback()}
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            ))}
+          </div>
+          {draft.footer.trim() ? (
+            <p className="mt-4 break-words text-xs text-muted-foreground">
+              {draft.footer}
+            </p>
+          ) : null}
+          <div className="mt-4">
+            {mode === "create" ? (
+              <p className="text-sm text-muted-foreground">
+                {m.page_public_after_create()}
+              </p>
+            ) : !page?.published ? (
+              <p className="text-sm text-muted-foreground">
+                {m.page_public_unpublished()}
+              </p>
+            ) : (
+              <>
+                <a className="text-sm" href={publicHref}>
+                  {m.page_view_public()}
+                </a>
+                {slugDirty ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {m.page_public_slug_dirty()}
+                  </p>
+                ) : null}
+              </>
+            )}
+          </div>
+        </aside>
+      </div>
+      <ConfirmDialog
+        open={blocker.status === "blocked"}
+        onOpenChange={(open) => {
+          if (!open && blocker.status === "blocked") blocker.reset();
+        }}
+        title={m.page_leave_title()}
+        description={m.page_leave_body()}
+        confirmLabel={m.page_leave_confirm()}
+        cancelLabel={m.page_stay()}
+        onConfirm={() => {
+          if (blocker.status === "blocked") blocker.proceed();
+        }}
+      />
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={m.page_delete_title()}
+        description={m.page_delete_body()}
+        confirmLabel={m.action_delete()}
+        cancelLabel={m.action_cancel()}
+        pending={submit.pending}
+        onConfirm={() => {
+          if (!page) return;
+          void submit.run(async () => {
+            await api(`/api/status-pages/${page.id}`, { method: "DELETE" });
+            skip.current = true;
+            await client.invalidateQueries({ queryKey: ["pages"] });
+            await navigate({ to: "/console/status-pages" });
+          });
+        }}
+      />
+    </>
+  );
+}
+
+export function StatusPageCreatePage() {
+  const monitors = useQuery(monitorsQuery);
+  if (monitors.isPending) return <ContentSkeleton />;
+  return (
+    <StatusPageForm mode="create" monitors={monitors.data?.monitors ?? []} />
+  );
+}
+
+export function StatusPageEditPage() {
+  const { id } = useParams({ strict: false }) as { id: string };
+  const search = useSearch({ strict: false }) as { created?: number };
+  const detail = useQuery({ ...statusPageQuery(id), enabled: Boolean(id) });
+  const monitors = useQuery(monitorsQuery);
+  if (detail.isPending || monitors.isPending) return <ContentSkeleton />;
+  if (!detail.data) {
+    return <p className="text-sm">{m.error_not_found()}</p>;
+  }
+  return (
+    <StatusPageForm
+      mode="edit"
+      page={detail.data}
+      monitors={monitors.data?.monitors ?? []}
+      created={search.created === 1}
+    />
+  );
+}

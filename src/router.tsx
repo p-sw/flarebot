@@ -20,6 +20,7 @@ import {
   outagesQuery,
   settingsQuery,
   statsQuery,
+  statusPageQuery,
   statusPagesQuery,
   teamQuery,
   tokensQuery,
@@ -52,6 +53,10 @@ import {
   MonitorFormPage,
 } from "./pages/monitors";
 import { PublicStatusPage } from "./pages/public";
+import {
+  StatusPageCreatePage,
+  StatusPageEditPage,
+} from "./pages/status-page-form";
 import { type SessionUser, Shell } from "./shell";
 import { ContentSkeleton } from "./ui/skeleton";
 
@@ -249,12 +254,30 @@ const pagesRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/status-pages",
   loader: () =>
+    queryClient.ensureQueryData(statusPagesQuery).catch(() => undefined),
+  ...pending,
+  component: StatusPagesPage,
+});
+const newPageRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: "/status-pages/new",
+  loader: () =>
+    queryClient.ensureQueryData(monitorsQuery).catch(() => undefined),
+  ...pending,
+  component: StatusPageCreatePage,
+});
+const editPageRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: "/status-pages/$id",
+  validateSearch: (search: Record<string, unknown>): { created?: 1 } =>
+    search.created === 1 || search.created === "1" ? { created: 1 } : {},
+  loader: ({ params }) =>
     Promise.all([
-      queryClient.ensureQueryData(statusPagesQuery),
+      queryClient.ensureQueryData(statusPageQuery(params.id)),
       queryClient.ensureQueryData(monitorsQuery),
     ]).catch(() => undefined),
   ...pending,
-  component: StatusPagesPage,
+  component: StatusPageEditPage,
 });
 const channelsRoute = createRoute({
   getParentRoute: () => consoleRoute,
@@ -318,6 +341,8 @@ const routeTree = rootRoute.addChildren([
     newMonitorRoute,
     monitorRoute,
     pagesRoute,
+    newPageRoute,
+    editPageRoute,
     channelsRoute,
     teamRoute,
     tokensRoute,

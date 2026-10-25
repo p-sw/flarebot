@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { ROLES, SCOPES } from "./permissions";
+import { statusSlugPattern } from "./status-layout";
 
 const privateHost =
   /^(localhost|.*\.local|.*\.internal|metadata\.google\.internal|0\.0\.0\.0|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+|\[?::1\]?|\[?f[cd][0-9a-f:]*\]?|\[?fe80:)/i;
@@ -219,10 +220,7 @@ export function parseChannelConfig(
   }
 }
 
-const slugSchema = z
-  .string()
-  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-  .max(60);
+const slugSchema = z.string().regex(statusSlugPattern).max(60);
 
 export const statusPageWriteSchema = z.object({
   slug: slugSchema,

@@ -14,6 +14,8 @@ type PublicPage = {
   description: string;
   footer: string;
   banner: string;
+  logoUrl?: string | null;
+  accent?: string | null;
   overall: "operational" | "degraded" | "outage" | "empty";
   groups: {
     name: string;
@@ -47,6 +49,19 @@ export function PublicStatusPage() {
   if (!data) return <p className="p-8">{t("loading")}</p>;
   return (
     <div className="mx-auto min-w-0 max-w-3xl px-4 py-10">
+      {data.logoUrl ? (
+        <img
+          src={data.logoUrl}
+          alt=""
+          className="mb-4 h-10 max-w-full object-contain"
+        />
+      ) : null}
+      {data.accent && /^#[0-9a-fA-F]{6}$/.test(data.accent) ? (
+        <div
+          className="mb-4 h-1 w-16 rounded-full"
+          style={{ backgroundColor: data.accent }}
+        />
+      ) : null}
       <StatusHero
         title={data.title}
         description={data.description}
@@ -69,7 +84,7 @@ export function PublicStatusPage() {
                 >
                   <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
                     <h3 className="min-w-0 break-words font-medium">
-                      {item.name}
+                      {item.name || t("monitor_fallback_name")}
                     </h3>
                     <Badge tone={statusTone(item.status)}>
                       {statusLabel(item.status)}
