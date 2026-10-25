@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import {
   duplicateSectionNames,
+  editorItemHeading,
   itemsFromSections,
   type LayoutSection,
   moveMonitor,
@@ -26,6 +27,22 @@ describe("statusItemLabel", () => {
   it("does not invent a label from a section name", () => {
     expect(statusItemLabel("", "")).toBe("");
     expect(statusItemLabel("", "Named probe")).not.toBe("Core");
+  });
+});
+
+describe("editorItemHeading", () => {
+  it("keeps the monitor name visible when a display name is set", () => {
+    expect(editorItemHeading("Main Web", "Edge API")).toEqual({
+      title: "Edge API",
+      monitorName: "Main Web",
+    });
+  });
+
+  it("reverts the title to the monitor name when the override is cleared", () => {
+    expect(editorItemHeading("Main Web", "   ")).toEqual({
+      title: "Main Web",
+      monitorName: "Main Web",
+    });
   });
 });
 

@@ -13,12 +13,19 @@ const monitor = {
   lastResponseMs: 12,
   lastError: null,
   paused: true,
-  config: {},
   intervalSeconds: 60,
+  target: "",
+  config: {},
   timeoutSeconds: 10,
   retries: 2,
   recoveryThreshold: 1,
   channelIds: [] as string[],
+  regions: ["default"],
+  since: null,
+  lastCheckAt: null,
+  createdAt: 1,
+  updatedAt: 2,
+  statusPages: [],
 };
 
 function client() {

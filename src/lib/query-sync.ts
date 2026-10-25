@@ -49,6 +49,8 @@ export function commitMonitor(
               paused: monitor.paused,
               lastResponseMs: monitor.lastResponseMs,
               lastError: monitor.lastError,
+              intervalSeconds: monitor.intervalSeconds,
+              target: monitor.target,
             }
           : item,
       ),

@@ -2,6 +2,7 @@
 
 import { t } from "@shared/copy";
 import {
+  editorItemHeading,
   type LayoutSection,
   moveMonitor,
   moveWithin,
@@ -19,13 +20,6 @@ type DragToken = {
   section: number;
   item: number | null;
 };
-
-function itemLabel(name: string, displayName: string): string {
-  const override = displayName.trim();
-  if (override) return override;
-  if (name.trim()) return name.trim();
-  return t("monitor_fallback_name");
-}
 
 export function StatusLayoutEditor({
   sections,
@@ -231,7 +225,13 @@ export function StatusLayoutEditor({
           ) : (
             <ul className="grid min-w-0 gap-2">
               {section.items.map((item, itemIndex) => {
-                const label = itemLabel(item.monitorName, item.displayName);
+                const heading = editorItemHeading(
+                  item.monitorName,
+                  item.displayName,
+                );
+                const sourceName =
+                  heading.monitorName || t("monitor_fallback_name");
+                const label = heading.title || t("monitor_fallback_name");
                 return (
                   <li
                     key={item.key}
@@ -268,9 +268,14 @@ export function StatusLayoutEditor({
                         >
                           <GripVertical className="h-4 w-4" aria-hidden />
                         </Button>
-                        <p className="min-w-0 flex-1 break-words text-sm font-medium">
-                          {label}
-                        </p>
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words text-sm font-medium">
+                            {label}
+                          </p>
+                          <p className="break-words text-xs text-muted-foreground">
+                            {t("page_monitor_source", { name: sourceName })}
+                          </p>
+                        </div>
                       </div>
                       <div className="flex min-w-0 flex-wrap gap-1">
                         <Button
@@ -391,6 +396,7 @@ export function StatusLayoutEditor({
                       <Input
                         value={item.displayName}
                         maxLength={120}
+                        placeholder={sourceName}
                         disabled={disabled}
                         onChange={(event) =>
                           onChange(
