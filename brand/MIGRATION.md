@@ -1,0 +1,17 @@
+# Brand migrations
+
+## brandApi 1
+
+Current contract:
+
+- `defineBrand` fields: `brandApi`, `name`, `logo.light`, `logo.dark`, `defaultLocale` (`en` or `ko`), `motion` (`calm`, `crisp`, `playful`, `none`), `links.source`.
+- `defineMotion` fields: `spring.soft`, `spring.snappy`, `page` (`slide-up`, `fade`, `none`), `stagger`, `distance`.
+- Slot props:
+  - `AppHeader({ title, actions })`
+  - `AppFooter()` with no props
+  - `StatusHero({ title, description, banner, overall })` where `overall` is `operational`, `degraded`, `outage`, or `empty`
+  - `EmptyState({ action })`
+  - `LoginBackdrop({ children })`
+- Token names in `tokens.css` are the shadcn variables plus `--sidebar`, `--sidebar-foreground`, `--sidebar-muted`, and `--status-*-foreground`.
+
+When a future release bumps `brandApi`, this file will list renamed props and tokens. Until then, keep `brandApi` at `1`.

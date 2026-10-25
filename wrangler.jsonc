@@ -1,0 +1,54 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "flarebot",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-10-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "upload_source_maps": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "traces": {
+      "enabled": true
+    }
+  },
+  // Placeholder so local wrangler and the Deploy to Cloudflare button work
+  // without an account id in git. The button replaces this all-zero id.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "flarebot",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "SCHEDULER", "class_name": "SchedulerShard" },
+      { "name": "MAILER", "class_name": "Mailer" }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SchedulerShard", "Mailer"]
+    }
+  ],
+  "analytics_engine_datasets": [
+    {
+      "binding": "ANALYTICS",
+      "dataset": "flarebot_checks"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/push/*", "/s/*"]
+  },
+  "vars": {
+    "DEFAULT_LOCALE": "en"
+  }
+}

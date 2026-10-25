@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
+import type { HTMLAttributes } from "react";
+import { cn } from "../lib/cn";
+
+const tones = {
+  up: "bg-status-up/15 text-status-up-foreground",
+  down: "bg-status-down/15 text-status-down-foreground",
+  pending: "bg-status-pending/20 text-status-pending-foreground",
+  unknown: "bg-muted text-muted-foreground",
+  paused: "bg-muted text-muted-foreground",
+  neutral: "bg-muted text-muted-foreground",
+};
+
+export function Badge({
+  className,
+  tone = "neutral",
+  ...props
+}: HTMLAttributes<HTMLSpanElement> & { tone?: keyof typeof tones }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+        tones[tone],
+        className,
+      )}
+      {...props}
+    />
+  );
+}

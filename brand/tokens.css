@@ -1,0 +1,56 @@
+/* Deployers edit this file. It maps to the shadcn variables the app reads. */
+
+:root {
+  --background: oklch(0.97 0.012 95);
+  --foreground: oklch(0.27 0.03 210);
+  --card: oklch(0.995 0.004 95);
+  --card-foreground: oklch(0.27 0.03 210);
+  --primary: oklch(0.4 0.07 200);
+  --primary-foreground: oklch(0.98 0.01 95);
+  --muted: oklch(0.93 0.012 95);
+  --muted-foreground: oklch(0.42 0.03 210);
+  --border: oklch(0.86 0.012 95);
+  --input: oklch(0.86 0.012 95);
+  --ring: oklch(0.4 0.07 200);
+  --destructive: oklch(0.5 0.16 28);
+  --destructive-foreground: oklch(0.98 0.01 95);
+  --sidebar: oklch(0.25 0.03 210);
+  --sidebar-foreground: oklch(0.97 0.01 95);
+  --sidebar-muted: oklch(0.78 0.02 200);
+  --status-up: oklch(0.55 0.13 155);
+  --status-up-foreground: oklch(0.32 0.07 155);
+  --status-down: oklch(0.52 0.16 28);
+  --status-down-foreground: oklch(0.38 0.12 28);
+  --status-pending: oklch(0.68 0.12 85);
+  --status-pending-foreground: oklch(0.38 0.08 70);
+  --status-unknown: oklch(0.62 0.02 210);
+  --status-unknown-foreground: oklch(0.36 0.02 210);
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: oklch(0.18 0.02 220);
+  --foreground: oklch(0.96 0.01 95);
+  --card: oklch(0.23 0.02 220);
+  --card-foreground: oklch(0.96 0.01 95);
+  --primary: oklch(0.8 0.09 190);
+  --primary-foreground: oklch(0.2 0.03 210);
+  --muted: oklch(0.28 0.02 220);
+  --muted-foreground: oklch(0.8 0.02 200);
+  --border: oklch(0.34 0.02 220);
+  --input: oklch(0.34 0.02 220);
+  --ring: oklch(0.8 0.09 190);
+  --destructive: oklch(0.72 0.14 28);
+  --destructive-foreground: oklch(0.16 0.02 220);
+  --sidebar: oklch(0.15 0.02 220);
+  --sidebar-foreground: oklch(0.96 0.01 95);
+  --sidebar-muted: oklch(0.78 0.02 200);
+  --status-up: oklch(0.78 0.13 155);
+  --status-up-foreground: oklch(0.88 0.08 155);
+  --status-down: oklch(0.74 0.14 28);
+  --status-down-foreground: oklch(0.9 0.05 28);
+  --status-pending: oklch(0.84 0.11 90);
+  --status-pending-foreground: oklch(0.92 0.06 95);
+  --status-unknown: oklch(0.74 0.02 210);
+  --status-unknown-foreground: oklch(0.88 0.02 210);
+}

@@ -1,0 +1,21 @@
+# Copy to .dev.vars for local `pnpm dev`. Never commit real secrets.
+# Generate a key: node -e "console.log(Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'))"
+
+# Required before the setup wizard will create an owner.
+SETUP_SECRET=change-me-setup-secret
+
+# Required to store SMTP passwords and notification credentials.
+ENCRYPTION_KEY=BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=
+
+# Optional. When set, these override the SMTP values saved in the wizard.
+# SMTP_HOST=smtp.example.com
+# SMTP_PORT=587
+# SMTP_SECURE=starttls
+# SMTP_USER=notifications@example.com
+# SMTP_PASSWORD=
+# MAIL_FROM=notifications@example.com
+# MAIL_FROM_NAME=Flarebot
+
+# Optional. When both are set, setup and login require a Turnstile token.
+# TURNSTILE_SITE_KEY=
+# TURNSTILE_SECRET_KEY=
