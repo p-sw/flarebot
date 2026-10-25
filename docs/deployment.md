@@ -14,7 +14,7 @@ After the button finishes:
 3. Optional: `npx wrangler secret put SMTP_HOST` plus `SMTP_PORT`, `SMTP_SECURE` (`starttls` or `tls`), `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, and `MAIL_FROM_NAME`. These override the database mail settings.
 4. Cloudflare Email Service is not bound in the committed config, because the deploy button does not provision it. Add a `send_email` binding named `EMAIL` later if you choose that driver in Settings.
 
-The `deploy` script builds the app, applies D1 migrations to the remote database, then runs `wrangler deploy`.
+The `deploy` script builds the app, applies D1 migrations to the remote database, then runs `wrangler deploy`. The build deletes `.dev.vars` from `dist/` before deploy. Secrets are not written into the Worker script or the client assets. Set them with `wrangler secret put` so the Worker reads them from `env` at runtime. The Deploy to Cloudflare button runs the same build from a checkout that has no `.dev.vars`.
 
 ## Manual
 

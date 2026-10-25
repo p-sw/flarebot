@@ -11,7 +11,7 @@
   },
   "scripts": {
     "dev": "pnpm i18n:compile && wrangler d1 migrations apply DB --local && vite",
-    "build": "pnpm i18n:compile && vite build",
+    "build": "pnpm i18n:compile && vite build && node scripts/assert-no-secrets.mjs",
     "preview": "vite preview",
     "deploy": "pnpm build && wrangler d1 migrations apply DB --remote && wrangler deploy",
     "typecheck": "pnpm i18n:compile && wrangler types && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
