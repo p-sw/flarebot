@@ -14,7 +14,7 @@ test("pause and resume update every screen without a reload", async ({
   const name = `Pause ${test.info().parallelIndex} ${Date.now().toString(36)}`;
   await createHeartbeat(page, name);
 
-  let release = () => undefined;
+  let release: () => void = () => undefined;
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });

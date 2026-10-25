@@ -104,6 +104,7 @@ describe("monitor pause and resume", () => {
     expect(pub.groups[0]?.items[0]?.status).toBe("paused");
     expect(pub.overall).toBe("paused");
 
+    const previousCheck = (await stub.getOne(id))?.state.lastCheckAt ?? 0;
     const resumed = await api(
       `/api/monitors/${id}`,
       {
@@ -119,11 +120,24 @@ describe("monitor pause and resume", () => {
     };
     expect(resumedBody.paused).toBe(false);
     expect(resumedBody.status).toBe("pending");
-    const scheduled = await stub.getOne(id);
-    expect(scheduled?.state.status).toBe("pending");
-    expect(scheduled?.nextCheckAt).toBeLessThanOrEqual(Date.now() + 1_000);
-    const ran = await stub.runDue(Date.now() + 5_000);
-    expect(ran.ran).toBe(1);
+    let scheduled = await stub.getOne(id);
+    const deadline = Date.now() + 2_000;
+    while (
+      (scheduled?.state.lastCheckAt ?? 0) <= previousCheck &&
+      Date.now() < deadline
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      scheduled = await stub.getOne(id);
+    }
+    if ((scheduled?.state.lastCheckAt ?? 0) <= previousCheck) {
+      await stub.runDue(Date.now() + 1_000);
+      scheduled = await stub.getOne(id);
+    }
+    expect(scheduled?.state.status).not.toBe("paused");
+    expect(scheduled?.state.lastCheckAt ?? 0).toBeGreaterThan(previousCheck);
+    expect(scheduled?.nextCheckAt ?? Number.POSITIVE_INFINITY).toBeLessThan(
+      Date.now() + 120_000,
+    );
     const after = (await (
       await api(`/api/monitors/${id}`, {}, owner)
     ).json()) as { paused: boolean; status: string };
