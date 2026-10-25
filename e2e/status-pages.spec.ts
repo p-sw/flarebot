@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import { createHeartbeat, signIn } from "./session";
 
 const shots = "/opt/cursor/artifacts/screenshots";
@@ -48,8 +48,12 @@ test.describe("status page editor", () => {
     const stamp = Date.now().toString(36);
     const alpha = `Alpha edit ${stamp}`;
     const beta = `Beta edit ${stamp}`;
-    const alphaId = await createHeartbeat(page, alpha);
-    await createHeartbeat(page, beta);
+    const alphaId = await createHttp(
+      page,
+      alpha,
+      `https://alpha-${stamp}.example/health`,
+    );
+    await createHttp(page, beta, `https://beta-${stamp}.example/health`);
     const slug = `edit-${stamp}`;
     const created = await page.request.post("/api/status-pages", {
       headers: {
@@ -78,14 +82,53 @@ test.describe("status page editor", () => {
     await page
       .getByRole("textbox", { name: "Description" })
       .fill("After the edit");
+    const edge = page.getByRole("article", { name: "Edge" });
+    await addMonitor(edge, beta);
+    const betaHandle = edge.getByRole("button", {
+      name: `Drag to reorder ${beta}`,
+    });
+    await betaHandle.dragTo(
+      edge.getByRole("button", { name: `Drag to reorder ${alpha}` }),
+    );
+    const edgeItems = edge.getByRole("list", { name: "Monitors in Edge" });
+    await expect(edgeItems.getByRole("listitem").nth(0)).toContainText(beta);
+    await expect(edgeItems.getByRole("listitem").nth(1)).toContainText(alpha);
+    const betaRow = edgeItems.getByRole("listitem").nth(0);
+    await betaRow
+      .getByRole("textbox", { name: "Display name" })
+      .fill("Public beta");
+    await expect(betaRow.getByText(`Monitor: ${beta}`)).toBeVisible();
     await page.getByRole("button", { name: "Add section" }).click();
-    const names = page.getByRole("textbox", { name: "Section name" });
-    await names.nth(1).fill("Core");
-    const core = page.locator("article").nth(1);
-    await core.getByLabel("Choose a monitor").selectOption({ label: beta });
-    await core.getByRole("button", { name: "Add monitor" }).click();
-    await page.getByRole("button", { name: "Move Core up" }).click();
+    await page
+      .getByRole("textbox", { name: "Section name" })
+      .nth(1)
+      .fill("Core");
+    await edge.getByRole("button", { name: "Actions for Public beta" }).click();
+    await page
+      .getByRole("menuitem", { name: "Move Public beta to the next section" })
+      .click();
+    const core = page.getByRole("article", { name: "Core" });
+    await core.getByRole("button", { name: "Drag to reorder Core" }).focus();
+    await page.keyboard.press("ArrowUp");
+    await expect(page.getByRole("article").first()).toHaveAttribute(
+      "aria-label",
+      "Core",
+    );
+    await page.route("**/api/status-pages/*", async (route) => {
+      if (route.request().method() !== "PATCH") {
+        await route.continue();
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      await route.continue();
+    });
     await page.getByRole("button", { name: "Save" }).first().click();
+    await expect(
+      page.getByRole("button", { name: "Working…" }).first(),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Add section" }),
+    ).toBeDisabled();
     await expect(page.getByText("Saved", { exact: true })).toBeVisible();
     mkdirSync(shots, { recursive: true });
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -93,9 +136,17 @@ test.describe("status page editor", () => {
       path: `${shots}/status-editor-desktop.png`,
       fullPage: true,
     });
+    await page.screenshot({
+      path: `${shots}/status-builder-after-edit-desktop.png`,
+      fullPage: true,
+    });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({
       path: `${shots}/status-editor-mobile.png`,
+      fullPage: true,
+    });
+    await page.screenshot({
+      path: `${shots}/status-builder-after-edit-mobile.png`,
       fullPage: true,
     });
     await expectNoHorizontalOverflow(page);
@@ -108,7 +159,7 @@ test.describe("status page editor", () => {
     await expect(headings.filter({ hasText: "Core" })).toBeVisible();
     await expect(headings.filter({ hasText: "Edge" })).toBeVisible();
     const monitors = page.locator("h3");
-    await expect(monitors.nth(0)).toHaveText(beta);
+    await expect(monitors.nth(0)).toHaveText("Public beta");
     await expect(monitors.nth(1)).toHaveText(alpha);
   });
 
@@ -122,13 +173,11 @@ test.describe("status page editor", () => {
     await page.goto("/console/status-pages/new");
     await page.getByRole("button", { name: "Add section" }).click();
     const section = page.locator("article").first();
-    await section.getByLabel("Choose a monitor").selectOption({ label: name });
-    await section.getByRole("button", { name: "Add monitor" }).click();
+    await addMonitor(section, name);
     const display = section.getByRole("textbox", { name: "Display name" });
     await display.fill("Public edge");
-    await expect(section.getByText("Public edge")).toBeVisible();
+    await expect(display).toHaveValue("Public edge");
     await expect(section.getByText(`Monitor: ${name}`)).toBeVisible();
-    await expect(display).toHaveAttribute("placeholder", name);
     mkdirSync(shots, { recursive: true });
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.screenshot({
@@ -136,7 +185,7 @@ test.describe("status page editor", () => {
       fullPage: true,
     });
     await display.fill("");
-    await expect(section.getByText(name, { exact: true })).toBeVisible();
+    await expect(display).toHaveValue("");
     await expect(section.getByText(`Monitor: ${name}`)).toBeVisible();
     await expect(section.getByText("Public edge")).toHaveCount(0);
   });
@@ -148,8 +197,9 @@ test.describe("status page editor", () => {
     const stamp = Date.now().toString(36);
     const alpha = `Alpha create ${stamp}`;
     const beta = `Beta create ${stamp}`;
-    await createHeartbeat(page, alpha);
-    await createHeartbeat(page, beta);
+    const alphaUrl = `https://alpha-${stamp}.example/health`;
+    await createHttp(page, alpha, alphaUrl);
+    await createHttp(page, beta, `https://beta-${stamp}.example/health`);
     await page.goto("/console/status-pages/new");
     await expect(
       page.getByRole("heading", { name: "New status page" }),
@@ -162,29 +212,67 @@ test.describe("status page editor", () => {
     await page
       .getByRole("textbox", { name: "Description" })
       .fill("Created from the form");
+    await expect(page.getByText("No sections yet")).toBeVisible();
     await page.getByRole("button", { name: "Add section" }).click();
     await page.getByRole("textbox", { name: "Section name" }).fill("Core");
-    const core = page.locator("article").nth(0);
-    await core.getByLabel("Choose a monitor").selectOption({ label: alpha });
-    await core.getByRole("button", { name: "Add monitor" }).click();
+    const core = page.getByRole("article", { name: "Core" });
+    const combo = core.getByRole("combobox", { name: "Choose a monitor" });
+    await combo.click();
+    await combo.fill("zzzz-no-monitor");
+    await expect(
+      page.getByText("No monitors match that search."),
+    ).toBeVisible();
+    await combo.fill(`alpha-${stamp}.example`);
+    await expect(page.getByRole("option", { name: alpha })).toContainText(
+      alphaUrl,
+    );
+    await expect(page.getByRole("option", { name: beta })).toHaveCount(0);
+    mkdirSync(shots, { recursive: true });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.screenshot({
+      path: `${shots}/status-builder-after-picker-desktop.png`,
+      fullPage: true,
+    });
+    await page.getByRole("option", { name: alpha }).click();
+    await expect(core.getByText(`Monitor: ${alpha}`)).toBeVisible();
     await page.getByRole("button", { name: "Add section" }).click();
     await page
       .getByRole("textbox", { name: "Section name" })
       .nth(1)
       .fill("Edge");
-    const edge = page.locator("article").nth(1);
-    await edge.getByLabel("Choose a monitor").selectOption({ label: beta });
-    await edge.getByRole("button", { name: "Add monitor" }).click();
-    await page.getByRole("button", { name: "Move Edge up" }).click();
+    const edge = page.getByRole("article", { name: "Edge" });
+    const edgeCombo = edge.getByRole("combobox", { name: "Choose a monitor" });
+    await edgeCombo.click();
+    await edgeCombo.fill(alpha);
+    await expect(
+      edge.getByText("No monitors match that search."),
+    ).toBeVisible();
+    await edgeCombo.fill(beta);
+    await page.getByRole("option", { name: beta }).click();
+    await edge
+      .getByRole("button", { name: "Drag to reorder Edge" })
+      .dragTo(core.getByRole("button", { name: "Drag to reorder Core" }));
+    await expect(page.getByRole("article").first()).toHaveAttribute(
+      "aria-label",
+      "Edge",
+    );
     mkdirSync(shots, { recursive: true });
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.screenshot({
       path: `${shots}/status-create-desktop.png`,
       fullPage: true,
     });
+    await page.screenshot({
+      path: `${shots}/status-builder-after-create-desktop.png`,
+      fullPage: true,
+    });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({
       path: `${shots}/status-create-mobile.png`,
+      fullPage: true,
+    });
+    await page.screenshot({
+      path: `${shots}/status-builder-after-create-mobile.png`,
       fullPage: true,
     });
     await expectNoHorizontalOverflow(page);
@@ -212,6 +300,34 @@ test.describe("status page editor", () => {
     expect(alphaAt).toBeGreaterThan(betaAt);
   });
 });
+
+async function createHttp(page: Page, name: string, url: string) {
+  const created = await page.request.post("/api/monitors", {
+    headers: {
+      origin: "http://127.0.0.1:4173",
+      "content-type": "application/json",
+    },
+    data: {
+      name,
+      type: "http",
+      config: { url },
+      intervalSeconds: 60,
+      timeoutSeconds: 10,
+      retries: 2,
+      recoveryThreshold: 1,
+      channelIds: [],
+    },
+  });
+  expect(created.ok()).toBeTruthy();
+  return ((await created.json()) as { id: string }).id;
+}
+
+async function addMonitor(section: Locator, name: string) {
+  const combo = section.getByRole("combobox", { name: "Choose a monitor" });
+  await combo.click();
+  await combo.fill(name);
+  await section.page().getByRole("option", { name }).click();
+}
 
 async function createStatusPage(page: Page, slug: string, title: string) {
   const created = await page.request.post("/api/status-pages", {
