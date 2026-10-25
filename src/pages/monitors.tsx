@@ -5,6 +5,7 @@ import EmptyState from "@brand/overrides/EmptyState";
 import { formatDateTime, formatTime, t } from "@shared/copy";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { Loader2, Pause, Play } from "lucide-react";
 import { useState } from "react";
 import {
   Area,
@@ -19,13 +20,16 @@ import { Button } from "@/ui/button";
 import { Card, CardContent } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { PendingButton } from "@/ui/pending-button";
-import { api, errorText } from "../lib/api";
+import { ApiClientError, api, errorText } from "../lib/api";
 import {
+  type MonitorDetail,
   monitorQuery,
   monitorsQuery,
   outagesQuery,
   statsQuery,
 } from "../lib/queries";
+import { commitMonitor, dropMonitor, refreshQueries } from "../lib/query-sync";
+import { useToggleLock } from "../lib/toggle-guard";
 import { useSubmitGuard } from "../lib/use-submit-guard";
 import { Stagger, StaggerItem } from "../motion/page";
 import { ConfirmDialog } from "../ui/confirm-dialog";
@@ -50,8 +54,72 @@ function statusLabel(status: string) {
   return t("status_unknown");
 }
 
+function PauseControl({
+  paused,
+  pending,
+  disabled,
+  onClick,
+}: {
+  paused: boolean;
+  pending: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={disabled || pending}
+      aria-busy={pending || undefined}
+      onClick={onClick}
+    >
+      {pending ? (
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+      ) : paused ? (
+        <Play className="h-4 w-4" aria-hidden />
+      ) : (
+        <Pause className="h-4 w-4" aria-hidden />
+      )}
+      {paused ? t("action_resume") : t("action_pause")}
+    </Button>
+  );
+}
+
+function useMonitorPause() {
+  const client = useQueryClient();
+  const toggles = useToggleLock();
+  const [error, setError] = useState("");
+  async function toggle(id: string, paused: boolean) {
+    setError("");
+    await toggles.run(id, async () => {
+      try {
+        const monitor = await api<MonitorDetail>(`/api/monitors/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ paused: !paused }),
+        });
+        commitMonitor(client, monitor);
+        await refreshQueries(client, [["public"]]);
+      } catch (cause) {
+        setError(
+          cause instanceof ApiClientError && cause.code === "forbidden"
+            ? t("error_forbidden")
+            : t("error_monitor_pause"),
+        );
+      }
+    });
+  }
+  return {
+    toggle,
+    pendingKey: toggles.pendingKey,
+    pending: toggles.pending,
+    error,
+  };
+}
+
 export function DashboardPage() {
   const monitors = useQuery(monitorsQuery);
+  const pause = useMonitorPause();
   const rows = monitors.data?.monitors ?? [];
   return (
     <>
@@ -66,6 +134,11 @@ export function DashboardPage() {
       <p className="mb-4 text-sm text-muted-foreground">
         {t("monitors_count", { count: rows.length })}
       </p>
+      {pause.error ? (
+        <p role="alert" className="mb-4 text-sm text-destructive">
+          {pause.error}
+        </p>
+      ) : null}
       {monitors.isPending ? (
         <ContentSkeleton />
       ) : rows.length === 0 ? (
@@ -80,37 +153,41 @@ export function DashboardPage() {
         <Stagger className="grid gap-3">
           {rows.map((row) => (
             <StaggerItem key={row.id}>
-              <Link
-                to="/console/monitors/$id"
-                params={{ id: row.id }}
-                className="block"
-              >
-                <Card>
-                  <CardContent className="flex min-w-0 flex-wrap items-center justify-between gap-4 p-5">
-                    <div className="min-w-0">
-                      <p className="break-words font-medium">{row.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {typeLabel(row.type)}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-4 text-sm">
-                      <span>
-                        {row.uptime24 === null
-                          ? t("uptime_empty")
-                          : t("uptime_percent", { value: row.uptime24 })}
-                      </span>
-                      <span className="font-mono text-muted-foreground">
-                        {row.lastResponseMs == null
-                          ? t("uptime_empty")
-                          : t("response_ms", { value: row.lastResponseMs })}
-                      </span>
-                      <Badge tone={statusTone(row.status)}>
-                        {statusLabel(row.status)}
-                      </Badge>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
+              <Card>
+                <CardContent className="flex min-w-0 flex-wrap items-center justify-between gap-4 p-5">
+                  <Link
+                    to="/console/monitors/$id"
+                    params={{ id: row.id }}
+                    className="min-w-0 flex-1"
+                  >
+                    <p className="break-words font-medium">{row.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {typeLabel(row.type)}
+                    </p>
+                  </Link>
+                  <div className="flex max-w-full flex-wrap items-center gap-3 text-sm">
+                    <span>
+                      {row.uptime24 === null
+                        ? t("uptime_empty")
+                        : t("uptime_percent", { value: row.uptime24 })}
+                    </span>
+                    <span className="font-mono text-muted-foreground">
+                      {row.lastResponseMs == null
+                        ? t("uptime_empty")
+                        : t("response_ms", { value: row.lastResponseMs })}
+                    </span>
+                    <Badge tone={statusTone(row.status)}>
+                      {statusLabel(row.status)}
+                    </Badge>
+                    <PauseControl
+                      paused={row.paused}
+                      pending={pause.pendingKey === row.id}
+                      disabled={pause.pending}
+                      onClick={() => void pause.toggle(row.id, row.paused)}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
             </StaggerItem>
           ))}
         </Stagger>
@@ -199,8 +276,8 @@ export function MonitorFormPage() {
           channelIds: [],
         }),
       }),
-    onSuccess: (data) => {
-      void client.invalidateQueries({ queryKey: ["monitors"] });
+    onSuccess: async (data) => {
+      await refreshQueries(client, [["monitors"]]);
       if (data.pushUrl) setPushUrl(data.pushUrl);
       else navigate({ to: "/console/monitors/$id", params: { id: data.id } });
     },
@@ -398,29 +475,7 @@ export function MonitorDetailPage() {
   const outages = useQuery(outagesQuery(id));
   const row = monitor.data;
   const action = useSubmitGuard();
-  const pause = useMutation({
-    mutationFn: async () => {
-      if (!row) return;
-      await api(`/api/monitors/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          name: row.name,
-          type: row.type,
-          config: row.config,
-          intervalSeconds: row.intervalSeconds,
-          timeoutSeconds: row.timeoutSeconds,
-          retries: row.retries,
-          recoveryThreshold: row.recoveryThreshold,
-          channelIds: row.channelIds,
-          paused: !row.paused,
-        }),
-      });
-    },
-    onSuccess: () => {
-      void client.invalidateQueries({ queryKey: ["monitor", id] });
-      void client.invalidateQueries({ queryKey: ["monitors"] });
-    },
-  });
+  const pause = useMonitorPause();
   const [confirmDelete, setConfirmDelete] = useState(false);
   if (monitor.isPending) return <ContentSkeleton />;
   if (!row) return <p>{t("loading")}</p>;
@@ -431,22 +486,12 @@ export function MonitorDetailPage() {
         title={row.name}
         actions={
           <>
-            <PendingButton
-              variant="outline"
-              type="button"
-              pending={action.pending}
-              onClick={() => {
-                void action.run(async () => {
-                  try {
-                    await pause.mutateAsync();
-                  } catch {
-                    // The detail query stays on the last successful row.
-                  }
-                });
-              }}
-            >
-              {row.paused ? t("action_resume") : t("action_pause")}
-            </PendingButton>
+            <PauseControl
+              paused={row.paused}
+              pending={pause.pendingKey === id}
+              disabled={pause.pending}
+              onClick={() => void pause.toggle(id, row.paused)}
+            />
             <PendingButton
               variant="destructive"
               type="button"
@@ -466,7 +511,8 @@ export function MonitorDetailPage() {
               onConfirm={() => {
                 void action.run(async () => {
                   await api(`/api/monitors/${id}`, { method: "DELETE" });
-                  await client.invalidateQueries({ queryKey: ["monitors"] });
+                  dropMonitor(client, id);
+                  await refreshQueries(client, [["monitors"], ["public"]]);
                   setConfirmDelete(false);
                   await navigate({ to: "/console" });
                 });
@@ -475,6 +521,11 @@ export function MonitorDetailPage() {
           </>
         }
       />
+      {pause.error ? (
+        <p role="alert" className="mb-4 text-sm text-destructive">
+          {pause.error}
+        </p>
+      ) : null}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Badge tone={statusTone(row.status)}>{statusLabel(row.status)}</Badge>
         <span className="text-sm text-muted-foreground">
@@ -590,9 +641,7 @@ export function MonitorDetailPage() {
                       await api(`/api/outages/${outage.id}/ack`, {
                         method: "POST",
                       });
-                      await client.invalidateQueries({
-                        queryKey: ["outages", id],
-                      });
+                      await refreshQueries(client, [["outages", id]]);
                     });
                   }}
                 >

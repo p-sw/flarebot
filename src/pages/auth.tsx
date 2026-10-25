@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { PendingButton } from "@/ui/pending-button";
 import { ApiClientError, api, errorText } from "../lib/api";
+import { refreshQueries } from "../lib/query-sync";
 import { useSubmitGuard } from "../lib/use-submit-guard";
 import type { SessionUser } from "../shell";
 import { Field } from "./fields";
@@ -72,7 +73,7 @@ export function SetupPage() {
       }),
     onSuccess: async (data) => {
       client.setQueryData(["session"], data);
-      await client.invalidateQueries({ queryKey: ["meta"] });
+      await refreshQueries(client, [["meta"]]);
       setStep(1);
     },
     onError: (cause) => setError(errorText(cause)),
@@ -104,8 +105,9 @@ export function SetupPage() {
           channelIds: [],
         }),
       }),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setPushUrl(data.pushUrl ?? "");
+      await refreshQueries(client, [["monitors"]]);
       setStep(3);
     },
     onError: (cause) => setError(errorText(cause)),

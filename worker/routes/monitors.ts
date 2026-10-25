@@ -3,6 +3,7 @@
 import { and, desc, eq, gte } from "drizzle-orm";
 import type { Hono } from "hono";
 import { t } from "../../shared/copy";
+import { visibleStatus } from "../../shared/monitor-status";
 import { can } from "../../shared/permissions";
 import { monitorWriteSchema, parseMonitorConfig } from "../../shared/schemas";
 import { sha256Hex } from "../crypto/secret";
@@ -36,7 +37,11 @@ import {
   snapshotFromRow,
 } from "../monitors/sync";
 import { percentile, saveRuntime } from "../scheduler/persist";
-import { initialState, type RuntimeState } from "../scheduler/state-machine";
+import {
+  initialState,
+  type RuntimeState,
+  runtimeForPause,
+} from "../scheduler/state-machine";
 
 function percent(ok: number, fail: number): number | null {
   const total = ok + fail;
@@ -105,9 +110,10 @@ export function registerMonitors(app: Hono<AppEnv>): void {
         type: row.type,
         paused: row.paused,
         intervalSeconds: row.intervalSeconds,
-        status: row.paused
-          ? "paused"
-          : (memory?.state.status ?? runtime?.status ?? "unknown"),
+        status: visibleStatus(
+          row.paused,
+          memory?.state.status ?? runtime?.status,
+        ),
         since: runtime?.since ?? null,
         lastResponseMs:
           memory?.state.lastResponseMs ?? runtime?.lastResponseMs ?? null,
@@ -198,45 +204,14 @@ export function registerMonitors(app: Hono<AppEnv>): void {
   app.get("/api/monitors/:id", async (c) => {
     const actor = await requireActor(c);
     requireCan(actor, "monitors.read");
-    const row = await ownedMonitor(
-      c.env,
-      actor.organizationId,
-      c.req.param("id"),
+    return c.json(
+      await readMonitor(
+        c,
+        actor.organizationId,
+        c.req.param("id"),
+        can(actor, "monitors.write"),
+      ),
     );
-    const db = getDb(c.env.DB);
-    const state = await db
-      .select()
-      .from(monitorState)
-      .where(eq(monitorState.monitorId, row.id))
-      .get();
-    const links = await db
-      .select()
-      .from(monitorChannels)
-      .where(eq(monitorChannels.monitorId, row.id));
-    let pushUrl: string | undefined;
-    if (can(actor, "monitors.write")) {
-      const token = await revealHeartbeatToken(c.env, row.pushTokenEncrypted);
-      if (token) pushUrl = `${requestOrigin(c)}/push/${token}`;
-    }
-    return c.json({
-      id: row.id,
-      name: row.name,
-      type: row.type,
-      config: JSON.parse(row.configJson) as unknown,
-      intervalSeconds: row.intervalSeconds,
-      timeoutSeconds: row.timeoutSeconds,
-      retries: row.retries,
-      recoveryThreshold: row.recoveryThreshold,
-      paused: row.paused,
-      regions: JSON.parse(row.regionsJson) as string[],
-      status: state?.status ?? "unknown",
-      since: state?.since ?? null,
-      lastResponseMs: state?.lastResponseMs ?? null,
-      lastCheckAt: state?.lastCheckAt ?? null,
-      lastError: state?.lastError ?? null,
-      pushUrl,
-      channelIds: links.map((link) => link.channelId),
-    });
   });
 
   app.patch("/api/monitors/:id", async (c) => {
@@ -248,7 +223,43 @@ export function registerMonitors(app: Hono<AppEnv>): void {
       actor.organizationId,
       c.req.param("id"),
     );
-    const body = await parseBody(c, monitorWriteSchema);
+    const raw = await c.req.json().catch(() => null);
+    if (isPauseOnly(raw)) {
+      const db = getDb(c.env.DB);
+      await db
+        .update(monitors)
+        .set({ paused: raw.paused, updatedAt: Date.now() })
+        .where(eq(monitors.id, current.id));
+      const row = await db
+        .select()
+        .from(monitors)
+        .where(eq(monitors.id, current.id))
+        .get();
+      if (!row)
+        throw new ApiError(500, "internal", t("error_monitor_not_stored"));
+      await scheduleMonitor(c.env, row);
+      await audit(
+        c.env,
+        actor,
+        "monitor.update",
+        row.id,
+        { paused: current.paused },
+        { paused: row.paused },
+        clientIp(c),
+      );
+      return c.json(
+        await readMonitor(
+          c,
+          actor.organizationId,
+          row.id,
+          can(actor, "monitors.write"),
+        ),
+      );
+    }
+    const parsedBody = monitorWriteSchema.safeParse(raw);
+    if (!parsedBody.success)
+      throw new ApiError(400, "validation", t("error_validation"));
+    const body = parsedBody.data;
     const parsed = parseMonitorConfig(body.type, body.config);
     if (!parsed.success)
       throw new ApiError(400, "validation", t("error_invalid_monitor"));
@@ -298,39 +309,25 @@ export function registerMonitors(app: Hono<AppEnv>): void {
       .get();
     if (!row)
       throw new ApiError(500, "internal", t("error_monitor_not_stored"));
-    const live = await schedulerStub(c.env, row.shardId)
-      .getOne(row.id)
-      .catch(() => null);
-    const stored = await db
-      .select()
-      .from(monitorState)
-      .where(eq(monitorState.monitorId, row.id))
-      .get();
-    const normalized = runtimeFrom(live?.state, stored, body.paused);
-    await saveRuntime(c.env.DB, row.id, normalized);
-    await schedulerStub(c.env, row.shardId).upsert(
-      snapshotFromRow(
-        row,
-        normalized,
-        body.paused ? Date.now() + 365 * 86_400_000 : Date.now(),
-        live?.lastPushAt ?? null,
-      ),
-    );
+    await scheduleMonitor(c.env, row);
     await audit(
       c.env,
       actor,
       "monitor.update",
       row.id,
-      { name: current.name },
-      { name: body.name },
+      { name: current.name, paused: current.paused },
+      { name: body.name, paused: row.paused },
       clientIp(c),
     );
-    return c.json({
-      id: row.id,
-      pushUrl: freshToken
-        ? `${requestOrigin(c)}/push/${freshToken}`
-        : undefined,
-    });
+    return c.json(
+      await readMonitor(
+        c,
+        actor.organizationId,
+        row.id,
+        can(actor, "monitors.write"),
+        freshToken,
+      ),
+    );
   });
 
   app.delete("/api/monitors/:id", async (c) => {
@@ -532,10 +529,97 @@ async function acceptPush(c: AppContext): Promise<Response> {
   return c.json({ ok: true });
 }
 
+function isPauseOnly(value: unknown): value is { paused: boolean } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    Object.keys(record).length === 1 &&
+    Object.hasOwn(record, "paused") &&
+    typeof record.paused === "boolean"
+  );
+}
+
+async function scheduleMonitor(
+  env: Env,
+  row: typeof monitors.$inferSelect,
+): Promise<void> {
+  const db = getDb(env.DB);
+  const live = await schedulerStub(env, row.shardId)
+    .getOne(row.id)
+    .catch(() => null);
+  const stored = await db
+    .select()
+    .from(monitorState)
+    .where(eq(monitorState.monitorId, row.id))
+    .get();
+  const now = Date.now();
+  const normalized = runtimeForPause(
+    runtimeFrom(live?.state, stored),
+    row.paused,
+    now,
+  );
+  await saveRuntime(env.DB, row.id, normalized);
+  await schedulerStub(env, row.shardId).upsert(
+    snapshotFromRow(
+      row,
+      normalized,
+      row.paused ? now + 365 * 86_400_000 : now,
+      live?.lastPushAt ?? null,
+    ),
+  );
+}
+
+async function readMonitor(
+  c: AppContext,
+  organizationId: string,
+  id: string,
+  showPush: boolean,
+  freshToken?: string,
+) {
+  const row = await ownedMonitor(c.env, organizationId, id);
+  const db = getDb(c.env.DB);
+  const state = await db
+    .select()
+    .from(monitorState)
+    .where(eq(monitorState.monitorId, row.id))
+    .get();
+  const links = await db
+    .select()
+    .from(monitorChannels)
+    .where(eq(monitorChannels.monitorId, row.id));
+  const live = await schedulerStub(c.env, row.shardId)
+    .getOne(row.id)
+    .catch(() => null);
+  let pushUrl: string | undefined;
+  if (freshToken) pushUrl = `${requestOrigin(c)}/push/${freshToken}`;
+  else if (showPush) {
+    const token = await revealHeartbeatToken(c.env, row.pushTokenEncrypted);
+    if (token) pushUrl = `${requestOrigin(c)}/push/${token}`;
+  }
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    config: JSON.parse(row.configJson) as unknown,
+    intervalSeconds: row.intervalSeconds,
+    timeoutSeconds: row.timeoutSeconds,
+    retries: row.retries,
+    recoveryThreshold: row.recoveryThreshold,
+    paused: row.paused,
+    regions: JSON.parse(row.regionsJson) as string[],
+    status: visibleStatus(row.paused, live?.state.status ?? state?.status),
+    since: state?.since ?? live?.state.statusSince ?? null,
+    lastResponseMs: live?.state.lastResponseMs ?? state?.lastResponseMs ?? null,
+    lastCheckAt: live?.state.lastCheckAt ?? state?.lastCheckAt ?? null,
+    lastError: live?.state.lastError ?? state?.lastError ?? null,
+    pushUrl,
+    channelIds: links.map((link) => link.channelId),
+  };
+}
+
 function runtimeFrom(
   live: RuntimeState | undefined,
   stored: typeof monitorState.$inferSelect | undefined,
-  paused: boolean,
 ): RuntimeState {
   const base: RuntimeState = live
     ? { ...live, transitions: [...live.transitions] }
@@ -552,7 +636,6 @@ function runtimeFrom(
           lastError: stored.lastError,
         }
       : initialState(Date.now());
-  if (paused) base.status = "paused";
   return base;
 }
 

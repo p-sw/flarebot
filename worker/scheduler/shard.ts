@@ -53,40 +53,61 @@ type Store = {
 };
 
 export class SchedulerShard extends DurableObject<Env> {
+  // Probe I/O yields the isolate, so a pause can land while a check is in flight.
+  // Storage writes are queued so that check cannot persist the pre-pause snapshot.
+  private writes: Promise<void> = Promise.resolve();
+
+  private enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.writes.then(task, task);
+    this.writes = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
   async upsert(snapshot: Snapshot): Promise<void> {
-    const store = await this.load();
-    store.monitors[snapshot.id] = snapshot;
-    await this.persist(store);
-    await this.arm(store, Date.now());
+    await this.enqueue(async () => {
+      const store = await this.load();
+      store.monitors[snapshot.id] = snapshot;
+      await this.persist(store);
+      await this.arm(store, Date.now());
+    });
   }
 
   async noteSample(
     id: string,
     sample: { t: number; ok: boolean; ms: number; internal: boolean },
   ): Promise<void> {
-    const store = await this.load();
-    if (!store.monitors[id]) return;
-    await this.recordSample(store, id, sample);
-    await this.persist(store);
+    await this.enqueue(async () => {
+      const store = await this.load();
+      if (!store.monitors[id]) return;
+      await this.recordSample(store, id, sample);
+      await this.persist(store);
+    });
   }
 
   async remove(id: string): Promise<void> {
-    const store = await this.load();
-    delete store.monitors[id];
-    delete store.recent[id];
-    delete store.rollups[id];
-    await this.persist(store);
+    await this.enqueue(async () => {
+      const store = await this.load();
+      delete store.monitors[id];
+      delete store.recent[id];
+      delete store.rollups[id];
+      await this.persist(store);
+    });
   }
 
   async recordPush(id: string, at: number): Promise<boolean> {
-    const store = await this.load();
-    const monitor = store.monitors[id];
-    if (!monitor) return false;
-    monitor.lastPushAt = at;
-    monitor.nextCheckAt = Math.min(monitor.nextCheckAt, at + 1000);
-    await this.persist(store);
-    await this.arm(store, at);
-    return true;
+    return this.enqueue(async () => {
+      const store = await this.load();
+      const monitor = store.monitors[id];
+      if (!monitor) return false;
+      monitor.lastPushAt = at;
+      monitor.nextCheckAt = Math.min(monitor.nextCheckAt, at + 1000);
+      await this.persist(store);
+      await this.arm(store, at);
+      return true;
+    });
   }
 
   async getAll(): Promise<
@@ -134,10 +155,12 @@ export class SchedulerShard extends DurableObject<Env> {
   }
 
   async ensureAlarm(): Promise<void> {
-    const current = await this.ctx.storage.getAlarm();
-    if (current !== null) return;
-    const store = await this.load();
-    await this.arm(store, Date.now());
+    await this.enqueue(async () => {
+      const current = await this.ctx.storage.getAlarm();
+      if (current !== null) return;
+      const store = await this.load();
+      await this.arm(store, Date.now());
+    });
   }
 
   async alarm(): Promise<void> {
@@ -157,7 +180,7 @@ export class SchedulerShard extends DurableObject<Env> {
         cursor += 1;
         const monitor = due[index];
         if (!monitor) continue;
-        await this.checkOne(store, monitor, now);
+        await this.checkOne(monitor.id, now);
       }
     };
     await Promise.all(
@@ -165,23 +188,26 @@ export class SchedulerShard extends DurableObject<Env> {
         worker(),
       ),
     );
-    if (now - store.flushedAt >= 5 * 60_000) await this.flush(store, now);
-    await this.persist(store);
-    const more = Object.values(store.monitors).some(
-      (monitor) => !monitor.paused && monitor.nextCheckAt <= now,
-    );
-    await this.arm(store, more ? now + 500 : now);
+    await this.enqueue(async () => {
+      const fresh = await this.load();
+      if (now - fresh.flushedAt >= 5 * 60_000) {
+        await this.flush(fresh, now);
+        await this.persist(fresh);
+      }
+      const more = Object.values(fresh.monitors).some(
+        (monitor) => !monitor.paused && monitor.nextCheckAt <= now,
+      );
+      await this.arm(fresh, more ? now + 500 : now);
+    });
     return { ran: due.length };
   }
 
-  private async checkOne(
-    store: Store,
-    monitor: Snapshot,
-    now: number,
-  ): Promise<void> {
+  private async checkOne(id: string, now: number): Promise<void> {
+    const preview = await this.load();
+    const monitor = preview.monitors[id];
+    if (!monitor || monitor.paused || monitor.nextCheckAt > now) return;
     // v1 runs one region. `regions` is stored so a later shard-per-region hint can reuse this snapshot.
     const region = monitor.regions[0] ?? "default";
-    void region;
     const outcome = await runCheck({
       type: monitor.type,
       config: monitor.config,
@@ -190,22 +216,51 @@ export class SchedulerShard extends DurableObject<Env> {
       lastPushAt: monitor.lastPushAt,
       now,
     });
-    const transition = applyOutcome(monitor.state, outcome, {
-      retries: monitor.retries,
-      recoveryThreshold: monitor.recoveryThreshold,
-      now,
+    const committed = await this.enqueue(async () => {
+      const store = await this.load();
+      const current = store.monitors[id];
+      if (!current || current.paused) return null;
+      const transition = applyOutcome(current.state, outcome, {
+        retries: current.retries,
+        recoveryThreshold: current.recoveryThreshold,
+        now,
+      });
+      current.state = transition.state;
+      current.nextCheckAt =
+        now + (transition.nextDelayMs ?? current.intervalMs);
+      await this.recordSample(store, id, {
+        t: now,
+        ok: outcome.ok,
+        ms: outcome.responseMs,
+        internal: outcome.internal,
+      });
+      await this.persist(store);
+      if (transition.openedOutage) {
+        await openOutage(
+          this.env.DB,
+          id,
+          outcome.error ?? outcome.errorKind ?? "down",
+          now,
+        );
+      }
+      if (transition.closedOutage) await closeOutage(this.env.DB, id, now);
+      if (
+        transition.openedOutage ||
+        transition.closedOutage ||
+        transition.alert
+      ) {
+        await saveRuntime(this.env.DB, id, current.state);
+      }
+      return {
+        name: current.name,
+        alert: transition.alert,
+        reason: outcome.error ?? outcome.errorKind ?? "",
+      };
     });
-    monitor.state = transition.state;
-    monitor.nextCheckAt = now + (transition.nextDelayMs ?? monitor.intervalMs);
-    await this.recordSample(store, monitor.id, {
-      t: now,
-      ok: outcome.ok,
-      ms: outcome.responseMs,
-      internal: outcome.internal,
-    });
+    if (!committed) return;
     try {
       this.env.ANALYTICS.writeDataPoint({
-        indexes: [monitor.id],
+        indexes: [id],
         blobs: [
           region,
           outcome.internal ? "unknown" : outcome.ok ? "up" : "down",
@@ -223,33 +278,16 @@ export class SchedulerShard extends DurableObject<Env> {
     if (monitor.type === "ssl") {
       await saveCert(
         this.env.DB,
-        monitor.id,
+        id,
         outcome.certNotAfter ?? null,
         outcome.ok ? null : outcome.error,
       ).catch(() => undefined);
     }
-    if (transition.openedOutage) {
-      await openOutage(
-        this.env.DB,
-        monitor.id,
-        outcome.error ?? outcome.errorKind ?? "down",
-        now,
-      );
-    }
-    if (transition.closedOutage)
-      await closeOutage(this.env.DB, monitor.id, now);
-    if (
-      transition.openedOutage ||
-      transition.closedOutage ||
-      transition.alert
-    ) {
-      await saveRuntime(this.env.DB, monitor.id, monitor.state);
-    }
-    if (transition.alert && !isInMaintenance(monitor.id, now)) {
+    if (committed.alert && !isInMaintenance(id, now)) {
       await this.notify(
-        monitor,
-        transition.alert,
-        outcome.error ?? outcome.errorKind ?? "",
+        { ...monitor, name: committed.name },
+        committed.alert,
+        committed.reason,
       );
     }
   }

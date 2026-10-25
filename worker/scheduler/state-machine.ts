@@ -42,6 +42,25 @@ export const RETRY_DELAY_MS = 10_000;
 export const FLAP_WINDOW_MS = 30 * 60 * 1000;
 export const FLAP_THRESHOLD = 3;
 
+export function runtimeForPause(
+  state: RuntimeState,
+  paused: boolean,
+  now: number,
+): RuntimeState {
+  if (paused) {
+    if (state.status === "paused") return state;
+    return { ...state, status: "paused", statusSince: now };
+  }
+  if (state.status !== "paused") return state;
+  return {
+    ...state,
+    status: "pending",
+    statusSince: now,
+    consecutiveFailures: 0,
+    consecutiveSuccesses: 0,
+  };
+}
+
 export function initialState(now: number): RuntimeState {
   return {
     status: "unknown",

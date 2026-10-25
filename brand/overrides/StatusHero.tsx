@@ -11,20 +11,22 @@ export default function StatusHero({
   title: string;
   description: string;
   banner: string;
-  overall: "operational" | "degraded" | "outage" | "empty";
+  overall: "operational" | "degraded" | "outage" | "empty" | "paused";
 }) {
   const label =
     overall === "outage"
       ? t("status_all_down")
       : overall === "degraded"
         ? t("status_some_down")
-        : overall === "empty"
-          ? t("status_empty")
-          : t("status_all_operational");
+        : overall === "paused"
+          ? t("status_all_paused")
+          : overall === "empty"
+            ? t("status_empty")
+            : t("status_all_operational");
   const tone =
     overall === "outage" || overall === "degraded"
       ? "bg-status-down"
-      : overall === "empty"
+      : overall === "paused" || overall === "empty"
         ? "bg-status-unknown"
         : "bg-status-up";
   return (

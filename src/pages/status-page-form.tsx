@@ -27,6 +27,7 @@ import {
   type StatusPageDetail,
   statusPageQuery,
 } from "../lib/queries";
+import { refreshQueries } from "../lib/query-sync";
 import { useToggleLock } from "../lib/toggle-guard";
 import { useSubmitGuard } from "../lib/use-submit-guard";
 import { useMotionPrefs } from "../motion/page";
@@ -258,7 +259,7 @@ function StatusPageForm({
             body: JSON.stringify(body),
           });
           skip.current = true;
-          await client.invalidateQueries({ queryKey: ["pages"] });
+          await refreshQueries(client, [["pages"]]);
           await navigate({
             to: "/console/status-pages/$id",
             params: { id: createdPage.id },
@@ -278,8 +279,7 @@ function StatusPageForm({
             ? `${t("saved")} ${t("page_empty_sections")}`
             : t("saved"),
         );
-        await client.invalidateQueries({ queryKey: ["pages"] });
-        await client.invalidateQueries({ queryKey: ["status-page", page.id] });
+        await refreshQueries(client, [["pages"], ["status-page", page.id]]);
       } catch (cause) {
         if (cause instanceof ApiClientError && cause.status === 409) {
           setErrors((current) => ({
@@ -304,12 +304,10 @@ function StatusPageForm({
           method: "PUT",
           body: JSON.stringify({ serveAtRoot }),
         });
-        await client.invalidateQueries({ queryKey: ["pages"] });
-        await client.invalidateQueries({ queryKey: ["status-page", page.id] });
+        await refreshQueries(client, [["pages"], ["status-page", page.id]]);
       } catch (cause) {
         setRootError(rootToggleError(cause));
-        await client.invalidateQueries({ queryKey: ["pages"] });
-        await client.invalidateQueries({ queryKey: ["status-page", page.id] });
+        await refreshQueries(client, [["pages"], ["status-page", page.id]]);
       }
     });
   }
@@ -710,7 +708,11 @@ function StatusPageForm({
           void submit.run(async () => {
             await api(`/api/status-pages/${page.id}`, { method: "DELETE" });
             skip.current = true;
-            await client.invalidateQueries({ queryKey: ["pages"] });
+            await refreshQueries(client, [
+              ["pages"],
+              ["status-page", page.id],
+              ["public"],
+            ]);
             await navigate({ to: "/console/status-pages" });
           });
         }}
