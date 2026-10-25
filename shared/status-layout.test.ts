@@ -42,14 +42,12 @@ describe("status page layout", () => {
     return {
       key: name,
       name,
-      i18n: {},
       items: items.map((item) => ({
         key: item.monitorId,
         monitorId: item.monitorId,
         monitorName:
           monitors.find((monitor) => monitor.id === item.monitorId)?.name ?? "",
         displayName: item.displayName ?? "",
-        i18n: {},
       })),
     };
   }
@@ -69,7 +67,7 @@ describe("status page layout", () => {
     ];
     const moved = moveMonitor(moveWithin(sections, 1, 0), 0, 0, 0, 1);
     expect(moved.map((entry) => entry.name)).toEqual(["Core", "Edge"]);
-    const items = itemsFromSections(moved, "en");
+    const items = itemsFromSections(moved);
     expect(items.map((item) => item.groupName)).toEqual(["Core", "Edge"]);
     expect(items.map((item) => item.position)).toEqual([0, 1]);
     expect(items[0]?.displayName).toBe("Public beta");
@@ -98,7 +96,6 @@ describe("status page layout", () => {
         position: 1,
         groupName: "Core",
         displayName: "",
-        i18n: {},
       },
       {
         id: "22222222-2222-4222-8222-222222222222",
@@ -107,7 +104,6 @@ describe("status page layout", () => {
         position: 0,
         groupName: "Edge",
         displayName: "Edge API",
-        i18n: { ko: { displayName: "ignored", groupName: "Edge KO" } },
       },
     ]);
     expect(sections.map((entry) => entry.name)).toEqual(["Edge", "Core"]);

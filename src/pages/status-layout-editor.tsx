@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+import { t } from "@shared/copy";
 import {
   type LayoutSection,
   moveMonitor,
@@ -8,7 +9,6 @@ import {
 } from "@shared/status-layout";
 import { ChevronDown, ChevronUp, GripVertical } from "lucide-react";
 import { type PointerEvent, useRef, useState } from "react";
-import { m } from "../paraglide/messages.js";
 import { Button } from "../ui/button";
 import { ConfirmDialog } from "../ui/confirm-dialog";
 import { Input } from "../ui/input";
@@ -24,7 +24,7 @@ function itemLabel(name: string, displayName: string): string {
   const override = displayName.trim();
   if (override) return override;
   if (name.trim()) return name.trim();
-  return m.page_name_fallback();
+  return t("monitor_fallback_name");
 }
 
 export function StatusLayoutEditor({
@@ -84,16 +84,16 @@ export function StatusLayoutEditor({
   }
 
   function sectionTitle(section: LayoutSection): string {
-    return section.name.trim() || m.page_section();
+    return section.name.trim() || t("page_section");
   }
 
   return (
     <div className="grid min-w-0 gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <h2 className="font-medium">{m.page_layout()}</h2>
+          <h2 className="font-medium">{t("page_layout")}</h2>
           <p className="text-xs text-muted-foreground">
-            {m.page_layout_hint()}
+            {t("page_layout_hint")}
           </p>
         </div>
         <Button
@@ -107,20 +107,19 @@ export function StatusLayoutEditor({
                 key: crypto.randomUUID(),
                 name: nextSectionName(
                   sections.map((section) => section.name),
-                  m.page_section_placeholder(),
+                  t("page_section_placeholder"),
                 ),
-                i18n: {},
                 items: [],
               },
             ])
           }
         >
-          {m.page_section_add()}
+          {t("page_section_add")}
         </Button>
       </div>
       {sections.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          {m.page_section_empty()}
+          {t("page_section_empty")}
         </p>
       ) : null}
       {sections.map((section, sectionIndex) => (
@@ -135,7 +134,10 @@ export function StatusLayoutEditor({
         >
           <div className="grid min-w-0 gap-2">
             <div className="min-w-0">
-              <Field label={m.page_section_name()} hint={m.page_section_hint()}>
+              <Field
+                label={t("page_section_name")}
+                hint={t("page_section_hint")}
+              >
                 <Input
                   value={section.name}
                   maxLength={80}
@@ -158,7 +160,7 @@ export function StatusLayoutEditor({
                 size="icon"
                 variant="outline"
                 className="h-8 w-8 touch-none"
-                aria-label={m.page_drag({ name: sectionTitle(section) })}
+                aria-label={t("page_drag", { name: sectionTitle(section) })}
                 disabled={disabled}
                 onPointerDown={(event) =>
                   start(event, {
@@ -180,7 +182,7 @@ export function StatusLayoutEditor({
                 size="icon"
                 variant="outline"
                 className="h-8 w-8"
-                aria-label={m.page_move_up({ name: sectionTitle(section) })}
+                aria-label={t("page_move_up", { name: sectionTitle(section) })}
                 disabled={disabled || sectionIndex === 0}
                 onClick={() =>
                   onChange(moveWithin(sections, sectionIndex, sectionIndex - 1))
@@ -193,7 +195,9 @@ export function StatusLayoutEditor({
                 size="icon"
                 variant="outline"
                 className="h-8 w-8"
-                aria-label={m.page_move_down({ name: sectionTitle(section) })}
+                aria-label={t("page_move_down", {
+                  name: sectionTitle(section),
+                })}
                 disabled={disabled || sectionIndex === sections.length - 1}
                 onClick={() =>
                   onChange(moveWithin(sections, sectionIndex, sectionIndex + 1))
@@ -216,13 +220,13 @@ export function StatusLayoutEditor({
                   setRemoveKey(section.key);
                 }}
               >
-                {m.page_section_delete()}
+                {t("page_section_delete")}
               </Button>
             </div>
           </div>
           {section.items.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              {m.page_section_empty()}
+              {t("page_section_empty")}
             </p>
           ) : (
             <ul className="grid min-w-0 gap-2">
@@ -247,7 +251,7 @@ export function StatusLayoutEditor({
                           size="icon"
                           variant="ghost"
                           className="h-8 w-8 touch-none"
-                          aria-label={m.page_drag({ name: label })}
+                          aria-label={t("page_drag", { name: label })}
                           disabled={disabled}
                           onPointerDown={(event) =>
                             start(event, {
@@ -274,7 +278,7 @@ export function StatusLayoutEditor({
                           size="icon"
                           variant="outline"
                           className="h-8 w-8"
-                          aria-label={m.page_move_up({ name: label })}
+                          aria-label={t("page_move_up", { name: label })}
                           disabled={disabled || itemIndex === 0}
                           onClick={() =>
                             onChange(
@@ -295,7 +299,7 @@ export function StatusLayoutEditor({
                           size="icon"
                           variant="outline"
                           className="h-8 w-8"
-                          aria-label={m.page_move_down({ name: label })}
+                          aria-label={t("page_move_down", { name: label })}
                           disabled={
                             disabled || itemIndex === section.items.length - 1
                           }
@@ -317,7 +321,7 @@ export function StatusLayoutEditor({
                           type="button"
                           size="sm"
                           variant="outline"
-                          aria-label={m.page_move_prev({ name: label })}
+                          aria-label={t("page_move_prev", { name: label })}
                           disabled={disabled || sectionIndex === 0}
                           onClick={() =>
                             onChange(
@@ -331,13 +335,13 @@ export function StatusLayoutEditor({
                             )
                           }
                         >
-                          {m.page_move_prev_short()}
+                          {t("page_move_prev_short")}
                         </Button>
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
-                          aria-label={m.page_move_next({ name: label })}
+                          aria-label={t("page_move_next", { name: label })}
                           disabled={
                             disabled || sectionIndex === sections.length - 1
                           }
@@ -353,13 +357,13 @@ export function StatusLayoutEditor({
                             )
                           }
                         >
-                          {m.page_move_next_short()}
+                          {t("page_move_next_short")}
                         </Button>
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
-                          aria-label={m.page_remove({ name: label })}
+                          aria-label={t("page_remove", { name: label })}
                           disabled={disabled}
                           onClick={() =>
                             onChange(
@@ -376,13 +380,13 @@ export function StatusLayoutEditor({
                             )
                           }
                         >
-                          {m.page_remove_short()}
+                          {t("page_remove_short")}
                         </Button>
                       </div>
                     </div>
                     <Field
-                      label={m.page_display_name()}
-                      hint={m.page_display_hint()}
+                      label={t("page_display_name")}
+                      hint={t("page_display_hint")}
                     >
                       <Input
                         value={item.displayName}
@@ -416,7 +420,10 @@ export function StatusLayoutEditor({
           )}
           <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
             <div className="min-w-0">
-              <Field label={m.page_monitor_pick()} hint={m.page_monitor_hint()}>
+              <Field
+                label={t("page_monitor_pick")}
+                hint={t("page_monitor_hint")}
+              >
                 <select
                   className={controlClass}
                   value={pick[section.key] ?? ""}
@@ -428,7 +435,7 @@ export function StatusLayoutEditor({
                     }))
                   }
                 >
-                  <option value="">{m.page_monitor_pick()}</option>
+                  <option value="">{t("page_monitor_pick")}</option>
                   {available.map((monitor) => (
                     <option key={monitor.id} value={monitor.id}>
                       {monitor.name}
@@ -457,7 +464,6 @@ export function StatusLayoutEditor({
                               monitorId: monitor.id,
                               monitorName: monitor.name,
                               displayName: "",
-                              i18n: {},
                             },
                           ],
                         }
@@ -467,16 +473,16 @@ export function StatusLayoutEditor({
                 setPick((current) => ({ ...current, [section.key]: "" }));
               }}
             >
-              {m.page_monitor_add()}
+              {t("page_monitor_add")}
             </Button>
           </div>
           {monitors.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              {m.page_monitor_none()}
+              {t("page_monitor_none")}
             </p>
           ) : available.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              {m.page_monitor_all_used()}
+              {t("page_monitor_all_used")}
             </p>
           ) : null}
         </article>
@@ -486,10 +492,10 @@ export function StatusLayoutEditor({
         onOpenChange={(open) => {
           if (!open) setRemoveKey(null);
         }}
-        title={m.page_section_delete_title()}
-        description={m.page_section_delete_body()}
-        confirmLabel={m.page_section_delete()}
-        cancelLabel={m.action_cancel()}
+        title={t("page_section_delete_title")}
+        description={t("page_section_delete_body")}
+        confirmLabel={t("page_section_delete")}
+        cancelLabel={t("action_cancel")}
         onConfirm={() => {
           onChange(sections.filter((entry) => entry.key !== removeKey));
           setRemoveKey(null);

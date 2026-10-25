@@ -2,21 +2,17 @@
 
 export const statusSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-export type TextMap = Record<string, Record<string, string>>;
-
 export type LayoutItem = {
   key: string;
   id?: string;
   monitorId: string;
   monitorName: string;
   displayName: string;
-  i18n: TextMap;
 };
 
 export type LayoutSection = {
   key: string;
   name: string;
-  i18n: TextMap;
   items: LayoutItem[];
 };
 
@@ -27,7 +23,6 @@ export type StoredStatusItem = {
   position: number;
   groupName: string;
   displayName: string;
-  i18n?: TextMap;
 };
 
 export type StatusItemWrite = {
@@ -36,8 +31,6 @@ export type StatusItemWrite = {
   position: number;
   groupName: string;
   displayName: string;
-  sourceLocale: string;
-  i18n: TextMap;
 };
 
 export function isStatusSlug(value: string): boolean {
@@ -152,13 +145,11 @@ export function sectionsFromItems(
   );
   const sections: LayoutSection[] = [];
   for (const item of sorted) {
-    const { group, display } = splitTextMap(item.i18n ?? {});
     let section = sections.find((entry) => entry.name === item.groupName);
     if (!section) {
       section = {
         key: newKey(),
         name: item.groupName,
-        i18n: group,
         items: [],
       };
       sections.push(section);
@@ -169,7 +160,6 @@ export function sectionsFromItems(
       monitorId: item.monitorId,
       monitorName: item.monitorName ?? "",
       displayName: item.displayName,
-      i18n: display,
     });
   }
   return sections;
@@ -177,7 +167,6 @@ export function sectionsFromItems(
 
 export function itemsFromSections(
   sections: readonly LayoutSection[],
-  sourceLocale: string,
 ): StatusItemWrite[] {
   const items: StatusItemWrite[] = [];
   let position = 0;
@@ -190,8 +179,6 @@ export function itemsFromSections(
         position,
         groupName,
         displayName: item.displayName.trim().slice(0, 120),
-        sourceLocale,
-        i18n: mergeTextMaps(section.i18n, item.i18n),
       };
       if (item.id) write.id = item.id;
       items.push(write);
@@ -207,29 +194,4 @@ function cloneSection(section: LayoutSection): LayoutSection {
 
 function newKey(): string {
   return crypto.randomUUID();
-}
-
-function splitTextMap(map: TextMap): { group: TextMap; display: TextMap } {
-  const group: TextMap = {};
-  const display: TextMap = {};
-  for (const [locale, fields] of Object.entries(map)) {
-    if (fields.groupName) group[locale] = { groupName: fields.groupName };
-    if (fields.displayName)
-      display[locale] = { displayName: fields.displayName };
-  }
-  return { group, display };
-}
-
-function mergeTextMaps(group: TextMap, display: TextMap): TextMap {
-  const locales = new Set([...Object.keys(group), ...Object.keys(display)]);
-  const merged: TextMap = {};
-  for (const locale of locales) {
-    const fields: Record<string, string> = {};
-    const groupName = group[locale]?.groupName?.trim() ?? "";
-    const displayName = display[locale]?.displayName?.trim() ?? "";
-    if (groupName) fields.groupName = groupName;
-    if (displayName) fields.displayName = displayName;
-    if (Object.keys(fields).length > 0) merged[locale] = fields;
-  }
-  return merged;
 }

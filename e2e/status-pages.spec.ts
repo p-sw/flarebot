@@ -59,9 +59,6 @@ test.describe("status page editor", () => {
       data: {
         slug,
         published: true,
-        defaultLocale: "en",
-        locales: ["en"],
-        sourceLocale: "en",
         title: `Edit me ${stamp}`,
         description: "Before",
         items: [
@@ -70,8 +67,6 @@ test.describe("status page editor", () => {
             position: 0,
             groupName: "Edge",
             displayName: "",
-            sourceLocale: "en",
-            i18n: {},
           },
         ],
       },
@@ -198,9 +193,6 @@ async function createStatusPage(page: Page, slug: string, title: string) {
     data: {
       slug,
       published: true,
-      defaultLocale: "en",
-      locales: ["en"],
-      sourceLocale: "en",
       title,
       description: "",
       items: [],
