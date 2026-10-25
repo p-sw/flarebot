@@ -13,9 +13,7 @@ async function expectNoHorizontalOverflow(
 
 const widths = [360, 390] as const;
 
-async function expectNoOverflowAtWidths(
-  page: import("@playwright/test").Page,
-) {
+async function expectNoOverflowAtWidths(page: import("@playwright/test").Page) {
   for (const width of widths) {
     await page.setViewportSize({ width, height: 800 });
     await expectNoHorizontalOverflow(page);
