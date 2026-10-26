@@ -112,7 +112,7 @@ export function StatusPagesPage() {
                       void setRoot(page.id, checked)
                     }
                   />
-                  <p className="text-sm text-muted-foreground">
+                  <p className="break-words text-sm text-muted-foreground">
                     {t("page_root_note", { slug: page.slug })}
                   </p>
                   {page.serveAtRoot ? (
