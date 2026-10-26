@@ -185,7 +185,7 @@ describe("region placement", () => {
     const override = crypto.randomUUID();
     const automatic = crypto.randomUUID();
     const inheritedShard = `weur-${810_000 + Math.floor(Math.random() * 10_000)}`;
-    const overrideShard = `enam-${820_000 + Math.floor(Math.random() * 10_000)}`;
+    const overrideShard = `weur-${820_000 + Math.floor(Math.random() * 10_000)}`;
     const automaticShard = `sam-${830_000 + Math.floor(Math.random() * 10_000)}`;
     await insertMonitor(inherited, inheritedShard, '["default"]');
     await insertMonitor(override, overrideShard, '["weur"]');

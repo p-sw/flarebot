@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-import { env } from "cloudflare:test";
+import { env, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import {
   DAY_MS,
@@ -103,6 +103,28 @@ describe("scheduler shard", () => {
     const shardId = `repair-${id}`;
     await insertMonitor(id, shardId);
     const stub = schedulerStub(env, shardId);
+    const now = Date.now();
+    await stub.upsert({
+      id,
+      name: id,
+      type: "heartbeat",
+      intervalMs: 60_000,
+      timeoutMs: 10_000,
+      retries: 2,
+      recoveryThreshold: 1,
+      config: { graceSeconds: 30 },
+      paused: false,
+      nextCheckAt: now + 60_000,
+      state: initialState(now),
+      lastPushAt: null,
+      regions: ["auto"],
+    });
+    await runInDurableObject(
+      env.SCHEDULER.get(env.SCHEDULER.idFromName(shardId)),
+      async (_instance, state) => {
+        await state.storage.deleteAlarm();
+      },
+    );
     expect(await stub.alarmAt()).toBeNull();
     await writeSetting(env, HISTORY_RETENTION_KEY, 90);
     await env.DB.prepare(
