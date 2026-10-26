@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { t } from "@shared/copy";
+import { BannerAlert } from "@/pages/status-notice";
 
 export default function StatusHero({
   title,
@@ -59,11 +60,7 @@ export default function StatusHero({
         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${tone}`} />
         <span className="min-w-0 truncate">{label}</span>
       </p>
-      {banner ? (
-        <p className="mt-4 break-words rounded-lg bg-muted px-3 py-2 text-sm">
-          {banner}
-        </p>
-      ) : null}
+      {banner ? <BannerAlert className="mt-4">{banner}</BannerAlert> : null}
     </section>
   );
 }

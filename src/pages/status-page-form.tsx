@@ -42,6 +42,7 @@ import { Textarea } from "../ui/textarea";
 import { controlClass, Field } from "./fields";
 import { RootSwitch, rootToggleError } from "./root-switch";
 import { StatusLayoutEditor } from "./status-layout-editor";
+import { BannerAlert } from "./status-notice";
 import { SubscribersPanel } from "./subscribers-panel";
 
 type Draft = {
@@ -664,9 +665,7 @@ function StatusPageForm({
             </p>
           ) : null}
           {draft.banner.trim() ? (
-            <p className="mt-3 break-words rounded-lg bg-muted px-3 py-2 text-sm">
-              {draft.banner}
-            </p>
+            <BannerAlert className="mt-3">{draft.banner}</BannerAlert>
           ) : null}
           <div className="mt-4 grid gap-3">
             {draft.sections.map((section) => (
