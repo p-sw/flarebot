@@ -81,4 +81,4 @@ An uncached request stays small:
 
 There is no extra cron and no write on a badge view. Turning the switch on writes one monitor row and one audit row (`monitor.badges`). Migration `0004_monitor_badges.sql` adds `monitors.badges_enabled` with default `0` and an index on `status_page_items.monitor_id`. It does not rewrite existing monitor rows beyond filling that default, and it does not delete history.
 
-The public image can lag a status change by up to two minutes. The console preview is `Cache-Control: private, no-store` and is only available to someone who can read that monitor.
+The public image can lag a status change by up to two minutes. The console preview is `Cache-Control: private, no-store` and is only available to someone who can read that monitor. A request that reaches Cloudflare still counts against the Workers daily request cap on the Free plan, including a Cache API hit. That cap, and the Paid plan's lack of a daily cutoff, is covered in the README under [Workers Paid plan](../README.md#workers-paid-plan).
