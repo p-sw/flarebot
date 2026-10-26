@@ -4,7 +4,7 @@ import { t } from "@shared/copy";
 import { can } from "@shared/permissions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { ApiClientError, api, errorText } from "../lib/api";
 import { refreshQueries } from "../lib/query-sync";
 import { useToggleLock } from "../lib/toggle-guard";
@@ -244,6 +244,7 @@ function Toggle({
   disabled: boolean;
   onCheckedChange: (checked: boolean) => void;
 }) {
+  const labelId = useId();
   return (
     <div className="min-w-0 rounded-lg border border-border p-3">
       {/* biome-ignore lint/a11y/noLabelWithoutControl: Switch is the control */}
@@ -251,13 +252,16 @@ function Toggle({
         <Switch
           checked={checked}
           disabled={disabled}
+          aria-labelledby={labelId}
           aria-busy={pending || undefined}
           onCheckedChange={(next) => {
             if (disabled) return;
             onCheckedChange(next);
           }}
         />
-        <span className="min-w-0 font-medium">{label}</span>
+        <span id={labelId} className="min-w-0 font-medium">
+          {label}
+        </span>
         {pending ? (
           <span role="status" className="inline-flex text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

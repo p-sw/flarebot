@@ -117,6 +117,7 @@ export function SubscribeSettings() {
           <Switch
             checked={shownHttp}
             disabled={toggles.pending}
+            aria-labelledby="subscribe-allow-http"
             aria-busy={toggles.pending || undefined}
             onCheckedChange={(checked) => {
               setHttpError("");
@@ -136,7 +137,9 @@ export function SubscribeSettings() {
               });
             }}
           />
-          <span className="font-medium">{t("settings_subscribe_http")}</span>
+          <span id="subscribe-allow-http" className="font-medium">
+            {t("settings_subscribe_http")}
+          </span>
           {toggles.pending ? (
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           ) : null}

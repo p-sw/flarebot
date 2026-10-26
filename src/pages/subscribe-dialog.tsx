@@ -285,10 +285,13 @@ function SubscribeDialog({
                   <label className="flex min-w-0 items-start gap-3 text-sm">
                     <Switch
                       checked={followAll}
+                      aria-labelledby="subscribe-all"
                       onCheckedChange={setFollowAll}
                     />
                     <span className="grid gap-1">
-                      <span className="font-medium">{t("subscribe_all")}</span>
+                      <span id="subscribe-all" className="font-medium">
+                        {t("subscribe_all")}
+                      </span>
                       <span className="text-xs text-muted-foreground">
                         {t("subscribe_all_hint")}
                       </span>
