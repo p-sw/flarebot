@@ -163,13 +163,23 @@ export function MonitorPicker({
                     choose(monitor);
                   }}
                 >
-                  <StatusDot status={monitor.status ?? "unknown"} />
-                  <MonitorTypeIcon type={type} />
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                    <StatusDot status={monitor.status ?? "unknown"} />
+                  </span>
+                  <span className="flex h-5 w-4 shrink-0 items-center justify-center">
+                    <MonitorTypeIcon type={type} />
+                  </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">
+                    <span
+                      className="block truncate text-sm font-medium"
+                      title={monitor.name}
+                    >
                       {monitor.name}
                     </span>
-                    <span className="block truncate text-xs text-muted-foreground">
+                    <span
+                      className="block truncate text-xs text-muted-foreground"
+                      title={[typeLabel, target].filter(Boolean).join(" · ")}
+                    >
                       {typeLabel}
                       {target ? (
                         <span>

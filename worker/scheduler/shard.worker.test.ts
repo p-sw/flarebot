@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   DAY_MS,
   HISTORY_RETENTION_KEY,
+  SLOT_MS,
   utcDayStart,
 } from "../../shared/history";
 import { assignShard, schedulerStub } from "../monitors/sync";
@@ -133,5 +134,131 @@ describe("scheduler shard", () => {
       "SELECT count(*) AS n FROM mail_outbox WHERE subject = 'old'",
     ).first<{ n: number }>();
     expect(kept?.n).toBe(0);
+  });
+
+  it("writes a slot when the 15 minute bucket closes", async () => {
+    const id = crypto.randomUUID();
+    const shardId = `slot-${id}`;
+    await insertMonitor(id, shardId);
+    const stub = schedulerStub(env, shardId);
+    const now = Date.now();
+    await stub.upsert({
+      id,
+      name: id,
+      type: "heartbeat",
+      intervalMs: 60_000,
+      timeoutMs: 10_000,
+      retries: 2,
+      recoveryThreshold: 1,
+      config: { graceSeconds: 30 },
+      paused: false,
+      nextCheckAt: now + 60_000,
+      state: initialState(now),
+      lastPushAt: null,
+      regions: ["default"],
+    });
+    const slot = Math.floor(now / SLOT_MS) * SLOT_MS;
+    await stub.noteSample(id, {
+      t: slot + 1000,
+      ok: true,
+      ms: 20,
+      internal: false,
+    });
+    await stub.noteSample(id, {
+      t: slot + SLOT_MS + 1000,
+      ok: false,
+      ms: 40,
+      internal: false,
+    });
+    const row = await env.DB.prepare(
+      `SELECT ok_count, fail_count, latency_sum
+       FROM uptime_slots WHERE monitor_id = ? AND slot_start = ?`,
+    )
+      .bind(id, slot)
+      .first<{ ok_count: number; fail_count: number; latency_sum: number }>();
+    expect(row).toEqual({ ok_count: 1, fail_count: 0, latency_sum: 20 });
+    expect((await stub.getOne(id))?.slot).toEqual({
+      slotStart: slot + SLOT_MS,
+      ok: 0,
+      fail: 1,
+      sum: 40,
+      max: 40,
+      maint: 0,
+    });
+  });
+
+  it("counts a maintenance sample on the slot and leaves it out of uptime", async () => {
+    const id = crypto.randomUUID();
+    const shardId = `slot-maint-${id}`;
+    await insertMonitor(id, shardId);
+    const now = Date.now();
+    const slot = Math.floor(now / SLOT_MS) * SLOT_MS;
+    const windowId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO maintenance_windows (
+        id, organization_id, title, description, timezone, start_at, end_at,
+        recurrence, weekdays_json, notify, created_at, updated_at
+      ) VALUES (?, 'org-shard', 'Window', '', 'UTC', ?, ?, 'once', '[]', 0, ?, ?)`,
+    )
+      .bind(windowId, slot, slot + SLOT_MS, now, now)
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO maintenance_monitors (maintenance_id, monitor_id) VALUES (?, ?)",
+    )
+      .bind(windowId, id)
+      .run();
+    const stub = schedulerStub(env, shardId);
+    await stub.upsert({
+      id,
+      name: id,
+      type: "heartbeat",
+      intervalMs: 60_000,
+      timeoutMs: 10_000,
+      retries: 2,
+      recoveryThreshold: 1,
+      config: { graceSeconds: 30 },
+      paused: false,
+      nextCheckAt: now + 60_000,
+      state: initialState(now),
+      lastPushAt: null,
+      regions: ["default"],
+    });
+    await stub.noteSample(id, {
+      t: slot + 1000,
+      ok: false,
+      ms: 80,
+      internal: false,
+    });
+    await stub.noteSample(id, {
+      t: slot + SLOT_MS + 1000,
+      ok: true,
+      ms: 10,
+      internal: false,
+    });
+    const row = await env.DB.prepare(
+      `SELECT ok_count, fail_count, latency_sum, maint_count
+       FROM uptime_slots WHERE monitor_id = ? AND slot_start = ?`,
+    )
+      .bind(id, slot)
+      .first<{
+        ok_count: number;
+        fail_count: number;
+        latency_sum: number;
+        maint_count: number;
+      }>();
+    expect(row).toEqual({
+      ok_count: 0,
+      fail_count: 0,
+      latency_sum: 0,
+      maint_count: 1,
+    });
+    expect((await stub.getOne(id))?.slot).toEqual({
+      slotStart: slot + SLOT_MS,
+      ok: 1,
+      fail: 0,
+      sum: 10,
+      max: 10,
+      maint: 0,
+    });
   });
 });

@@ -234,7 +234,124 @@ describe("root status page routing", () => {
       .first<{ root: number }>();
     expect(row?.root).toBe(0);
   });
+
+  it("keeps a single root across concurrent writes, edits, and deletes", async () => {
+    const owner = await ownerSession();
+    const stamp = crypto.randomUUID().slice(0, 8);
+    const alpha = await createPage(owner, `race-a-${stamp}`, "Race Alpha");
+    const beta = await createPage(owner, `race-b-${stamp}`, "Race Beta");
+    const hidden = await createPage(
+      owner,
+      `race-h-${stamp}`,
+      "Race Hidden",
+      false,
+    );
+    expect(
+      (
+        await api(
+          `/api/status-pages/${hidden}/root`,
+          { method: "PUT", body: JSON.stringify({ serveAtRoot: true }) },
+          owner,
+        )
+      ).status,
+    ).toBe(400);
+
+    expect(
+      (
+        await api(
+          `/api/status-pages/${alpha}/root`,
+          { method: "PUT", body: JSON.stringify({ serveAtRoot: true }) },
+          owner,
+        )
+      ).status,
+    ).toBe(200);
+
+    const raced = await Promise.all(
+      Array.from({ length: 12 }, (_, index) => {
+        const id = index % 2 === 0 ? alpha : beta;
+        return api(
+          `/api/status-pages/${id}/root`,
+          { method: "PUT", body: JSON.stringify({ serveAtRoot: true }) },
+          owner,
+        );
+      }),
+    );
+    for (const response of raced) {
+      expect([200, 409]).toContain(response.status);
+    }
+    const afterRace = await rootIds();
+    expect(afterRace).toHaveLength(1);
+    expect([alpha, beta]).toContain(afterRace[0]);
+
+    const created = await Promise.all(
+      ["c", "d"].map((suffix) =>
+        api(
+          "/api/status-pages",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              slug: `race-${suffix}-${stamp}`,
+              published: true,
+              title: `Race ${suffix}`,
+              serveAtRoot: true,
+              items: [],
+            }),
+          },
+          owner,
+        ),
+      ),
+    );
+    for (const response of created) {
+      expect([201, 409]).toContain(response.status);
+    }
+    expect(
+      created.filter((response) => response.status === 201).length,
+    ).toBeGreaterThan(0);
+    const afterCreate = await rootIds();
+    expect(afterCreate).toHaveLength(1);
+
+    const holder = afterCreate[0] === alpha ? beta : alpha;
+    const other = holder === alpha ? beta : alpha;
+    const edited = await api(
+      `/api/status-pages/${holder}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          slug: holder === alpha ? `race-a-${stamp}` : `race-b-${stamp}`,
+          published: true,
+          title: "Race edited",
+          serveAtRoot: true,
+          items: [],
+        }),
+      },
+      owner,
+    );
+    expect(edited.status).toBe(200);
+    expect(await rootIds()).toEqual([holder]);
+    await expect(
+      env.DB.prepare("UPDATE status_pages SET serve_at_root = 1 WHERE id = ?")
+        .bind(other)
+        .run(),
+    ).rejects.toThrow();
+    expect(await rootIds()).toEqual([holder]);
+
+    const removed = await api(
+      `/api/status-pages/${holder}`,
+      { method: "DELETE" },
+      owner,
+    );
+    expect(removed.status).toBe(200);
+    expect(await rootIds()).toEqual([]);
+    expect((await api("/")).headers.get("location")).toBe("/login");
+  });
 });
+
+async function rootIds(): Promise<string[]> {
+  const rows = await env.DB.prepare(
+    "SELECT id FROM status_pages WHERE serve_at_root = 1",
+  ).all<{ id: string }>();
+  return rows.results.map((row) => row.id);
+}
 
 async function createPage(
   cookie: string,

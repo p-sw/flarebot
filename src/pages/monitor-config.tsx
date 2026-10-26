@@ -55,8 +55,13 @@ export function MonitorConfig({ monitor }: { monitor: MonitorDetail }) {
           <Row label={t("monitor_type")}>{monitorTypeLabel(monitor.type)}</Row>
           <Row label={t("monitor_target")}>
             {target ? (
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <span className="min-w-0 break-all font-mono">{target}</span>
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  className="min-w-0 flex-1 truncate font-mono"
+                  title={target}
+                >
+                  {target}
+                </span>
                 <Button
                   type="button"
                   size="sm"
@@ -185,7 +190,11 @@ export function MonitorConfig({ monitor }: { monitor: MonitorDetail }) {
             ) : (
               <ul className="grid min-w-0 gap-1">
                 {monitor.channelIds.map((id) => (
-                  <li key={id} className="break-words">
+                  <li
+                    key={id}
+                    className="truncate"
+                    title={names.get(id) ?? t("monitor_channel_missing")}
+                  >
                     {names.get(id) ?? t("monitor_channel_missing")}
                   </li>
                 ))}
@@ -202,7 +211,8 @@ export function MonitorConfig({ monitor }: { monitor: MonitorDetail }) {
                     <Link
                       to="/console/status-pages/$id"
                       params={{ id: page.id }}
-                      className="break-words underline-offset-2 hover:underline"
+                      className="block truncate underline-offset-2 hover:underline"
+                      title={page.title}
                     >
                       {page.title}
                     </Link>
@@ -228,7 +238,8 @@ function SecretValue({ value, hidden }: { value: string; hidden: boolean }) {
   return (
     <motion.span
       key={hidden ? "hidden" : "shown"}
-      className="min-w-0 break-all font-mono"
+      title={value}
+      className="block min-w-0 truncate font-mono"
       initial={
         motionPrefs.still ? false : { opacity: 0, y: motionPrefs.distance }
       }
@@ -244,7 +255,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid min-w-0 gap-1 border-b border-border py-3 last:border-b-0 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-4">
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 break-words text-sm">{children}</dd>
+      <dd className="min-w-0 text-sm">{children}</dd>
     </div>
   );
 }

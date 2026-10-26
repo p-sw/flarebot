@@ -256,7 +256,12 @@ export function SetupPage() {
             <div className="grid gap-3">
               <h2 className="font-medium">{t("account_passkey_add")}</h2>
               {pushUrl ? (
-                <p className="break-all font-mono text-xs">{pushUrl}</p>
+                <p
+                  className="max-w-full min-w-0 overflow-x-auto whitespace-nowrap font-mono text-xs"
+                  title={pushUrl}
+                >
+                  {pushUrl}
+                </p>
               ) : null}
               <PendingButton
                 type="button"

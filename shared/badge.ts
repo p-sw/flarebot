@@ -70,8 +70,8 @@ export function responseColor(value: number | null): string {
 }
 
 export function effectiveWindowLabel(window: HistoryWindow): string {
-  if (window.bucket === "hour") return "24h";
-  return `${window.bars}d`;
+  if (window.configured === "24h" || window.shownDays <= 1) return "24h";
+  return `${window.shownDays}d`;
 }
 
 function roundUpToOdd(value: number): number {

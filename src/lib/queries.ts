@@ -57,6 +57,21 @@ export function monitorQuery(id: string) {
   });
 }
 
+export type MonitorSpark = {
+  currentMs: number | null;
+  averageMs: number | null;
+  uptime: number | null;
+  points: { t: number; ms: number }[];
+};
+
+export function sparkQuery(id: string) {
+  return queryOptions({
+    queryKey: ["spark", id],
+    queryFn: () => api<MonitorSpark>(`/api/monitors/${id}/spark`),
+    staleTime: fresh,
+  });
+}
+
 export function statsQuery(id: string) {
   return queryOptions({
     queryKey: ["stats", id],

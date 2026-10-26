@@ -41,6 +41,14 @@ export type SchedulerApi = {
         max: number;
         samples: number[];
       } | null;
+      slot: {
+        slotStart: number;
+        ok: number;
+        fail: number;
+        sum: number;
+        max: number;
+        maint: number;
+      } | null;
     }[]
   >;
   getOne(id: string): Promise<{
@@ -56,6 +64,14 @@ export type SchedulerApi = {
       sum: number;
       max: number;
       samples: number[];
+    } | null;
+    slot: {
+      slotStart: number;
+      ok: number;
+      fail: number;
+      sum: number;
+      max: number;
+      maint: number;
     } | null;
   } | null>;
   ensureAlarm(): Promise<void>;

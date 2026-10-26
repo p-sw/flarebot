@@ -371,6 +371,40 @@ export function registerMonitors(app: Hono<AppEnv>): void {
     return c.json({ ok: true });
   });
 
+  app.get("/api/monitors/:id/spark", async (c) => {
+    const actor = await requireActor(c);
+    requireCan(actor, "monitors.read");
+    const row = await ownedMonitor(
+      c.env,
+      actor.organizationId,
+      c.req.param("id"),
+    );
+    // One Durable Object read. The shard already keeps the last 60 checks,
+    // so the dashboard chart does not scan D1.
+    const live = await schedulerStub(c.env, row.shardId)
+      .getOne(row.id)
+      .catch(() => null);
+    const points = (live?.recent ?? []).slice(-60);
+    let ok = 0;
+    let fail = 0;
+    let sum = 0;
+    let counted = 0;
+    for (const point of points) {
+      if (point.maint) continue;
+      if (point.ok) ok += 1;
+      else fail += 1;
+      sum += point.ms;
+      counted += 1;
+    }
+    const last = points.at(-1);
+    return c.json({
+      currentMs: last ? last.ms : null,
+      averageMs: counted === 0 ? null : Math.round(sum / counted),
+      uptime: percent(ok, fail),
+      points: points.map((point) => ({ t: point.t, ms: point.ms })),
+    });
+  });
+
   app.get("/api/monitors/:id/stats", async (c) => {
     const actor = await requireActor(c);
     requireCan(actor, "monitors.read");

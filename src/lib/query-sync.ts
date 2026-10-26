@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT
 
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
-import type { MonitorDetail, MonitorListItem } from "./queries";
+import type {
+  MonitorDetail,
+  MonitorListItem,
+  StatusPageDetail,
+} from "./queries";
 
 type MonitorList = { monitors: MonitorListItem[] };
 
@@ -56,6 +60,42 @@ export function commitMonitor(
       ),
     };
   });
+}
+
+type PageList = {
+  pages: { id: string; serveAtRoot: boolean }[];
+};
+
+export function commitServeAtRoot(
+  client: QueryClient,
+  pageId: string,
+  serveAtRoot: boolean,
+): void {
+  const nextFlag = (id: string, current: boolean) => {
+    if (serveAtRoot) return id === pageId;
+    return id === pageId ? false : current;
+  };
+  client.setQueryData<PageList>(["pages"], (current) => {
+    if (!current) return current;
+    return {
+      ...current,
+      pages: current.pages.map((page) => ({
+        ...page,
+        serveAtRoot: nextFlag(page.id, page.serveAtRoot),
+      })),
+    };
+  });
+  for (const [key, page] of client.getQueriesData<StatusPageDetail>({
+    queryKey: ["status-page"],
+  })) {
+    if (!page || page.serveAtRoot === nextFlag(page.id, page.serveAtRoot)) {
+      continue;
+    }
+    client.setQueryData<StatusPageDetail>(key, {
+      ...page,
+      serveAtRoot: nextFlag(page.id, page.serveAtRoot),
+    });
+  }
 }
 
 export function dropMonitor(client: QueryClient, id: string): void {

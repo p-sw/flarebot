@@ -400,7 +400,12 @@ function MonitorForm({
         {pushUrl ? (
           <div className="min-w-0 rounded-lg bg-muted p-3 text-sm">
             <p className="font-medium">{t("monitor_push_url")}</p>
-            <p className="mt-1 break-all font-mono text-xs">{pushUrl}</p>
+            <p
+              className="mt-1 max-w-full min-w-0 overflow-x-auto whitespace-nowrap font-mono text-xs"
+              title={pushUrl}
+            >
+              {pushUrl}
+            </p>
             <p className="mt-2 text-muted-foreground">
               {t("monitor_push_hint")}
             </p>

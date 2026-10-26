@@ -2,6 +2,7 @@
 
 import { sql } from "drizzle-orm";
 import {
+  index,
   integer,
   primaryKey,
   sqliteTable,
@@ -228,6 +229,23 @@ export const uptimeHourly = sqliteTable(
     maintCount: integer("maint_count").notNull().default(0),
   },
   (table) => [primaryKey({ columns: [table.monitorId, table.hourStart] })],
+);
+
+export const uptimeSlots = sqliteTable(
+  "uptime_slots",
+  {
+    monitorId: text("monitor_id").notNull(),
+    slotStart: integer("slot_start").notNull(),
+    okCount: integer("ok_count").notNull(),
+    failCount: integer("fail_count").notNull(),
+    latencySum: integer("latency_sum").notNull(),
+    latencyMax: integer("latency_max").notNull(),
+    maintCount: integer("maint_count").notNull().default(0),
+  },
+  (table) => [
+    primaryKey({ columns: [table.monitorId, table.slotStart] }),
+    index("uptime_slots_slot_idx").on(table.slotStart),
+  ],
 );
 
 export const uptimeDaily = sqliteTable(

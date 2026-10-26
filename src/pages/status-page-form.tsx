@@ -28,7 +28,7 @@ import {
   type StatusPageDetail,
   statusPageQuery,
 } from "../lib/queries";
-import { refreshQueries } from "../lib/query-sync";
+import { commitServeAtRoot, refreshQueries } from "../lib/query-sync";
 import { useToggleLock } from "../lib/toggle-guard";
 import { useSubmitGuard } from "../lib/use-submit-guard";
 import { useMotionPrefs } from "../motion/page";
@@ -305,10 +305,14 @@ function StatusPageForm({
     setRootError("");
     await toggles.run("root", async () => {
       try {
-        await api(`/api/status-pages/${page.id}/root`, {
-          method: "PUT",
-          body: JSON.stringify({ serveAtRoot }),
-        });
+        const saved = await api<{ id: string; serveAtRoot: boolean }>(
+          `/api/status-pages/${page.id}/root`,
+          {
+            method: "PUT",
+            body: JSON.stringify({ serveAtRoot }),
+          },
+        );
+        commitServeAtRoot(client, saved.id, saved.serveAtRoot);
         await refreshQueries(client, [["pages"], ["status-page", page.id]]);
       } catch (cause) {
         setRootError(rootToggleError(cause));
@@ -647,7 +651,10 @@ function StatusPageForm({
               style={{ backgroundColor: draft.accent.trim() }}
             />
           ) : null}
-          <h3 className="mt-4 break-words text-xl font-medium">
+          <h3
+            className="mt-4 truncate text-xl font-medium"
+            title={draft.title.trim() || t("page_title")}
+          >
             {draft.title.trim() || t("page_title")}
           </h3>
           {draft.description.trim() ? (
@@ -664,13 +671,23 @@ function StatusPageForm({
             {draft.sections.map((section) => (
               <section key={section.key} className="min-w-0">
                 {section.name.trim() ? (
-                  <h4 className="break-words text-sm font-medium text-muted-foreground">
+                  <h4
+                    className="truncate text-sm font-medium text-muted-foreground"
+                    title={section.name.trim()}
+                  >
                     {section.name.trim()}
                   </h4>
                 ) : null}
                 <ol className="mt-1 grid gap-1">
                   {section.items.map((item) => (
-                    <li key={item.key} className="break-words text-sm">
+                    <li
+                      key={item.key}
+                      className="truncate text-sm"
+                      title={
+                        statusItemLabel(item.displayName, item.monitorName) ||
+                        t("monitor_fallback_name")
+                      }
+                    >
                       {statusItemLabel(item.displayName, item.monitorName) ||
                         t("monitor_fallback_name")}
                     </li>

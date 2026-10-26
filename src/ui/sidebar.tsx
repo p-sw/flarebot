@@ -123,7 +123,7 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     <SidebarContext.Provider
       value={{ open, setOpen, openMobile, setOpenMobile, isMobile, toggle }}
     >
-      <div className="flex min-h-svh w-full">{children}</div>
+      <div className="flex min-h-svh w-full min-w-0">{children}</div>
     </SidebarContext.Provider>
   );
 }

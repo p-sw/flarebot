@@ -3,6 +3,7 @@
 import AppFooter from "@brand/overrides/AppFooter";
 import StatusHero from "@brand/overrides/StatusHero";
 import { formatDateTime, t } from "@shared/copy";
+import type { HistoryBar } from "@shared/history";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { Badge } from "@/ui/badge";
@@ -10,6 +11,7 @@ import { api } from "../lib/api";
 import { incidentStatusLabel } from "./announcement-fields";
 import { responseText, statusTone } from "./fields";
 import { Markdown } from "./markdown";
+import { UptimeBars } from "./uptime-bars";
 
 type PublicPage = {
   slug: string;
@@ -20,8 +22,9 @@ type PublicPage = {
   logoUrl?: string | null;
   accent?: string | null;
   displayRange: "24h" | "7d" | "30d" | "90d";
-  bucket: "hour" | "day";
+  bucket: "slot" | "hour" | "day";
   barCount: number;
+  shownDays: number;
   clamped: boolean;
   retentionDays: number;
   overall:
@@ -57,14 +60,8 @@ type PublicPage = {
       status: string;
       uptime: number | null;
       responseMs: number | null;
-      maint?: number;
-      bars: {
-        start: number;
-        uptime: number | null;
-        responseMs: number | null;
-        state?: string;
-        maint?: number;
-      }[];
+      maint: number;
+      bars: HistoryBar[];
     }[];
   }[];
 };
@@ -77,8 +74,8 @@ function configuredLabel(range: PublicPage["displayRange"]): string {
 }
 
 function shownLabel(page: PublicPage): string {
-  if (page.bucket === "hour") return t("range_24h");
-  return t("status_shown_days", { count: page.barCount });
+  if (page.shownDays <= 1) return t("range_24h");
+  return t("status_shown_days", { count: page.shownDays });
 }
 
 function statusLabel(status: string) {
@@ -99,17 +96,6 @@ function statusLabel(status: string) {
     return incidentStatusLabel(status);
   }
   return t("status_unknown");
-}
-
-function barClass(bar: { uptime: number | null; state?: string }): string {
-  if (bar.state === "maintenance") return "bg-primary";
-  if (bar.state === "up") return "bg-status-up";
-  if (bar.state === "degraded") return "bg-status-pending";
-  if (bar.state === "down") return "bg-status-down";
-  if (bar.state === "empty" || bar.uptime === null) return "bg-muted";
-  if (bar.uptime >= 99) return "bg-status-up";
-  if (bar.uptime >= 90) return "bg-status-pending";
-  return "bg-status-down";
 }
 
 export function PublicStatusPage() {
@@ -158,7 +144,8 @@ export function PublicStatusPage() {
                   <Link
                     to="/s/$slug/incidents/$incidentId"
                     params={{ slug: data.slug, incidentId: incident.id }}
-                    className="underline-offset-2 hover:underline"
+                    className="break-words underline-offset-2 hover:underline"
+                    title={incident.title}
                   >
                     {incident.title}
                   </Link>
@@ -199,7 +186,10 @@ export function PublicStatusPage() {
               className="min-w-0 rounded-lg border border-primary/30 bg-card p-4"
             >
               <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-                <h3 className="min-w-0 break-words font-medium">
+                <h3
+                  className="min-w-0 break-words font-medium"
+                  title={window.title}
+                >
                   {window.title}
                 </h3>
                 <Badge tone="maintenance">
@@ -213,7 +203,7 @@ export function PublicStatusPage() {
                   {window.description}
                 </p>
               ) : null}
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-2 min-w-0 break-words text-xs tabular-nums text-muted-foreground">
                 {formatDateTime(window.start)} – {formatDateTime(window.end)}
               </p>
               {window.monitors.length > 0 ? (
@@ -238,7 +228,10 @@ export function PublicStatusPage() {
         {data.groups.map((group) => (
           <section key={group.name || "default"}>
             {group.name ? (
-              <h2 className="mb-2 text-sm font-medium text-muted-foreground">
+              <h2
+                className="mb-2 min-w-0 truncate text-sm font-medium text-muted-foreground"
+                title={group.name}
+              >
                 {group.name}
               </h2>
             ) : null}
@@ -248,15 +241,18 @@ export function PublicStatusPage() {
                   key={item.id}
                   className="min-w-0 rounded-lg border border-border bg-card p-4"
                 >
-                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-                    <h3 className="min-w-0 break-words font-medium">
+                  <div className="flex min-w-0 items-center justify-between gap-3">
+                    <h3
+                      className="min-w-0 truncate font-medium"
+                      title={item.name || t("monitor_fallback_name")}
+                    >
                       {item.name || t("monitor_fallback_name")}
                     </h3>
                     <Badge tone={statusTone(item.status)}>
                       {statusLabel(item.status)}
                     </Badge>
                   </div>
-                  <p className="mt-1 text-xs break-words text-muted-foreground">
+                  <p className="mt-1 truncate text-xs tabular-nums text-muted-foreground">
                     {shownLabel(data)}{" "}
                     {item.uptime === null
                       ? (item.maint ?? 0) > 0
@@ -266,34 +262,7 @@ export function PublicStatusPage() {
                     {" · "}
                     {t("response_label")} {responseText(item.responseMs)}
                   </p>
-                  <div
-                    className="mt-3 flex h-6 min-w-0 items-end gap-px"
-                    aria-hidden="true"
-                  >
-                    {item.bars.map((bar) => (
-                      <div
-                        key={bar.start}
-                        title={
-                          bar.state === "maintenance"
-                            ? t("status_bar_maintenance")
-                            : bar.uptime === null
-                              ? t("chart_empty")
-                              : t("status_bar_title", {
-                                  uptime: t("uptime_percent", {
-                                    value: bar.uptime,
-                                  }),
-                                  response: responseText(bar.responseMs),
-                                })
-                        }
-                        className={`min-w-0 flex-1 ${barClass(bar)} ${
-                          (bar.maint ?? 0) > 0 && bar.state !== "maintenance"
-                            ? "border-t-2 border-primary"
-                            : ""
-                        }`}
-                        style={{ height: 16 }}
-                      />
-                    ))}
-                  </div>
+                  <UptimeBars bars={item.bars} />
                 </article>
               ))}
             </div>
@@ -314,7 +283,7 @@ export function PublicStatusPage() {
                 className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm"
               >
                 <span className="min-w-0 break-words">{incident.title}</span>
-                <span className="text-xs text-muted-foreground">
+                <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
                   {formatDateTime(incident.resolvedAt)}
                 </span>
               </Link>

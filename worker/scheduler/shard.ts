@@ -2,6 +2,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
+import { SLOT_MS } from "../../shared/history";
 import type { MonitorType } from "../../shared/schemas";
 import { runCheck } from "../checks/run";
 import { decryptString } from "../crypto/secret";
@@ -14,6 +15,7 @@ import { CHECK_CONCURRENCY, CHECKS_PER_ALARM } from "./capacity";
 import {
   closeOutage,
   mergeHourly,
+  mergeSlot,
   openOutage,
   saveCert,
   saveRuntime,
@@ -46,15 +48,29 @@ type Rollup = {
   max: number;
   samples: number[];
 };
+type SlotRollup = {
+  slotStart: number;
+  ok: number;
+  fail: number;
+  sum: number;
+  max: number;
+  maint: number;
+};
+
 function normalizeRollup(rollup: Rollup | undefined): Rollup | null {
   if (!rollup) return null;
   return { ...rollup, maint: rollup.maint ?? 0 };
 }
 
+function normalizeSlot(slot: SlotRollup | undefined): SlotRollup | null {
+  if (!slot) return null;
+  return { ...slot, maint: slot.maint ?? 0 };
+}
 type Store = {
   monitors: Record<string, Snapshot>;
   recent: Record<string, Point[]>;
   rollups: Record<string, Rollup>;
+  slots: Record<string, SlotRollup>;
   flushedAt: number;
 };
 
@@ -103,6 +119,7 @@ export class SchedulerShard extends DurableObject<Env> {
       delete store.monitors[id];
       delete store.recent[id];
       delete store.rollups[id];
+      delete store.slots[id];
       await this.persist(store);
     });
   }
@@ -128,6 +145,7 @@ export class SchedulerShard extends DurableObject<Env> {
       nextCheckAt: number;
       lastPushAt: number | null;
       rollup: Rollup | null;
+      slot: SlotRollup | null;
     }[]
   > {
     const store = await this.load();
@@ -138,6 +156,7 @@ export class SchedulerShard extends DurableObject<Env> {
       nextCheckAt: monitor.nextCheckAt,
       lastPushAt: monitor.lastPushAt,
       rollup: normalizeRollup(store.rollups[monitor.id]),
+      slot: normalizeSlot(store.slots[monitor.id]),
     }));
   }
 
@@ -147,6 +166,7 @@ export class SchedulerShard extends DurableObject<Env> {
     nextCheckAt: number;
     lastPushAt: number | null;
     rollup: Rollup | null;
+    slot: SlotRollup | null;
   } | null> {
     const store = await this.load();
     const monitor = store.monitors[id];
@@ -157,6 +177,7 @@ export class SchedulerShard extends DurableObject<Env> {
       nextCheckAt: monitor.nextCheckAt,
       lastPushAt: monitor.lastPushAt,
       rollup: normalizeRollup(store.rollups[id]),
+      slot: normalizeSlot(store.slots[id]),
     };
   }
 
@@ -390,6 +411,33 @@ export class SchedulerShard extends DurableObject<Env> {
       }
     }
     store.rollups[id] = current;
+    const slotStart = Math.floor(sample.t / SLOT_MS) * SLOT_MS;
+    const previous = store.slots[id];
+    if (
+      previous &&
+      previous.slotStart !== slotStart &&
+      previous.ok + previous.fail + (previous.maint ?? 0) > 0
+    ) {
+      await mergeSlot(this.env.DB, id, {
+        ...previous,
+        maint: previous.maint ?? 0,
+      }).catch(() => undefined);
+    }
+    const slot: SlotRollup =
+      !previous || previous.slotStart !== slotStart
+        ? { slotStart, ok: 0, fail: 0, sum: 0, max: 0, maint: 0 }
+        : { ...previous, maint: previous.maint ?? 0 };
+    if (!sample.internal) {
+      if (sample.maintenance) {
+        slot.maint += 1;
+      } else {
+        if (sample.ok) slot.ok += 1;
+        else slot.fail += 1;
+        slot.sum += sample.ms;
+        slot.max = Math.max(slot.max, sample.ms);
+      }
+    }
+    store.slots[id] = slot;
   }
 
   private async flush(store: Store, now: number): Promise<void> {
@@ -454,16 +502,18 @@ export class SchedulerShard extends DurableObject<Env> {
   }
 
   private async load(): Promise<Store> {
-    const [monitors, recent, rollups, flushedAt] = await Promise.all([
+    const [monitors, recent, rollups, slots, flushedAt] = await Promise.all([
       this.ctx.storage.get<Record<string, Snapshot>>("monitors"),
       this.ctx.storage.get<Record<string, Point[]>>("recent"),
       this.ctx.storage.get<Record<string, Rollup>>("rollups"),
+      this.ctx.storage.get<Record<string, SlotRollup>>("slots"),
       this.ctx.storage.get<number>("flushedAt"),
     ]);
     return {
       monitors: monitors ?? {},
       recent: recent ?? {},
       rollups: rollups ?? {},
+      slots: slots ?? {},
       flushedAt: flushedAt ?? 0,
     };
   }
@@ -473,6 +523,7 @@ export class SchedulerShard extends DurableObject<Env> {
       monitors: store.monitors,
       recent: store.recent,
       rollups: store.rollups,
+      slots: store.slots,
       flushedAt: store.flushedAt,
     });
   }
