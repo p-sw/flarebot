@@ -41,12 +41,7 @@ Channel ids are attached to start and completed events only when the window's no
 
 ## Subscriptions
 
-A follow-up can add a sink in one of two ways:
-
-1. Read `announcement_events` (ordered by `created_at`) and deliver to subscribers on the same cron, with its own batch cap.
-2. Wrap `publishAnnouncement` and insert subscriber deliveries beside the channel outbox.
-
-Do not add subscription branching to the incident or maintenance routes. The public status JSON already includes active incidents, incident history, and maintenance. This change does not add an RSS or Atom feed.
+Visitor email, webhook, and RSS or Atom delivery reads `announcement_events` on the same five-minute cron. It does not branch inside the incident or maintenance routes. See `docs/subscriptions.md`. The cron inserts at most 12 delivery rows and sends at most 6 of them per run.
 
 ## Retention
 
@@ -56,5 +51,6 @@ History retention, the same setting that drops old check buckets and finished au
 - one-time maintenance whose end is older than the window
 - cancelled maintenance whose `cancelled_at` is older than the window
 - announcement events older than the window
+- sent or failed subscription deliveries, expired unconfirmed subscribers, and subscription tokens older than the window (confirmed and disabled subscribers stay)
 
 A repeating window that is not cancelled stays, because it still has future occurrences. The audit log is not pruned. Samples that were counted as maintenance stay in `maint_count` until the hourly or daily bucket itself ages out.

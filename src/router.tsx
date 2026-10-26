@@ -69,6 +69,7 @@ import {
   StatusPageCreatePage,
   StatusPageEditPage,
 } from "./pages/status-page-form";
+import { SubscribeManagePage } from "./pages/subscribe-manage";
 import { type SessionUser, Shell } from "./shell";
 import { ContentSkeleton } from "./ui/skeleton";
 
@@ -195,6 +196,12 @@ const publicIncidentRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/s/$slug/incidents/$incidentId",
   component: PublicIncidentPage,
+});
+
+const manageSubscribeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/subscribe/manage/$token",
+  component: SubscribeManagePage,
 });
 
 const homeRoute = createRoute({
@@ -462,6 +469,7 @@ const routeTree = rootRoute.addChildren([
   inviteRoute,
   publicIncidentRoute,
   publicRoute,
+  manageSubscribeRoute,
   homeRoute,
   consoleRoute.addChildren([
     indexRoute,

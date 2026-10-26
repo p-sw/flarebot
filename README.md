@@ -24,6 +24,7 @@ Flarebot checks HTTP, TCP, DNS, certificate expiry, and heartbeat endpoints, con
 - Each status page shows 24 hours, 7 days, 30 days, or 90 days. New pages start at 24 hours
 - Owners set how long check history is kept. Older hourly totals, daily totals, finished outages, resolved incidents, and past maintenance are deleted on a schedule
 - Manual incidents with a public timeline, and maintenance windows that hold alerts and stay out of the uptime percentage
+- Visitor subscriptions on a status page: confirmed email, signed webhooks, and cached RSS and Atom feeds
 - Uptime and response charts from local rollups
 - Public SVG badges for status, uptime, and response time. A private monitor returns an unknown badge
 - Owner, Admin, Editor, and Viewer roles, passkeys, passwords, optional TOTP, and scoped API tokens

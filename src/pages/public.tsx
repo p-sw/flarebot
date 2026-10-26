@@ -11,6 +11,7 @@ import { api } from "../lib/api";
 import { incidentStatusLabel } from "./announcement-fields";
 import { responseText, statusTone } from "./fields";
 import { Markdown } from "./markdown";
+import { type PublicSubscriptions, SubscribeEntry } from "./subscribe-dialog";
 import { UptimeBars } from "./uptime-bars";
 
 type PublicPage = {
@@ -52,6 +53,7 @@ type PublicPage = {
     state: "active" | "upcoming";
     monitors: string[];
   }[];
+  subscriptions?: PublicSubscriptions;
   groups: {
     name: string;
     items: {
@@ -129,6 +131,12 @@ export function PublicStatusPage() {
         banner={data.banner}
         overall={data.overall}
       />
+      {data.subscriptions &&
+      (data.subscriptions.email ||
+        data.subscriptions.webhook ||
+        data.subscriptions.rss) ? (
+        <SubscribeEntry slug={data.slug} subscriptions={data.subscriptions} />
+      ) : null}
       {(data.incidents?.length ?? 0) > 0 ? (
         <section className="mt-8 grid gap-3" aria-label={t("status_incidents")}>
           <h2 className="text-sm font-medium text-muted-foreground">

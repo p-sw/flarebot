@@ -42,6 +42,7 @@ import { Textarea } from "../ui/textarea";
 import { controlClass, Field } from "./fields";
 import { RootSwitch, rootToggleError } from "./root-switch";
 import { StatusLayoutEditor } from "./status-layout-editor";
+import { SubscribersPanel } from "./subscribers-panel";
 
 type Draft = {
   title: string;
@@ -725,6 +726,7 @@ function StatusPageForm({
           </div>
         </aside>
       </div>
+      {mode === "edit" && page ? <SubscribersPanel pageId={page.id} /> : null}
       <ConfirmDialog
         open={blocker.status === "blocked"}
         onOpenChange={(open) => {

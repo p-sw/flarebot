@@ -73,7 +73,11 @@
       "/settings",
       "/settings/*",
       "/account",
-      "/account/*"
+      "/account/*",
+      "/feed.rss",
+      "/feed.atom",
+      "/subscribe/confirm/*",
+      "/subscribe/unsubscribe/*"
     ]
   }
 }

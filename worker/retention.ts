@@ -24,6 +24,8 @@ export type PruneResult = {
   incidents: number;
   maintenance: number;
   announcements: number;
+  deliveries: number;
+  expiredPending: number;
   caughtUp: boolean;
   retentionDays: number;
 };
@@ -78,6 +80,27 @@ const DELETE_ANNOUNCEMENTS = `DELETE FROM announcement_events WHERE rowid IN (
   LIMIT ?
 )`;
 
+const DELETE_DELIVERIES = `DELETE FROM subscription_deliveries WHERE rowid IN (
+  SELECT rowid FROM subscription_deliveries
+  WHERE status != 'pending' AND created_at < ?
+  ORDER BY created_at ASC
+  LIMIT ?
+)`;
+
+const DELETE_EXPIRED_PENDING = `DELETE FROM subscribers WHERE rowid IN (
+  SELECT rowid FROM subscribers
+  WHERE status = 'pending' AND confirm_expires_at IS NOT NULL AND confirm_expires_at < ?
+  ORDER BY confirm_expires_at ASC
+  LIMIT ?
+)`;
+
+const DELETE_SUBSCRIPTION_TOKENS = `DELETE FROM subscription_tokens WHERE rowid IN (
+  SELECT rowid FROM subscription_tokens
+  WHERE created_at < ? OR (expires_at IS NOT NULL AND expires_at < ?)
+  ORDER BY created_at ASC
+  LIMIT ?
+)`;
+
 async function deleteBatch(
   database: D1Database,
   sql: string,
@@ -115,6 +138,8 @@ export async function pruneHistory(
       incidents: 0,
       maintenance: 0,
       announcements: 0,
+      deliveries: 0,
+      expiredPending: 0,
       caughtUp: state.caughtUp,
       retentionDays,
     };
@@ -176,8 +201,45 @@ export async function pruneHistory(
     cutoff,
     announcementLimit,
   );
+  budget -= announcements;
+  const deliveryLimit = Math.min(PRUNE_BATCH, budget);
+  const deliveries = await deleteBatch(
+    env.DB,
+    DELETE_DELIVERIES,
+    cutoff,
+    deliveryLimit,
+  );
+  budget -= deliveries;
+  const pendingLimit = Math.min(PRUNE_BATCH, budget);
+  const expiredPending = await deleteBatch(
+    env.DB,
+    DELETE_EXPIRED_PENDING,
+    now,
+    pendingLimit,
+  );
+  budget -= expiredPending;
+  const tokenLimit = Math.min(PRUNE_BATCH, budget);
+  const tokens =
+    tokenLimit <= 0
+      ? 0
+      : Number(
+          (
+            await env.DB.prepare(DELETE_SUBSCRIPTION_TOKENS)
+              .bind(cutoff, now, tokenLimit)
+              .run()
+          ).meta?.changes ?? 0,
+        );
   const deleted =
-    slots + hourly + daily + outages + incidents + maintenance + announcements;
+    slots +
+    hourly +
+    daily +
+    outages +
+    incidents +
+    maintenance +
+    announcements +
+    deliveries +
+    expiredPending +
+    tokens;
   const caughtUp =
     slots < slotLimit &&
     hourly < hourLimit &&
@@ -185,7 +247,10 @@ export async function pruneHistory(
     outages < outageLimit &&
     incidents < incidentLimit &&
     maintenance < maintenanceLimit &&
-    announcements < announcementLimit;
+    announcements < announcementLimit &&
+    deliveries < deliveryLimit &&
+    expiredPending < pendingLimit &&
+    tokens < tokenLimit;
   const next: PruneState = {
     at: now,
     dayStart: decision.dayStart,
@@ -203,6 +268,8 @@ export async function pruneHistory(
     incidents,
     maintenance,
     announcements,
+    deliveries,
+    expiredPending,
     caughtUp,
     retentionDays,
   };

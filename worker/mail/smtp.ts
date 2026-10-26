@@ -35,7 +35,13 @@ export type MailResult =
 
 export async function sendSmtp(
   settings: SmtpSettings,
-  message: { to: string; subject: string; text: string; messageId: string },
+  message: {
+    to: string;
+    subject: string;
+    text: string;
+    messageId: string;
+    headers?: Record<string, string>;
+  },
   options?: {
     allowLoopback?: boolean;
     responseTimeoutMs?: number;
@@ -101,7 +107,10 @@ export async function sendSmtp(
           to: message.to,
           subject: message.subject,
           text: message.text,
-          headers: { "Message-ID": message.messageId },
+          headers: {
+            "Message-ID": message.messageId,
+            ...safeHeaders(message.headers),
+          },
         }),
         new Promise((_, reject) =>
           setTimeout(
@@ -129,4 +138,14 @@ export async function sendSmtp(
         Date.now() - started < 0,
     };
   }
+}
+
+function safeHeaders(
+  headers: Record<string, string> | undefined,
+): Record<string, string> {
+  const extra: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers ?? {})) {
+    extra[name.replace(/[^\w-]/g, "")] = value.replace(/[\r\n]/g, "");
+  }
+  return extra;
 }

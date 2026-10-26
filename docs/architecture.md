@@ -32,6 +32,9 @@ These D1 columns are deprecated and unused. They stay so existing production row
 | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
 | `/`                                                                                              | The one published status page with `serve_at_root`, or a redirect to `/login`     |
 | `/s/:slug`                                                                                       | That status page. The slug keeps working when the page is also the root           |
+| `/s/:slug/feed.rss`, `/s/:slug/feed.atom`                                                        | Cached incident and maintenance feeds when RSS is enabled for that page           |
+| `/feed.rss`, `/feed.atom`                                                                        | The same feeds for the page served at the site root                               |
+| `/subscribe/confirm/:token`, `/subscribe/unsubscribe/:token`, `/subscribe/manage/:token`         | Confirm, unsubscribe, and manage a visitor subscription                            |
 | `/login`                                                                                         | Sign-in. An existing session redirects to `/console`                              |
 | `/console` and `/console/*`                                                                      | Admin app. Signed-out requests redirect to `/login?next=` with a same-origin path |
 | `/console/status-pages/new` and `/console/status-pages/:id`                                      | Create a status page, or edit its text, branding, and monitor layout              |
@@ -46,6 +49,8 @@ The Worker handles those HTML routes before the asset SPA fallback, so the brows
 `GET /api/auth/oidc/:id/start` redirects to the identity provider and `GET /api/auth/oidc/callback` returns to `/console` with `flarebot_session` set. `POST /api/auth/access` does the same for a validated Cloudflare Access token. Settings for both are `/console/settings`.
 
 Maintenance windows suppress alerts and leave those samples out of uptime. Each alarm loads the active windows in one D1 read and passes the monitor set into the check loop. A sample taken during a window increments `maint_count` instead of `ok_count` or `fail_count`, and it is left out of the latency total. The same count is kept on `uptime_slots`. The shard adds it in memory and writes the row when the 15 minute bucket closes, not once per check. Thin status bars paint a maintenance-only bucket on its own, and a mixed bucket keeps the uptime color with a maintenance edge. Tooltips name that state. The uptime percentage is still `ok / (ok + fail)`. When a 24 hour view has no slot rows for an hour, that hour's maintenance count is split across the 15 minute bars with the ok and fail counts.
+
+Visitor subscriptions, when a status page turns them on, read the same announcement events. Email and webhooks are queued and drained on the five-minute cron. See `docs/subscriptions.md`.
 
 Manual incidents are separate from automatic `outages`. An open incident's impact overrides the live check on the status page: major outage counts as down, and degraded or partial outage counts as degraded. An active maintenance window overrides the live check when no incident impact applies. See `docs/announcements.md` for the event log those two features share.
 

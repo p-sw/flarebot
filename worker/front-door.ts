@@ -11,6 +11,8 @@ import {
   publishedPageExists,
   statusDocument,
 } from "./status/public";
+import { feedResponse } from "./subscribe/feed";
+import { confirmResponse, unsubscribeResponse } from "./subscribe/pages";
 
 const LEGACY_ROOTS = [
   "monitors",
@@ -77,6 +79,25 @@ async function applyDecision(
 }
 
 export function registerFrontDoor(app: Hono<AppEnv>): void {
+  app.on(["GET", "HEAD"], "/s/:slug/feed.rss", (c) =>
+    feedResponse(c.env, c.req.raw, c.req.param("slug"), "rss"),
+  );
+  app.on(["GET", "HEAD"], "/s/:slug/feed.atom", (c) =>
+    feedResponse(c.env, c.req.raw, c.req.param("slug"), "atom"),
+  );
+  app.on(["GET", "HEAD"], "/feed.rss", (c) =>
+    feedResponse(c.env, c.req.raw, null, "rss"),
+  );
+  app.on(["GET", "HEAD"], "/feed.atom", (c) =>
+    feedResponse(c.env, c.req.raw, null, "atom"),
+  );
+  app.get("/subscribe/confirm/:token", (c) =>
+    confirmResponse(c.env, c.req.param("token"), new URL(c.req.url).origin),
+  );
+  app.on(["GET", "POST"], "/subscribe/unsubscribe/:token", (c) =>
+    unsubscribeResponse(c.env, c.req.param("token")),
+  );
+
   app.on(["GET", "HEAD"], "/s/:slug/incidents/:incidentId", async (c) => {
     const exists = await publishedPageExists(c.env, c.req.param("slug"));
     if (!exists) return c.notFound();

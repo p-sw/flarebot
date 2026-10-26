@@ -94,7 +94,11 @@ describe("rollups", () => {
     ]) {
       expect(names.has(name)).toBe(true);
     }
-    expect(names.has("subscribers")).toBe(false);
+    expect(names.has("uptime_slots")).toBe(true);
+    expect(names.has("sso_providers")).toBe(true);
+    expect(names.has("subscribers")).toBe(true);
+    expect(names.has("subscription_deliveries")).toBe(true);
+    expect(names.has("subscription_tokens")).toBe(true);
     expect(names.has("incidents")).toBe(true);
     expect(names.has("maintenance_windows")).toBe(true);
     expect(names.has("announcement_events")).toBe(true);
