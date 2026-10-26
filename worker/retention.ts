@@ -12,6 +12,11 @@ import {
   retentionCutoff,
   shouldPrune,
 } from "../shared/history";
+import {
+  canSpend,
+  markDeferred,
+  PRUNE_RUN_STATEMENTS,
+} from "./scheduler/budget";
 import { readSetting, writeSetting } from "./settings-store";
 
 export type PruneResult = {
@@ -128,6 +133,24 @@ export async function pruneHistory(
   const decision = shouldPrune(state, now);
   const retentionDays = await historyRetentionDays(env);
   if (!decision.run) {
+    return {
+      skipped: true,
+      deleted: 0,
+      slots: 0,
+      hourly: 0,
+      daily: 0,
+      outages: 0,
+      incidents: 0,
+      maintenance: 0,
+      announcements: 0,
+      deliveries: 0,
+      expiredPending: 0,
+      caughtUp: state.caughtUp,
+      retentionDays,
+    };
+  }
+  if (!canSpend(env.DB, PRUNE_RUN_STATEMENTS)) {
+    markDeferred(env.DB);
     return {
       skipped: true,
       deleted: 0,

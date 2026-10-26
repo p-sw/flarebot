@@ -10,6 +10,30 @@ pnpm dev
 
 The dev server is http://127.0.0.1:5173. Create the owner at `/setup`, sign in at `/login`, and use the admin UI at `/console`.
 
+## Scheduler and daily rollups
+
+`SchedulerShard` keeps the open hour in memory. An alarm runs at most 12 checks. About every five minutes, and when the hour changes, the shard flushes that hour to `uptime_hourly` and writes `monitor_state`. The flush is three D1 statements however many monitors are on the shard: one maintenance read, one `batch()` of the hourly reads, and one `batch()` of the upserts. `db.batch()` counts as a single query against D1's 50-queries-per-invocation cap ([D1 limits](https://developers.cloudflare.com/d1/platform/limits/)). Rows read and rows written are still counted per row, including one extra write when a statement touches a secondary index ([D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/)). Batching does not shrink those daily quotas, so the flush stays the existing per-monitor upserts and the daily rollup does not.
+
+The Worker cron is `*/5 * * * *` (`worker/scheduler/watchdog.ts`), 288 runs per day. It repairs a missing alarm, rolls daily totals, prunes history, and drains mail, announcements, and visitor subscriptions. The same invocation stops at 40 D1 statements. Prune, maintenance signals, and the outbox drains check the remaining budget and leave unfinished rows for the next run instead of failing.
+
+`uptime_daily` is the sum of that UTC day's `uptime_hourly` rows: ok, fail, latency sum, max latency, and maintenance count. The open UTC day is not written, which is the same rule as the previous rollup. `rollup_dirty` records a monitor day when an hourly row is upserted. The cron rewrites at most two such closed days per run, with one `INSERT INTO uptime_daily ... SELECT ... GROUP BY`. After midnight the day that just closed is dirty, so the next cron writes it. A flush that lands after that cron marks yesterday again, and the following cron rewrites it. Unchanged days are not read and not written, so retention length drops out of the per-run cost.
+
+`rollup_watermark.pending_before` walks days that already exist, newest closed day first, one day per cron. `0` means the walk has not started. A positive value is the exclusive upper bound of hours still to revisit. `-1` means the walk is finished. Each step rewrites that day from its hourly rows, so a daily row the old loop never finished becomes the same totals. The migration does not update existing rollup rows. The walk is one-time: after `-1`, only dirty days are rewritten.
+
+Let `N` be monitors, `R` be retained days, `C` be 288 cron runs per day, and `H` be hourly rows per monitor on a closed day (at most 24).
+
+| Work                                    | Statements per invocation                 | Rows, steady state                                                                                                                                                                                                                       |
+| --------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Daily rollup, nothing dirty             | 2 (watermark, dirty scan)                 | Reads about `C * (1 + N)` per day from the watermark row and the dirty table. No daily writes                                                                                                                                            |
+| Daily rollup, a closed day is dirty     | 4                                         | Reads `N * H` hourly rows on that run, once or twice a day. Writes `N` daily rows (plus the `day_start` index row, so about `2N` metered writes)                                                                                         |
+| One-time backfill step                  | 7 on the first step, 6 after that         | The first step also marks today. Each step reads one hour to find the day, then `N * H` hourly rows, and writes `N` daily rows. At most `R` runs, then it stops                                                                          |
+| Whole cron, prune running, drains empty | At most 40, and the code defers past that | Prune adds its existing capped deletes. Drains add only the rows they still have budget to send                                                                                                                                          |
+| Shard flush of `M` monitors             | 3                                         | Same row writes as before: about one hourly upsert and one `monitor_state` upsert per monitor that had samples, about 288 times a day, plus the 15-minute slot writes. A dirty mark is one insert per monitor per UTC day, not per flush |
+
+The previous rollup was about `1 + N * R` statements per cron and about `N * R * C` daily-row writes per day. Those no longer depend on `R`. A Free deployment's rollup cost grows with `N`, not with how long history is kept.
+
+Migration `0009_rollup_incremental.sql` adds `rollup_dirty` and `rollup_watermark` only.
+
 Useful scripts:
 
 | Script                  | What it does                                                                                                                                                   |

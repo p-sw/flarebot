@@ -58,7 +58,18 @@ describe("rollups", () => {
       max: 1,
       samples: [1],
     });
-    await rollDaily(env.DB, today + 3_600_000);
+    await env.DB.prepare(
+      "UPDATE rollup_watermark SET pending_before = 0 WHERE id = 1",
+    ).run();
+    for (let step = 0; step < 400; step += 1) {
+      await rollDaily(env.DB, today + 3_600_000);
+      const rolled = await env.DB.prepare(
+        "SELECT ok_count FROM uptime_daily WHERE monitor_id = ? AND day_start = ?",
+      )
+        .bind(id, Date.UTC(2024, 5, 1))
+        .first<{ ok_count: number }>();
+      if (rolled) break;
+    }
     const daily = await env.DB.prepare(
       "SELECT ok_count FROM uptime_daily WHERE monitor_id = ? AND day_start = ?",
     )
@@ -102,5 +113,7 @@ describe("rollups", () => {
     expect(names.has("incidents")).toBe(true);
     expect(names.has("maintenance_windows")).toBe(true);
     expect(names.has("announcement_events")).toBe(true);
+    expect(names.has("rollup_dirty")).toBe(true);
+    expect(names.has("rollup_watermark")).toBe(true);
   });
 });

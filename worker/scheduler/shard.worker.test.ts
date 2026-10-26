@@ -105,6 +105,9 @@ describe("scheduler shard", () => {
     const stub = schedulerStub(env, shardId);
     expect(await stub.alarmAt()).toBeNull();
     await writeSetting(env, HISTORY_RETENTION_KEY, 90);
+    await env.DB.prepare(
+      "UPDATE rollup_watermark SET pending_before = 0 WHERE id = 1",
+    ).run();
     const yesterday = utcDayStart(Date.now()) - DAY_MS;
     await env.DB.prepare(
       `INSERT INTO uptime_hourly (

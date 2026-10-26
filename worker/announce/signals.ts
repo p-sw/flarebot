@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-import { and, eq, gt, isNull, or } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, isNull, or } from "drizzle-orm";
 import { announcementHref } from "../../shared/announcements";
 import { nextOccurrences } from "../../shared/recurrence";
 import { getDb } from "../db/client";
@@ -12,6 +12,11 @@ import {
   statusPages,
 } from "../db/schema";
 import { scheduleFromRow } from "../maintenance";
+import {
+  canSpend,
+  markDeferred,
+  SIGNAL_EMIT_STATEMENTS,
+} from "../scheduler/budget";
 import { publishAnnouncement } from "./publish";
 
 /** New start/complete events written on one cron run. The rest wait five minutes. */
@@ -65,6 +70,33 @@ export async function emitMaintenanceSignals(
       ),
     )
     .limit(100);
+  const known = new Set<string>();
+  if (windows.length > 0) {
+    if (!canSpend(env.DB, 1)) {
+      markDeferred(env.DB);
+      return 0;
+    }
+    const signalSince = now - LOOKBACK_MS - 21 * 86_400_000;
+    const rows = await db
+      .select({
+        maintenanceId: maintenanceSignals.maintenanceId,
+        occurrenceStart: maintenanceSignals.occurrenceStart,
+        kind: maintenanceSignals.kind,
+      })
+      .from(maintenanceSignals)
+      .where(
+        and(
+          inArray(
+            maintenanceSignals.maintenanceId,
+            windows.map((window) => window.id),
+          ),
+          gte(maintenanceSignals.occurrenceStart, signalSince),
+        ),
+      );
+    for (const row of rows) {
+      known.add(`${row.maintenanceId}:${row.occurrenceStart}:${row.kind}`);
+    }
+  }
   let emitted = 0;
   for (const window of windows) {
     if (emitted >= MAINTENANCE_SIGNAL_BATCH) break;
@@ -87,18 +119,12 @@ export async function emitMaintenanceSignals(
       ].filter((kind): kind is "started" | "completed" => kind != null);
       for (const kind of kinds) {
         if (emitted >= MAINTENANCE_SIGNAL_BATCH) break;
-        const existing = await db
-          .select({ kind: maintenanceSignals.kind })
-          .from(maintenanceSignals)
-          .where(
-            and(
-              eq(maintenanceSignals.maintenanceId, window.id),
-              eq(maintenanceSignals.occurrenceStart, occurrence.start),
-              eq(maintenanceSignals.kind, kind),
-            ),
-          )
-          .get();
-        if (existing) continue;
+        const key = `${window.id}:${occurrence.start}:${kind}`;
+        if (known.has(key)) continue;
+        if (!canSpend(env.DB, SIGNAL_EMIT_STATEMENTS)) {
+          markDeferred(env.DB);
+          return emitted;
+        }
         const href = await hrefFor(env.DB, window.id);
         await publishAnnouncement(
           env.DB,
@@ -123,6 +149,7 @@ export async function emitMaintenanceSignals(
           kind,
           createdAt: now,
         });
+        known.add(key);
         emitted += 1;
       }
     }
