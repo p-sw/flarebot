@@ -63,6 +63,15 @@ test("subscribers are configured on the status page and offered to visitors", as
     page.getByRole("heading", { name: "Subscriptions" }),
   ).toBeVisible();
   await expect(
+    page.getByRole("switch", { name: "Email subscriptions" }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole("switch", { name: "Webhook subscriptions" }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole("switch", { name: "RSS and Atom feeds" }),
+  ).toBeChecked();
+  await expect(
     page.getByText("Email is hidden on the public page"),
   ).toHaveCount(0);
   await expect(page.getByText(/rate limits/)).toBeVisible();
@@ -89,19 +98,28 @@ test("subscribers are configured on the status page and offered to visitors", as
   await page.getByRole("button", { name: "Subscribe to updates" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.getByLabel("Email address")).toBeVisible();
+  await expect(
+    page.getByRole("switch", { name: "All components on this page" }),
+  ).toBeChecked();
   await page.getByLabel("Email address").fill(`visitor-${stamp}@example.com`);
   await page.screenshot({
     path: `${shots}/subscriptions-dialog.png`,
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Subscribe", exact: true }).click();
-  await expect(page.getByText("Check your inbox")).toBeVisible();
-
   await page.setViewportSize({ width: 390, height: 844 });
+  const overflow = await page.evaluate(
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
   await page.screenshot({
     path: `${shots}/subscriptions-dialog-mobile.png`,
     fullPage: true,
   });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.getByRole("button", { name: "Subscribe", exact: true }).click();
+  await expect(page.getByText("Check your inbox")).toBeVisible();
 
   const feed = await page.request.get(`/s/${slug}/feed.rss`);
   expect(feed.ok()).toBeTruthy();
