@@ -1,6 +1,6 @@
 # Deployment
 
-Flarebot targets the Cloudflare Workers free plan. Do not add Queues or KV on a hot path. The checked-in `wrangler.jsonc` uses the placeholder D1 id `00000000-0000-0000-0000-000000000000` and contains no account id. The Deploy to Cloudflare button replaces that id when it provisions a database.
+Flarebot targets the Cloudflare Workers free plan. A few monitors and a quiet status page fit there. The Workers Paid plan (minimum $5 per month) is recommended when a daily quota or a per-invocation cap would stop checks or the public page. The comparison is in the README under [Workers Paid plan](../README.md#workers-paid-plan). Do not add Queues or KV on a hot path. The checked-in `wrangler.jsonc` uses the placeholder D1 id `00000000-0000-0000-0000-000000000000` and contains no account id. The Deploy to Cloudflare button replaces that id when it provisions a database.
 
 ## Deploy to Cloudflare button
 

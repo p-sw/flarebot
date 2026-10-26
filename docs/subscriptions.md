@@ -49,7 +49,7 @@ The Worker cron stays `*/5 * * * *` (288 runs per day). Each run already drains 
 
 D1 writes for a full day at that cap are about 3,456 (one insert and one update per delivery), inside the 100,000 writes/day. Confirmation mail is one outbox row on the subscribe request, not on the cron. DNS checks for a new webhook also run on that request.
 
-The batches stay small so the 10ms CPU limit and the 50-subrequest limit still have room for shard alarms and the announcement drain (8). Worst case for this feature on the cron is 6 webhook fetches plus 1 Mailer kick.
+The batches stay small so the 10ms CPU limit and the 50-subrequest limit still have room for shard alarms and the announcement drain (8). Worst case for this feature on the cron is 6 webhook fetches plus 1 Mailer kick. How that budget compares with the Workers Paid plan is in the README under [Workers Paid plan](../README.md#workers-paid-plan).
 
 ## Retention
 
