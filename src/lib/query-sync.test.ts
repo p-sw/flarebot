@@ -26,6 +26,8 @@ const monitor = {
   recoveryThreshold: 1,
   channelIds: [] as string[],
   regions: ["default"],
+  region: "inherit" as const,
+  effectiveRegion: "auto" as const,
   since: null,
   lastCheckAt: null,
   createdAt: 1,

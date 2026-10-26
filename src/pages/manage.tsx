@@ -4,6 +4,8 @@ import AppHeader from "@brand/overrides/AppHeader";
 import { formatDateTime, t } from "@shared/copy";
 import { parseStoredMailError } from "@shared/mail-test";
 import { can } from "@shared/permissions";
+import type { CheckRegionId } from "@shared/regions";
+import { isCheckRegion } from "@shared/regions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useRouteContext } from "@tanstack/react-router";
 import { useState } from "react";
@@ -26,6 +28,7 @@ import { useSubmitGuard } from "../lib/use-submit-guard";
 import { Stagger, StaggerItem } from "../motion/page";
 import { ContentSkeleton } from "../ui/skeleton";
 import { controlClass, Field } from "./fields";
+import { RegionSelect } from "./region-select";
 import { RootSwitch, rootToggleError } from "./root-switch";
 import { SsoSettings } from "./sso-settings";
 import { SubscribeSettings } from "./subscribe-settings";
@@ -527,9 +530,14 @@ export function SettingsPage() {
   } | null>(null);
   const [historyNote, setHistoryNote] = useState("");
   const [historyTone, setHistoryTone] = useState<"ok" | "error">("ok");
+  const [region, setRegion] = useState<CheckRegionId | null>(null);
+  const [regionNote, setRegionNote] = useState("");
+  const [regionTone, setRegionTone] = useState<"ok" | "error">("ok");
+  const saveRegion = useSubmitGuard();
   const shownName = name ?? settings.data?.instanceName ?? "";
   const shownHistory =
     history ?? retentionChoice(settings.data?.historyRetentionDays ?? 90);
+  const shownRegion = region ?? settings.data?.checkRegion ?? "auto";
   const historyValue = retentionDays(shownHistory.choice, shownHistory.custom);
   const form = draft ?? mailDraft(mail.data);
   const patch = (next: Partial<MailDraft>) => setDraft({ ...form, ...next });
@@ -582,6 +590,67 @@ export function SettingsPage() {
             <PendingButton type="submit" pending={saveInstance.pending}>
               {t("action_save")}
             </PendingButton>
+          </form>
+          <h2 className="mb-3 font-medium">{t("settings_region")}</h2>
+          <form
+            className="mb-8 grid max-w-xl gap-3"
+            aria-label={t("settings_region")}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveRegion.run(async () => {
+                try {
+                  const saved = await api<{ placementRemaining: number }>(
+                    "/api/settings",
+                    {
+                      method: "PUT",
+                      body: JSON.stringify({ checkRegion: shownRegion }),
+                    },
+                  );
+                  await refreshQueries(client, [["settings"], ["monitors"]]);
+                  setRegion(null);
+                  setRegionTone("ok");
+                  setRegionNote(
+                    saved.placementRemaining > 0
+                      ? t("settings_region_moving")
+                      : t("settings_region_saved"),
+                  );
+                } catch (cause) {
+                  setRegionTone("error");
+                  setRegionNote(errorText(cause));
+                }
+              });
+            }}
+          >
+            <Field
+              label={t("settings_region")}
+              hint={t("settings_region_hint")}
+            >
+              <RegionSelect
+                value={shownRegion}
+                includeInherit={false}
+                disabled={saveRegion.pending}
+                onChange={(value) => {
+                  if (!isCheckRegion(value)) return;
+                  setRegionNote("");
+                  setRegion(value);
+                }}
+              />
+            </Field>
+            <PendingButton type="submit" pending={saveRegion.pending}>
+              {t("action_save")}
+            </PendingButton>
+            {regionNote ? (
+              <p
+                role="status"
+                className={
+                  regionTone === "error"
+                    ? "text-sm text-destructive"
+                    : "text-sm text-muted-foreground"
+                }
+              >
+                {regionNote}
+              </p>
+            ) : null}
           </form>
           <h2 className="mb-3 font-medium">{t("settings_history")}</h2>
           <p className="mb-3 max-w-xl text-sm break-words text-muted-foreground">

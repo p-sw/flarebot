@@ -16,6 +16,7 @@ import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { channelTypeLabel } from "./channel-catalog";
 import { monitorTypeLabel } from "./monitor-labels";
+import { regionLabel } from "./region-select";
 
 export function MonitorConfig({ monitor }: { monitor: MonitorDetail }) {
   const channels = useQuery(channelsQuery);
@@ -179,10 +180,17 @@ export function MonitorConfig({ monitor }: { monitor: MonitorDetail }) {
           <Row label={t("monitor_recovery")}>
             {String(monitor.recoveryThreshold)}
           </Row>
-          <Row label={t("monitor_regions")}>
-            {monitor.regions.length > 0
-              ? monitor.regions.join(", ")
-              : t("monitor_not_set")}
+          <Row label={t("monitor_region")}>
+            <span className="inline-flex min-w-0 flex-wrap items-center gap-2">
+              <span className="min-w-0 break-words">
+                {regionLabel(monitor.effectiveRegion)}
+              </span>
+              <span className="text-muted-foreground">
+                {monitor.region === "inherit"
+                  ? t("monitor_region_inherited")
+                  : t("monitor_region_override")}
+              </span>
+            </span>
           </Row>
           <Row label={t("monitor_channels")}>
             {monitor.channelIds.length === 0 ? (

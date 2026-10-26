@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+import type { CheckRegionId, MonitorRegionChoice } from "@shared/regions";
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "./api";
 
@@ -17,6 +18,8 @@ export type MonitorListItem = {
   intervalSeconds: number;
   target: string;
   pushUrl?: string;
+  region: MonitorRegionChoice;
+  effectiveRegion: CheckRegionId;
 };
 
 export type MonitorStatusPageRef = {
@@ -222,6 +225,7 @@ export const settingsQuery = queryOptions({
         source: "settings" | "env" | "none";
       };
       subscribeAllowHttp: boolean;
+      checkRegion: CheckRegionId;
     }>("/api/settings"),
   staleTime: fresh,
 });

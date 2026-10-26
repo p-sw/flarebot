@@ -5,6 +5,7 @@ import { drainAnnouncements } from "../announce/drain";
 import { emitMaintenanceSignals } from "../announce/signals";
 import { getDb } from "../db/client";
 import { mailOutbox, monitors } from "../db/schema";
+import { schedulerStub } from "../monitors/sync";
 import { pruneHistory } from "../retention";
 import { drainSubscriptions, fanoutSubscriptions } from "../subscribe/deliver";
 import {
@@ -16,6 +17,7 @@ import {
   withDatabase,
 } from "./budget";
 import { rollDaily } from "./persist";
+import { settlePlacement } from "./placement";
 
 export async function watchdog(env: Env): Promise<void> {
   await runScheduled(env);
@@ -37,13 +39,13 @@ export async function runScheduled(
 }
 
 async function scheduledBody(env: Env): Promise<void> {
+  await settlePlacement(env);
   const db = getDb(env.DB);
   const shards = await db
     .selectDistinct({ shardId: monitors.shardId })
     .from(monitors);
   for (const shard of shards) {
-    const stub = env.SCHEDULER.get(env.SCHEDULER.idFromName(shard.shardId));
-    await stub.ensureAlarm();
+    await schedulerStub(env, shard.shardId).ensureAlarm();
   }
   await env.MAILER.get(env.MAILER.idFromName("mailer")).kick();
   await rollDaily(env.DB);

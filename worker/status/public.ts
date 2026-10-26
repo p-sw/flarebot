@@ -98,6 +98,7 @@ export type PublicStatus = {
       uptime: number | null;
       responseMs: number | null;
       maint: number;
+      type: string;
       bars: HistoryBar[];
     }[];
   }[];
@@ -232,6 +233,7 @@ export async function loadPublicStatus(
   const states = items.length ? await db.select().from(monitorState) : [];
   const stateById = new Map(states.map((row) => [row.monitorId, row.status]));
   const pausedById = new Map(owned.map((row) => [row.id, row.paused]));
+  const typeById = new Map(owned.map((row) => [row.id, row.type]));
   const nameById = new Map(owned.map((row) => [row.id, row.name]));
   const announcements = await loadPageAnnouncements(
     env,
@@ -309,6 +311,7 @@ export async function loadPublicStatus(
       uptime: summary.uptime,
       responseMs: summary.responseMs,
       maint: summary.maint,
+      type: typeById.get(item.monitorId) ?? "http",
       bars: summary.bars,
     });
     groups.set(groupKey, bucket);

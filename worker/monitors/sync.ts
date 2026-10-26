@@ -1,8 +1,18 @@
 // SPDX-License-Identifier: MIT
 
 import { sql } from "drizzle-orm";
+import {
+  type CheckRegionId,
+  effectiveRegion,
+  locationHintForShard,
+  regionOfShard,
+  shardIndex,
+  shardName,
+  storedRegion,
+} from "../../shared/regions";
 import type { MonitorType } from "../../shared/schemas";
 import { parseMonitorConfig } from "../../shared/schemas";
+import { readCheckRegion } from "../check-region";
 import { runCheck } from "../checks/run";
 import {
   decryptString,
@@ -88,6 +98,12 @@ export type SchedulerApi = {
     id: string,
     sample: { t: number; ok: boolean; ms: number; internal: boolean },
   ): Promise<void>;
+  detach(id: string): Promise<{
+    state: RuntimeState;
+    nextCheckAt: number;
+    lastPushAt: number | null;
+    paused: boolean;
+  } | null>;
   seedDemo(
     id: string,
     input: {
@@ -102,15 +118,21 @@ export type SchedulerApi = {
 };
 
 export function schedulerStub(env: Env, shardId: string): SchedulerApi {
-  return env.SCHEDULER.get(
-    env.SCHEDULER.idFromName(shardId),
-  ) as unknown as SchedulerApi;
+  const id = env.SCHEDULER.idFromName(shardId);
+  const hint = locationHintForShard(shardId);
+  // Only the first get() for a name honors locationHint. Automatic shards,
+  // including the existing shard-0, omit it so they stay where they were created.
+  const stub = hint
+    ? env.SCHEDULER.get(id, { locationHint: hint })
+    : env.SCHEDULER.get(id);
+  return stub as unknown as SchedulerApi;
 }
 
 export async function assignShard(
   env: Env,
   intervalSeconds: number,
   timeoutSeconds: number,
+  region: CheckRegionId = "auto",
 ): Promise<string> {
   const capacity = shardCapacity(intervalSeconds, timeoutSeconds);
   const db = getDb(env.DB);
@@ -121,9 +143,17 @@ export async function assignShard(
     })
     .from(monitors)
     .groupBy(monitors.shardId);
-  const open = rows.find((row) => row.count < capacity);
+  const inRegion = rows.filter((row) => regionOfShard(row.shardId) === region);
+  const open = inRegion.find((row) => row.count < capacity);
   if (open) return open.shardId;
-  return `shard-${rows.length}`;
+  const used = new Set(
+    inRegion
+      .map((row) => shardIndex(row.shardId))
+      .filter((index): index is number => index !== null),
+  );
+  let index = 0;
+  while (used.has(index)) index += 1;
+  return shardName(region, index);
 }
 
 export function snapshotFromRow(
@@ -131,6 +161,7 @@ export function snapshotFromRow(
   state: RuntimeState,
   nextCheckAt: number,
   lastPushAt: number | null,
+  region: CheckRegionId,
 ): Snapshot {
   return {
     id: row.id,
@@ -145,7 +176,7 @@ export function snapshotFromRow(
     nextCheckAt,
     state,
     lastPushAt,
-    regions: JSON.parse(row.regionsJson) as string[],
+    regions: [region],
   };
 }
 
@@ -183,9 +214,13 @@ export async function runInitialCheck(
   }
   const nextCheckAt =
     now + (transition.nextDelayMs ?? row.intervalSeconds * 1000);
+  const region = effectiveRegion(
+    storedRegion(row.regionsJson),
+    await readCheckRegion(env),
+  );
   const scheduler = schedulerStub(env, row.shardId);
   await scheduler.upsert(
-    snapshotFromRow(row, transition.state, nextCheckAt, lastPushAt),
+    snapshotFromRow(row, transition.state, nextCheckAt, lastPushAt, region),
   );
   await scheduler.noteSample(row.id, {
     t: now,

@@ -40,6 +40,7 @@ const CACHE_CONTROL = "public, max-age=120";
 
 type BadgeRow = {
   id: string;
+  type: string;
   paused: boolean;
   badgesEnabled: boolean;
   shardId: string;
@@ -81,6 +82,7 @@ async function loadRow(env: Env, id: string): Promise<BadgeRow | null> {
   const row = await getDb(env.DB)
     .select({
       id: monitors.id,
+      type: monitors.type,
       paused: monitors.paused,
       badgesEnabled: monitors.badgesEnabled,
       shardId: monitors.shardId,
@@ -216,7 +218,12 @@ export async function badgeSvg(
     query.label ??
     (resolved === "uptime"
       ? t("badge_label_uptime", { window: summary.windowLabel })
-      : t("badge_label_response", { window: summary.windowLabel }));
+      : t(
+          row.type === "http"
+            ? "badge_label_response_ttfb"
+            : "badge_label_response",
+          { window: summary.windowLabel },
+        ));
   if (resolved === "uptime") {
     return renderBadge({
       label,

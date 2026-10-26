@@ -16,7 +16,14 @@ import {
 } from "../../shared/monitor-schedule";
 import { visibleStatus } from "../../shared/monitor-status";
 import { can } from "../../shared/permissions";
+import {
+  type CheckRegionId,
+  effectiveRegion,
+  encodeRegionChoice,
+  storedRegion,
+} from "../../shared/regions";
 import { monitorWriteSchema, parseMonitorConfig } from "../../shared/schemas";
+import { readCheckRegion } from "../check-region";
 import { sha256Hex } from "../crypto/secret";
 import { getDb } from "../db/client";
 import {
@@ -51,6 +58,7 @@ import {
 } from "../monitors/sync";
 import { historyRetentionDays } from "../retention";
 import { percentile, saveRuntime } from "../scheduler/persist";
+import { placeEditedMonitor } from "../scheduler/placement";
 import {
   initialState,
   type RuntimeState,
@@ -99,6 +107,7 @@ export function registerMonitors(app: Hono<AppEnv>): void {
       .from(uptimeHourly)
       .where(gte(uptimeHourly.hourStart, since));
     const showPush = can(actor, "monitors.write");
+    const globalRegion = await readCheckRegion(c.env);
     const items = [];
     for (const row of rows) {
       const runtime = stateById.get(row.id);
@@ -135,6 +144,7 @@ export function registerMonitors(app: Hono<AppEnv>): void {
         lastCheckAt: memory?.state.lastCheckAt ?? runtime?.lastCheckAt ?? null,
         lastError: memory?.state.lastError ?? runtime?.lastError ?? null,
         uptime24: percent(ok, fail),
+        ...regionFields(row.regionsJson, globalRegion),
         pushUrl,
         channelIds: links
           .filter((link) => link.monitorId === row.id)
@@ -157,10 +167,14 @@ export function registerMonitors(app: Hono<AppEnv>): void {
     await assertChannels(c.env, actor.organizationId, body.channelIds);
     const now = Date.now();
     const id = crypto.randomUUID();
+    const globalRegion = await readCheckRegion(c.env);
+    const choice = body.region;
+    const resolved = effectiveRegion(choice, globalRegion);
     const shardId = await assignShard(
       c.env,
       body.intervalSeconds,
       body.timeoutSeconds,
+      resolved,
     );
     const heartbeat =
       body.type === "heartbeat" ? await issueHeartbeatToken(c.env) : null;
@@ -174,7 +188,7 @@ export function registerMonitors(app: Hono<AppEnv>): void {
       timeoutSeconds: body.timeoutSeconds,
       retries: body.retries,
       recoveryThreshold: body.recoveryThreshold,
-      regionsJson: JSON.stringify(["default"]),
+      regionsJson: encodeRegionChoice(choice),
       shardId,
       paused: body.paused,
       badgesEnabled: false,
@@ -197,7 +211,7 @@ export function registerMonitors(app: Hono<AppEnv>): void {
       const state = { ...initialState(now), status: "paused" as const };
       await saveRuntime(c.env.DB, id, state);
       await schedulerStub(c.env, shardId).upsert(
-        snapshotFromRow(row, state, now + 365 * 86_400_000, null),
+        snapshotFromRow(row, state, now + 365 * 86_400_000, null, resolved),
       );
     } else {
       await runInitialCheck(c.env, row, null);
@@ -208,7 +222,7 @@ export function registerMonitors(app: Hono<AppEnv>): void {
       "monitor.create",
       id,
       null,
-      { name: body.name, type: body.type },
+      { name: body.name, type: body.type, region: choice },
       clientIp(c),
     );
     const pushUrl = heartbeat
@@ -307,6 +321,7 @@ export function registerMonitors(app: Hono<AppEnv>): void {
         paused: body.paused,
         pushTokenHash: pushHash,
         pushTokenEncrypted: pushEncrypted,
+        regionsJson: encodeRegionChoice(body.region),
         updatedAt: Date.now(),
       })
       .where(eq(monitors.id, current.id));
@@ -331,8 +346,12 @@ export function registerMonitors(app: Hono<AppEnv>): void {
       actor,
       "monitor.update",
       row.id,
-      { name: current.name, paused: current.paused },
-      { name: body.name, paused: row.paused },
+      {
+        name: current.name,
+        paused: current.paused,
+        region: storedRegion(current.regionsJson),
+      },
+      { name: body.name, paused: row.paused, region: body.region },
       clientIp(c),
     );
     return c.json(
@@ -614,6 +633,10 @@ async function scheduleMonitor(
     row.paused,
     now,
   );
+  const region = effectiveRegion(
+    storedRegion(row.regionsJson),
+    await readCheckRegion(env),
+  );
   await saveRuntime(env.DB, row.id, normalized);
   await schedulerStub(env, row.shardId).upsert(
     snapshotFromRow(
@@ -621,6 +644,7 @@ async function scheduleMonitor(
       normalized,
       row.paused ? now + 365 * 86_400_000 : now,
       live?.lastPushAt ?? null,
+      region,
     ),
   );
 }
@@ -631,7 +655,7 @@ async function rescheduleAfterEdit(
   previous: typeof monitors.$inferSelect,
 ): Promise<void> {
   const db = getDb(env.DB);
-  const live = await schedulerStub(env, row.shardId)
+  const live = await schedulerStub(env, previous.shardId)
     .getOne(row.id)
     .catch(() => null);
   const stored = await db
@@ -640,6 +664,7 @@ async function rescheduleAfterEdit(
     .where(eq(monitorState.monitorId, row.id))
     .get();
   const now = Date.now();
+  const globalRegion = await readCheckRegion(env);
   const normalized = runtimeForPause(
     runtimeFrom(live?.state, stored),
     row.paused,
@@ -661,10 +686,13 @@ async function rescheduleAfterEdit(
       JSON.parse(row.configJson) as unknown,
     ),
   });
-  await saveRuntime(env.DB, row.id, normalized);
-  await schedulerStub(env, row.shardId).upsert(
-    snapshotFromRow(row, normalized, nextCheckAt, live?.lastPushAt ?? null),
-  );
+  await placeEditedMonitor(env, row, {
+    previousShardId: previous.shardId,
+    state: normalized,
+    nextCheckAt,
+    lastPushAt: live?.lastPushAt ?? null,
+    globalRegion,
+  });
 }
 
 export async function readMonitor(
@@ -702,6 +730,7 @@ export async function readMonitor(
       ),
     );
   pages.sort((left, right) => left.title.localeCompare(right.title));
+  const globalRegion = await readCheckRegion(c.env);
   const live = await schedulerStub(c.env, row.shardId)
     .getOne(row.id)
     .catch(() => null);
@@ -722,6 +751,7 @@ export async function readMonitor(
     recoveryThreshold: row.recoveryThreshold,
     paused: row.paused,
     regions: JSON.parse(row.regionsJson) as string[],
+    ...regionFields(row.regionsJson, globalRegion),
     status: visibleStatus(row.paused, live?.state.status ?? state?.status),
     since: state?.since ?? live?.state.statusSince ?? null,
     lastResponseMs: live?.state.lastResponseMs ?? state?.lastResponseMs ?? null,
@@ -735,6 +765,14 @@ export async function readMonitor(
     statusPages: pages,
     badgesEnabled: row.badgesEnabled,
     badgesPublic: row.badgesEnabled || pages.some((page) => page.published),
+  };
+}
+
+function regionFields(regionsJson: string, globalRegion: CheckRegionId) {
+  const region = storedRegion(regionsJson);
+  return {
+    region,
+    effectiveRegion: effectiveRegion(region, globalRegion),
   };
 }
 
