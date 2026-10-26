@@ -13,6 +13,12 @@ import { decryptString } from "../crypto/secret";
 import { getDb } from "../db/client";
 import { announcementEvents, statusPages, subscribers } from "../db/schema";
 import { enqueueMail } from "../mail/mailer";
+import {
+  canSpend,
+  FANOUT_EVENT_STATEMENTS,
+  markDeferred,
+  SUBSCRIPTION_SEND_STATEMENTS,
+} from "../scheduler/budget";
 import { readSetting } from "../settings-store";
 import { noticeMessage } from "./messages";
 import { mintToken } from "./store";
@@ -60,6 +66,10 @@ export async function fanoutSubscriptions(env: Env): Promise<number> {
      LIMIT 1`,
   ).first<EventRow>();
   if (!event) return 0;
+  if (!canSpend(env.DB, FANOUT_EVENT_STATEMENTS)) {
+    markDeferred(env.DB);
+    return 0;
+  }
   const now = Date.now();
   await env.DB.prepare(
     `INSERT OR IGNORE INTO subscription_fanout
@@ -130,13 +140,24 @@ export async function fanoutSubscriptions(env: Env): Promise<number> {
     )
     .all<SubRow>();
   let inserted = 0;
+  let stopped = false;
+  let lastSeen: SubRow | undefined;
   for (const row of rows.results) {
     const wanted = subscriberWantsEvent(
       row.follow_all === 1,
       parseMonitorIds(row.monitor_ids_json),
       eventMonitors,
     );
-    if (!wanted) continue;
+    if (!wanted) {
+      lastSeen = row;
+      continue;
+    }
+    if (!canSpend(env.DB, 2)) {
+      markDeferred(env.DB);
+      stopped = true;
+      break;
+    }
+    lastSeen = row;
     const result = await env.DB.prepare(
       `INSERT OR IGNORE INTO subscription_deliveries (
         id, status_page_id, subscriber_id, event_id, status, attempts,
@@ -147,19 +168,22 @@ export async function fanoutSubscriptions(env: Env): Promise<number> {
       .run();
     inserted += Number(result.meta?.changes ?? 0);
   }
-  const last = rows.results[rows.results.length - 1];
-  const done = rows.results.length < SUBSCRIPTION_FANOUT_BATCH;
+  const done = !stopped && rows.results.length < SUBSCRIPTION_FANOUT_BATCH;
+  if (!canSpend(env.DB, 1)) {
+    markDeferred(env.DB);
+    return inserted;
+  }
   await markFanout(
     env,
     event.id,
-    last
+    lastSeen
       ? {
-          cursor_created_at: last.created_at,
-          cursor_id: last.id,
+          cursor_created_at: lastSeen.created_at,
+          cursor_id: lastSeen.id,
           done: done ? 1 : 0,
         }
-      : { ...cursor, done: 1 },
-    done || !last,
+      : { ...cursor, done: stopped ? 0 : 1 },
+    done || (!lastSeen && !stopped),
   );
   return inserted;
 }
@@ -204,10 +228,19 @@ export async function drainSubscriptions(env: Env): Promise<number> {
   )
     .bind(now, SUBSCRIPTION_DRAIN_BATCH)
     .all<DeliveryRow>();
+  if (due.results.length === 0) return 0;
+  if (!canSpend(env.DB, 1)) {
+    markDeferred(env.DB);
+    return 0;
+  }
   const allowHttp = await readSetting(env, ALLOW_HTTP_KEY, false);
   let sent = 0;
   let mailed = false;
   for (const row of due.results) {
+    if (!canSpend(env.DB, SUBSCRIPTION_SEND_STATEMENTS)) {
+      markDeferred(env.DB);
+      break;
+    }
     const outcome = await sendOne(env, row, Boolean(allowHttp));
     if (outcome === "queued") mailed = true;
     if (outcome === "sent" || outcome === "queued") sent += 1;

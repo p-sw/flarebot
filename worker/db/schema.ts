@@ -271,6 +271,23 @@ export const uptimeDaily = sqliteTable(
   (table) => [primaryKey({ columns: [table.monitorId, table.dayStart] })],
 );
 
+export const rollupDirty = sqliteTable(
+  "rollup_dirty",
+  {
+    monitorId: text("monitor_id").notNull(),
+    dayStart: integer("day_start").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.monitorId, table.dayStart] }),
+    index("rollup_dirty_day_idx").on(table.dayStart),
+  ],
+);
+
+export const rollupWatermark = sqliteTable("rollup_watermark", {
+  id: integer("id").primaryKey(),
+  pendingBefore: integer("pending_before").notNull().default(0),
+});
+
 export const certInfo = sqliteTable("cert_info", {
   monitorId: text("monitor_id").primaryKey(),
   notAfter: integer("not_after"),

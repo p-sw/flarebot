@@ -15,6 +15,11 @@ import {
 } from "../db/schema";
 import { enqueueMail } from "../mail/mailer";
 import type { ChannelDelivery } from "../notify/dispatch";
+import {
+  ANNOUNCEMENT_ROW_STATEMENTS,
+  canSpend,
+  markDeferred,
+} from "../scheduler/budget";
 import { deliverAnnouncement } from "./deliver";
 
 /** One cron run. Each row is at most one subrequest, inside the free-plan budget of 50. */
@@ -26,6 +31,10 @@ function asSubject(value: string): AnnouncementSubject {
 }
 
 export async function drainAnnouncements(env: Env): Promise<number> {
+  if (!canSpend(env.DB, 1)) {
+    markDeferred(env.DB);
+    return 0;
+  }
   const db = getDb(env.DB);
   const now = Date.now();
   const due = await db
@@ -40,6 +49,10 @@ export async function drainAnnouncements(env: Env): Promise<number> {
     .limit(ANNOUNCEMENT_DRAIN_BATCH);
   let sent = 0;
   for (const row of due) {
+    if (!canSpend(env.DB, ANNOUNCEMENT_ROW_STATEMENTS)) {
+      markDeferred(env.DB);
+      break;
+    }
     const eventRow = await db
       .select()
       .from(announcementEvents)

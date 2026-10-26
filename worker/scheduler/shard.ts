@@ -2,7 +2,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
-import { SLOT_MS } from "../../shared/history";
+import { SLOT_MS, utcDayStart } from "../../shared/history";
 import type { MonitorType } from "../../shared/schemas";
 import { runCheck } from "../checks/run";
 import { decryptString } from "../crypto/secret";
@@ -14,6 +14,7 @@ import { type ChannelDelivery, deliverChannel } from "../notify/dispatch";
 import { CHECK_CONCURRENCY, CHECKS_PER_ALARM } from "./capacity";
 import {
   closeOutage,
+  flushMonitorRollups,
   mergeHourly,
   mergeSlot,
   openOutage,
@@ -72,6 +73,8 @@ type Store = {
   rollups: Record<string, Rollup>;
   slots: Record<string, SlotRollup>;
   flushedAt: number;
+  /** UTC day already recorded in rollup_dirty for this monitor. */
+  dirtyDays: Record<string, number>;
 };
 
 export class SchedulerShard extends DurableObject<Env> {
@@ -151,6 +154,7 @@ export class SchedulerShard extends DurableObject<Env> {
       }));
       delete store.rollups[id];
       delete store.slots[id];
+      delete store.dirtyDays[id];
       await this.persist(store);
       await saveRuntime(this.env.DB, id, monitor.state);
       await this.arm(store, input.now);
@@ -165,6 +169,7 @@ export class SchedulerShard extends DurableObject<Env> {
       delete store.recent[id];
       delete store.rollups[id];
       delete store.slots[id];
+      delete store.dirtyDays[id];
       await this.persist(store);
     });
   }
@@ -486,21 +491,39 @@ export class SchedulerShard extends DurableObject<Env> {
   }
 
   private async flush(store: Store, now: number): Promise<void> {
+    const entries: {
+      monitorId: string;
+      rollup: Rollup;
+      state: Snapshot["state"] | null;
+      markDirty: boolean;
+      day: number;
+    }[] = [];
     for (const [id, stored] of Object.entries(store.rollups)) {
       const rollup = { ...stored, maint: stored.maint ?? 0 };
       if (rollup.ok + rollup.fail + rollup.maint === 0) continue;
-      await mergeHourly(this.env.DB, id, rollup);
-      const monitor = store.monitors[id];
-      if (monitor) await saveRuntime(this.env.DB, id, monitor.state);
-      store.rollups[id] = {
-        hourStart: rollup.hourStart,
-        ok: 0,
-        fail: 0,
-        maint: 0,
-        sum: 0,
-        max: 0,
-        samples: [],
-      };
+      const day = utcDayStart(rollup.hourStart);
+      entries.push({
+        monitorId: id,
+        rollup,
+        state: store.monitors[id]?.state ?? null,
+        markDirty: store.dirtyDays[id] !== day,
+        day,
+      });
+    }
+    if (entries.length > 0) {
+      await flushMonitorRollups(this.env.DB, entries);
+      for (const entry of entries) {
+        store.rollups[entry.monitorId] = {
+          hourStart: entry.rollup.hourStart,
+          ok: 0,
+          fail: 0,
+          maint: 0,
+          sum: 0,
+          max: 0,
+          samples: [],
+        };
+        if (entry.markDirty) store.dirtyDays[entry.monitorId] = entry.day;
+      }
     }
     store.flushedAt = now;
   }
@@ -547,19 +570,22 @@ export class SchedulerShard extends DurableObject<Env> {
   }
 
   private async load(): Promise<Store> {
-    const [monitors, recent, rollups, slots, flushedAt] = await Promise.all([
-      this.ctx.storage.get<Record<string, Snapshot>>("monitors"),
-      this.ctx.storage.get<Record<string, Point[]>>("recent"),
-      this.ctx.storage.get<Record<string, Rollup>>("rollups"),
-      this.ctx.storage.get<Record<string, SlotRollup>>("slots"),
-      this.ctx.storage.get<number>("flushedAt"),
-    ]);
+    const [monitors, recent, rollups, slots, flushedAt, dirtyDays] =
+      await Promise.all([
+        this.ctx.storage.get<Record<string, Snapshot>>("monitors"),
+        this.ctx.storage.get<Record<string, Point[]>>("recent"),
+        this.ctx.storage.get<Record<string, Rollup>>("rollups"),
+        this.ctx.storage.get<Record<string, SlotRollup>>("slots"),
+        this.ctx.storage.get<number>("flushedAt"),
+        this.ctx.storage.get<Record<string, number>>("dirtyDays"),
+      ]);
     return {
       monitors: monitors ?? {},
       recent: recent ?? {},
       rollups: rollups ?? {},
       slots: slots ?? {},
       flushedAt: flushedAt ?? 0,
+      dirtyDays: dirtyDays ?? {},
     };
   }
 
@@ -570,6 +596,7 @@ export class SchedulerShard extends DurableObject<Env> {
       rollups: store.rollups,
       slots: store.slots,
       flushedAt: store.flushedAt,
+      dirtyDays: store.dirtyDays,
     });
   }
 
