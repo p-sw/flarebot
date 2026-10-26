@@ -358,7 +358,7 @@ test.afterAll(() => {
   rmSync(".wrangler/screenshot-flag", { force: true });
 });
 
-test("captures README screenshots from local demo data", async ({
+test("captures the dashboard and status page screenshots from local demo data", async ({
   browser,
   request,
 }) => {
@@ -447,22 +447,6 @@ test("captures README screenshots from local demo data", async ({
     { id: hook.id, name: "Deploy hook" },
     { id: nightly.id, name: "Nightly job" },
   ];
-
-  await postJson(request, "/api/channels", {
-    name: "On-call email",
-    type: "email",
-    config: { to: "ops@harbor.example" },
-  });
-  await postJson(request, "/api/channels", {
-    name: "Ops ntfy",
-    type: "ntfy",
-    config: { server: "https://ntfy.example.com", topic: "harbor" },
-  });
-  await postJson(request, "/api/channels", {
-    name: "Chat webhook",
-    type: "slack",
-    config: { webhookUrl: "https://hooks.slack.example/services/demo" },
-  });
 
   const page = await postJson(request, "/api/status-pages", {
     slug: "harbor",
@@ -577,37 +561,6 @@ test("captures README screenshots from local demo data", async ({
     monitorIds: [dns.id],
   });
 
-  const policy = await request.put("/api/sso/policy", {
-    headers: jsonHeaders,
-    data: {
-      hideLocalLogin: false,
-      access: {
-        enabled: true,
-        teamName: "harbor",
-        audiences: ["harbor-console-aud"],
-        groupsClaim: "groups",
-        jitEnabled: true,
-        allowedDomains: ["harbor.example"],
-        rules: [{ kind: "group", value: "flarebot-admins", role: "admin" }],
-      },
-    },
-  });
-  expect(policy.ok(), await policy.text()).toBeTruthy();
-  await postJson(request, "/api/sso/providers", {
-    enabled: true,
-    displayName: "Example IdP",
-    buttonLabel: "Sign in with Example IdP",
-    issuerUrl: "https://id.example.com/application/o/harbor/",
-    clientId: "harbor-console",
-    clientSecret: "demo-client-secret",
-    scopes: "openid email profile",
-    groupsClaim: "groups",
-    jitEnabled: true,
-    jitRole: "viewer",
-    allowedDomains: ["harbor.example"],
-    roleMappings: [{ value: "flarebot-admins", role: "admin" }],
-  });
-
   seedHistory(monitors, billing.id);
   const seededAt = Date.now();
   const history = await postJson(
@@ -712,42 +665,6 @@ test("captures README screenshots from local demo data", async ({
   await settle(desk);
   await saveShot(desk, "status.webp");
 
-  await desk.getByRole("button", { name: "Subscribe to updates" }).click();
-  const subscribe = desk.getByRole("dialog");
-  await expect(subscribe.getByLabel("Email address")).toBeVisible();
-  await expect(
-    subscribe.getByRole("button", { name: "Webhook", exact: true }),
-  ).toBeVisible();
-  await expect(
-    subscribe.getByRole("switch", { name: "All components on this page" }),
-  ).toBeChecked();
-  await settle(desk);
-  await saveShot(desk, "subscribe.webp", false);
-  await desk.keyboard.press("Escape");
-  await expect(subscribe).toBeHidden();
-
-  const phone = await browser.newContext({
-    viewport: { width: 390, height: 844 },
-    colorScheme: "light",
-    reducedMotion: "reduce",
-    deviceScaleFactor: 1,
-    isMobile: true,
-    hasTouch: true,
-  });
-  const mobile = await phone.newPage();
-  await mobile.goto("/");
-  await expect(mobile.getByRole("heading", { name: "Harbor" })).toBeVisible();
-  await expect(mobile.getByText("Billing API errors")).toBeVisible();
-  await expect(
-    mobile.getByText("Edge proxy certificate rotation"),
-  ).toBeVisible();
-  await expect(
-    mobile.getByRole("button", { name: "Subscribe to updates" }),
-  ).toBeVisible();
-  await expect(mobile.getByText("Billing API").first()).toBeVisible();
-  await settle(mobile);
-  await saveShot(mobile, "status-mobile.webp");
-
   await desk.goto("/console");
   await expect(desk.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   await expect(desk.getByText("6 monitors")).toBeVisible();
@@ -762,92 +679,5 @@ test("captures README screenshots from local demo data", async ({
   ).toBeVisible();
   await saveConsoleShot(desk, "dashboard.webp");
 
-  await desk.goto(`/console/monitors/${website.id}`);
-  await expect(desk.getByRole("heading", { name: "Website" })).toBeVisible();
-  await expect(
-    desk.getByText("24 hours", { exact: true }).first(),
-  ).toBeVisible();
-  await expect(
-    desk.getByText("90 days", { exact: true }).first(),
-  ).toBeVisible();
-  await expect(desk.getByRole("heading", { name: "Badges" })).toBeVisible();
-  await expect(desk.locator("img[alt*='Status']").first()).toBeVisible();
-  await saveConsoleShot(desk, "monitor.webp");
-
-  for (const [kind, file] of [
-    ["status", "badge-status.svg"],
-    ["uptime", "badge-uptime.svg"],
-    ["response", "badge-response.svg"],
-  ] as const) {
-    const badge = await request.get(`/badge/${website.id}/${kind}.svg`);
-    expect(badge.ok(), await badge.text()).toBeTruthy();
-    const svg = await badge.text();
-    expect(svg).toContain("<svg");
-    expect(svg).not.toContain("unknown");
-    writeFileSync(path.join(outDir, file), svg);
-  }
-
-  await desk.goto(`/console/status-pages/${pageId}`);
-  const layout = desk.getByRole("heading", { name: "Layout", exact: true });
-  await expect(layout).toBeVisible();
-  await expect(desk.locator('input[value="Edge"]')).toBeVisible();
-  await expect(desk.locator('input[value="Platform"]')).toBeVisible();
-  await expect(
-    desk.getByRole("heading", { name: "Subscriptions" }),
-  ).toBeVisible();
-  await saveConsoleShot(desk, "layout.webp");
-
-  await desk.goto("/console/incidents");
-  await expect(desk.getByRole("heading", { name: "Incidents" })).toBeVisible();
-  await expect(desk.getByText("Billing API errors")).toBeVisible();
-  await expect(desk.getByText("Investigating").first()).toBeVisible();
-  await saveConsoleShot(desk, "incidents.webp");
-
-  await desk.goto("/console/maintenance");
-  await expect(
-    desk.getByRole("heading", { name: "Maintenance" }),
-  ).toBeVisible();
-  await desk.getByRole("button", { name: "Active", exact: true }).click();
-  await expect(desk.getByText("Edge proxy certificate rotation")).toBeVisible();
-  await saveConsoleShot(desk, "maintenance.webp");
-
-  await desk.setViewportSize({ width: 1280, height: 900 });
-  await desk.goto("/console/channels");
-  await expect(
-    desk.getByRole("heading", { name: "Notifications" }),
-  ).toBeVisible();
-  await expect(desk.getByText("Ops ntfy")).toBeVisible();
-  await desk.getByRole("button", { name: "New channel" }).click();
-  const channelDialog = desk.getByRole("dialog");
-  await expect(
-    channelDialog.getByRole("heading", { name: "Add a notification channel" }),
-  ).toBeVisible();
-  const matrix = channelDialog.getByRole("option", { name: "Matrix" });
-  await matrix.scrollIntoViewIfNeeded();
-  await expect(matrix).toBeVisible();
-  await channelDialog
-    .getByRole("option", { name: "Email" })
-    .scrollIntoViewIfNeeded();
-  await expect(
-    channelDialog.getByRole("option", { name: "ntfy" }),
-  ).toBeVisible();
-  await expect(
-    channelDialog.getByRole("option", { name: "Gotify" }),
-  ).toBeVisible();
-  await desk.evaluate(() => window.scrollTo(0, 0));
-  await assertConsoleFrame(desk);
-  await settle(desk);
-  await saveShot(desk, "channels.webp", false);
-
-  await desk.goto("/console/settings");
-  const sso = desk.getByRole("heading", { name: "Single sign-on" });
-  await expect(sso).toBeVisible();
-  await expect(desk.getByText("Example IdP")).toBeVisible();
-  await expect(
-    desk.getByRole("heading", { name: "Cloudflare Access" }),
-  ).toBeVisible();
-  await saveConsoleShot(desk, "sso.webp");
-
   await desktop.close();
-  await phone.close();
 });
