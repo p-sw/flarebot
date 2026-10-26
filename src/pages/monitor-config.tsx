@@ -14,6 +14,7 @@ import { channelsQuery, type MonitorDetail } from "../lib/queries";
 import { useMotionPrefs } from "../motion/page";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { channelTypeLabel } from "./channel-catalog";
 import { monitorTypeLabel } from "./monitor-labels";
 
 export function MonitorConfig({ monitor }: { monitor: MonitorDetail }) {
@@ -31,7 +32,7 @@ export function MonitorConfig({ monitor }: { monitor: MonitorDetail }) {
   const names = new Map(
     (channels.data?.channels ?? []).map((channel) => [
       channel.id,
-      channel.name,
+      `${channel.name} · ${channelTypeLabel(channel.type)}`,
     ]),
   );
 

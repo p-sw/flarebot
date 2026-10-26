@@ -18,7 +18,7 @@ Flarebot checks HTTP, TCP, DNS, certificate expiry, and heartbeat endpoints, con
 - A monitor detail page and an editor for the check, schedule, and notifications
 - Pause and resume without deleting check history
 - Pending, then down, so a single blip does not page anyone
-- Email (SMTP or Cloudflare Email Service), Discord, Slack, Telegram, and webhooks
+- Email (SMTP or Cloudflare Email Service), Discord, Slack, Telegram, webhooks, ntfy, Gotify, Pushover, Microsoft Teams, Google Chat, and Matrix
 - Public status pages, including one published page served at the site root
 - A layout builder for sections, monitor order, and the name visitors see
 - Each status page shows 24 hours, 7 days, 30 days, or 90 days. New pages start at 24 hours

@@ -137,12 +137,18 @@ export const statusPagesQuery = queryOptions({
   staleTime: fresh,
 });
 
+export type ChannelRecord = {
+  id: string;
+  name: string;
+  type: string;
+  destination?: string;
+  config?: Record<string, unknown>;
+  secrets?: string[];
+};
+
 export const channelsQuery = queryOptions({
   queryKey: ["channels"],
-  queryFn: () =>
-    api<{ channels: { id: string; name: string; type: string }[] }>(
-      "/api/channels",
-    ),
+  queryFn: () => api<{ channels: ChannelRecord[] }>("/api/channels"),
   staleTime: fresh,
 });
 

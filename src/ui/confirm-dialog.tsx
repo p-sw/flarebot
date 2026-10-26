@@ -4,6 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "motion/react";
 import { useMotionPrefs } from "../motion/page";
 import { Button } from "./button";
+import { PendingButton } from "./pending-button";
 
 export function ConfirmDialog({
   open,
@@ -69,14 +70,14 @@ export function ConfirmDialog({
                       {cancelLabel}
                     </Button>
                   </Dialog.Close>
-                  <Button
+                  <PendingButton
                     type="button"
                     variant="destructive"
-                    disabled={pending}
+                    pending={pending}
                     onClick={onConfirm}
                   >
                     {confirmLabel}
-                  </Button>
+                  </PendingButton>
                 </div>
               </motion.div>
             </Dialog.Content>
