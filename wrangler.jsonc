@@ -49,6 +49,7 @@
     "run_worker_first": [
       "/api/*",
       "/push/*",
+      "/badge/*",
       "/s/*",
       "/",
       "/login",

@@ -26,6 +26,8 @@ const monitor = {
   createdAt: 1,
   updatedAt: 2,
   statusPages: [],
+  badgesEnabled: false,
+  badgesPublic: false,
 };
 
 function client() {

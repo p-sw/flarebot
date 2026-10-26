@@ -177,6 +177,7 @@ export function registerMonitors(app: Hono<AppEnv>): void {
       regionsJson: JSON.stringify(["default"]),
       shardId,
       paused: body.paused,
+      badgesEnabled: false,
       pushTokenHash: heartbeat?.hash ?? null,
       pushTokenEncrypted: heartbeat?.encrypted ?? null,
       createdAt: now,
@@ -632,7 +633,7 @@ async function rescheduleAfterEdit(
   );
 }
 
-async function readMonitor(
+export async function readMonitor(
   c: AppContext,
   organizationId: string,
   id: string,
@@ -656,6 +657,7 @@ async function readMonitor(
       title: statusPages.title,
       slug: statusPages.slug,
       published: statusPages.published,
+      serveAtRoot: statusPages.serveAtRoot,
     })
     .from(statusPageItems)
     .innerJoin(statusPages, eq(statusPageItems.pageId, statusPages.id))
@@ -697,6 +699,8 @@ async function readMonitor(
     pushUrl,
     channelIds: links.map((link) => link.channelId),
     statusPages: pages,
+    badgesEnabled: row.badgesEnabled,
+    badgesPublic: row.badgesEnabled || pages.some((page) => page.published),
   };
 }
 
@@ -730,7 +734,11 @@ function runtimeFrom(
   return base;
 }
 
-async function ownedMonitor(env: Env, organizationId: string, id: string) {
+export async function ownedMonitor(
+  env: Env,
+  organizationId: string,
+  id: string,
+) {
   const row = await getDb(env.DB)
     .select()
     .from(monitors)

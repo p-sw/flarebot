@@ -116,6 +116,9 @@ export const monitors = sqliteTable("monitors", {
   regionsJson: text("regions_json").notNull(),
   shardId: text("shard_id").notNull(),
   paused: integer("paused", { mode: "boolean" }).notNull().default(false),
+  badgesEnabled: integer("badges_enabled", { mode: "boolean" })
+    .notNull()
+    .default(false),
   pushTokenHash: text("push_token_hash"),
   pushTokenEncrypted: text("push_token_encrypted"),
   createdAt: integer("created_at").notNull(),

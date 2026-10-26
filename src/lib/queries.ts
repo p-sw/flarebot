@@ -24,6 +24,7 @@ export type MonitorStatusPageRef = {
   title: string;
   slug: string;
   published: boolean;
+  serveAtRoot: boolean;
 };
 
 export type MonitorDetail = MonitorListItem & {
@@ -38,6 +39,8 @@ export type MonitorDetail = MonitorListItem & {
   createdAt: number;
   updatedAt: number;
   statusPages: MonitorStatusPageRef[];
+  badgesEnabled: boolean;
+  badgesPublic: boolean;
 };
 
 export const monitorsQuery = queryOptions({

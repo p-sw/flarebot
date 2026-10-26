@@ -39,6 +39,7 @@ import { Stagger, StaggerItem } from "../motion/page";
 import { ConfirmDialog } from "../ui/confirm-dialog";
 import { ContentSkeleton } from "../ui/skeleton";
 import { responseText, statusTone } from "./fields";
+import { MonitorBadges } from "./monitor-badges";
 import { MonitorConfig } from "./monitor-config";
 import { monitorStatusLabel, monitorTypeLabel } from "./monitor-labels";
 
@@ -275,6 +276,7 @@ export function MonitorDetailPage() {
         </p>
       ) : null}
       <MonitorConfig monitor={row} />
+      <MonitorBadges monitor={row} />
       <Stagger className="mb-4 grid gap-3 sm:grid-cols-4">
         {(["h24", "d7", "d30", "d90"] as const).map((key) => (
           <StaggerItem key={key}>
