@@ -13,7 +13,6 @@ import path from "node:path";
 import {
   type APIRequestContext,
   expect,
-  type Locator,
   type Page,
   test,
 } from "@playwright/test";
@@ -272,11 +271,74 @@ async function saveShot(
   await savePng(png, name);
 }
 
-async function scrollUnderHeader(locator: Locator): Promise<void> {
-  await locator.evaluate((element) => {
-    const top = element.getBoundingClientRect().top + window.scrollY - 80;
-    window.scrollTo(0, Math.max(0, top));
+// fullPage stitches a scrolled capture and repaints sticky chrome in the
+// wrong place. Grow the viewport to the document instead, then shoot once
+// from the top so the sidebar and header stay where the layout put them.
+async function fitConsoleViewport(page: Page): Promise<void> {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  let height = 900;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const next = await page.evaluate(() =>
+      Math.ceil(
+        Math.max(
+          document.documentElement.scrollHeight,
+          document.body.scrollHeight,
+        ),
+      ),
+    );
+    if (Math.abs(next - height) <= 1) break;
+    height = Math.max(900, Math.min(next, 8_000));
+    await page.setViewportSize({ width: 1280, height });
+    await page.evaluate(() => window.scrollTo(0, 0));
+  }
+}
+
+async function assertConsoleFrame(page: Page): Promise<void> {
+  const frame = await page.evaluate(() => {
+    const sidebar = document.querySelector("#admin-sidebar");
+    const header = document.querySelector("header");
+    const main = document.querySelector("main");
+    if (
+      !(sidebar instanceof HTMLElement) ||
+      !(header instanceof HTMLElement) ||
+      !(main instanceof HTMLElement)
+    ) {
+      return null;
+    }
+    const side = sidebar.getBoundingClientRect();
+    const bar = header.getBoundingClientRect();
+    const content = main.getBoundingClientRect();
+    return {
+      scrollY: window.scrollY,
+      viewport: window.innerHeight,
+      sidebarTop: side.top,
+      sidebarHeight: side.height,
+      headerTop: bar.top,
+      headerBottom: bar.bottom,
+      mainTop: content.top,
+    };
   });
+  expect(frame).not.toBeNull();
+  if (!frame) return;
+  expect(frame.scrollY).toBe(0);
+  expect(frame.sidebarTop).toBeGreaterThanOrEqual(0);
+  expect(frame.sidebarTop).toBeLessThan(2);
+  expect(Math.abs(frame.sidebarHeight - frame.viewport)).toBeLessThan(2);
+  expect(frame.headerTop).toBeGreaterThanOrEqual(0);
+  expect(frame.headerTop).toBeLessThan(2);
+  expect(frame.mainTop).toBeGreaterThanOrEqual(frame.headerBottom - 1);
+}
+
+async function saveConsoleShot(page: Page, name: string): Promise<void> {
+  await fitConsoleViewport(page);
+  await assertConsoleFrame(page);
+  await settle(page);
+  const png = await page.screenshot({
+    fullPage: false,
+    animations: "disabled",
+  });
+  await savePng(png, name);
 }
 
 function stripScreenshotFlag(file: string): void {
@@ -698,8 +760,7 @@ test("captures README screenshots from local demo data", async ({
   await expect(
     desk.getByText("Recent checks in this summary: 48"),
   ).toBeVisible();
-  await settle(desk);
-  await saveShot(desk, "dashboard.webp");
+  await saveConsoleShot(desk, "dashboard.webp");
 
   await desk.goto(`/console/monitors/${website.id}`);
   await expect(desk.getByRole("heading", { name: "Website" })).toBeVisible();
@@ -711,8 +772,7 @@ test("captures README screenshots from local demo data", async ({
   ).toBeVisible();
   await expect(desk.getByRole("heading", { name: "Badges" })).toBeVisible();
   await expect(desk.locator("img[alt*='Status']").first()).toBeVisible();
-  await settle(desk);
-  await saveShot(desk, "monitor.webp");
+  await saveConsoleShot(desk, "monitor.webp");
 
   for (const [kind, file] of [
     ["status", "badge-status.svg"],
@@ -735,16 +795,13 @@ test("captures README screenshots from local demo data", async ({
   await expect(
     desk.getByRole("heading", { name: "Subscriptions" }),
   ).toBeVisible();
-  await scrollUnderHeader(layout);
-  await settle(desk);
-  await saveShot(desk, "layout.webp", false);
+  await saveConsoleShot(desk, "layout.webp");
 
   await desk.goto("/console/incidents");
   await expect(desk.getByRole("heading", { name: "Incidents" })).toBeVisible();
   await expect(desk.getByText("Billing API errors")).toBeVisible();
   await expect(desk.getByText("Investigating").first()).toBeVisible();
-  await settle(desk);
-  await saveShot(desk, "incidents.webp");
+  await saveConsoleShot(desk, "incidents.webp");
 
   await desk.goto("/console/maintenance");
   await expect(
@@ -752,9 +809,9 @@ test("captures README screenshots from local demo data", async ({
   ).toBeVisible();
   await desk.getByRole("button", { name: "Active", exact: true }).click();
   await expect(desk.getByText("Edge proxy certificate rotation")).toBeVisible();
-  await settle(desk);
-  await saveShot(desk, "maintenance.webp");
+  await saveConsoleShot(desk, "maintenance.webp");
 
+  await desk.setViewportSize({ width: 1280, height: 900 });
   await desk.goto("/console/channels");
   await expect(
     desk.getByRole("heading", { name: "Notifications" }),
@@ -777,6 +834,8 @@ test("captures README screenshots from local demo data", async ({
   await expect(
     channelDialog.getByRole("option", { name: "Gotify" }),
   ).toBeVisible();
+  await desk.evaluate(() => window.scrollTo(0, 0));
+  await assertConsoleFrame(desk);
   await settle(desk);
   await saveShot(desk, "channels.webp", false);
 
@@ -787,10 +846,7 @@ test("captures README screenshots from local demo data", async ({
   await expect(
     desk.getByRole("heading", { name: "Cloudflare Access" }),
   ).toBeVisible();
-  await desk.setViewportSize({ width: 1280, height: 1500 });
-  await scrollUnderHeader(sso);
-  await settle(desk);
-  await saveShot(desk, "sso.webp", false);
+  await saveConsoleShot(desk, "sso.webp");
 
   await desktop.close();
   await phone.close();
