@@ -192,4 +192,29 @@ describe("status history windows", () => {
     expect(summary.bars).toHaveLength(25);
     expect(summary.responseMs).toBe(15);
   });
+
+  it("leaves maintenance samples out of the uptime ratio", () => {
+    const window = resolveWindow("24h", 90, now);
+    const hour = Math.floor(now / HOUR_MS) * HOUR_MS;
+    const summary = summarizeHistory({
+      window,
+      now,
+      daily: [],
+      hourly: [
+        { start: hour - HOUR_MS, ok: 0, fail: 0, sum: 0, maint: 4 },
+        { start: hour, ok: 9, fail: 1, sum: 100, maint: 6 },
+      ],
+      live: null,
+    });
+    const maintained = summary.bars.find((bar) => bar.start === hour - HOUR_MS);
+    const mixed = summary.bars.find((bar) => bar.start === hour);
+    expect(maintained).toMatchObject({
+      uptime: null,
+      state: "maintenance",
+      maint: 4,
+    });
+    expect(mixed).toMatchObject({ uptime: 90, state: "degraded", maint: 6 });
+    expect(summary.uptime).toBe(90);
+    expect(summary.maint).toBe(10);
+  });
 });

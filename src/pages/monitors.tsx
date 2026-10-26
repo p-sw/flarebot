@@ -3,6 +3,7 @@
 import AppHeader from "@brand/overrides/AppHeader";
 import EmptyState from "@brand/overrides/EmptyState";
 import { formatDateTime, formatTime, t } from "@shared/copy";
+import { can } from "@shared/permissions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Link,
@@ -34,6 +35,7 @@ import {
 } from "../lib/queries";
 import { commitMonitor, dropMonitor, refreshQueries } from "../lib/query-sync";
 import { useToggleLock } from "../lib/toggle-guard";
+import { useRole } from "../lib/use-role";
 import { useSubmitGuard } from "../lib/use-submit-guard";
 import { Stagger, StaggerItem } from "../motion/page";
 import { ConfirmDialog } from "../ui/confirm-dialog";
@@ -198,6 +200,9 @@ export function MonitorDetailPage() {
   const outages = useQuery(outagesQuery(id));
   const row = monitor.data;
   const action = useSubmitGuard();
+  const incidentAction = useSubmitGuard();
+  const role = useRole();
+  const canWriteIncident = role ? can({ role }, "incidents.write") : false;
   const pause = useMonitorPause();
   const [confirmDelete, setConfirmDelete] = useState(false);
   if (monitor.isPending) return <ContentSkeleton />;
@@ -346,7 +351,7 @@ export function MonitorDetailPage() {
             {recent.slice(-60).map((point) => (
               <div
                 key={point.t}
-                className={`min-w-0 flex-1 ${point.ok ? "bg-status-up" : "bg-status-down"}`}
+                className={`min-w-0 flex-1 ${point.maint ? "bg-primary" : point.ok ? "bg-status-up" : "bg-status-down"}`}
                 style={{
                   height: Math.max(4, Math.min(32, point.ms / 30)),
                 }}
@@ -388,6 +393,28 @@ export function MonitorDetailPage() {
                   }}
                 >
                   {t("monitor_ack")}
+                </PendingButton>
+              ) : null}
+              {canWriteIncident ? (
+                <PendingButton
+                  size="sm"
+                  type="button"
+                  pending={incidentAction.pending}
+                  onClick={() => {
+                    void incidentAction.run(async () => {
+                      const created = await api<{ id: string }>(
+                        `/api/incidents/from-outage/${outage.id}`,
+                        { method: "POST" },
+                      );
+                      await refreshQueries(client, [["incidents"]]);
+                      await navigate({
+                        to: "/console/incidents/$id",
+                        params: { id: created.id },
+                      });
+                    });
+                  }}
+                >
+                  {t("incident_from_outage")}
                 </PendingButton>
               ) : null}
             </div>

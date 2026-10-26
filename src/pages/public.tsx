@@ -2,14 +2,17 @@
 
 import AppFooter from "@brand/overrides/AppFooter";
 import StatusHero from "@brand/overrides/StatusHero";
-import { t } from "@shared/copy";
+import { formatDateTime, t } from "@shared/copy";
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
 import { Badge } from "@/ui/badge";
 import { api } from "../lib/api";
+import { incidentStatusLabel } from "./announcement-fields";
 import { responseText, statusTone } from "./fields";
+import { Markdown } from "./markdown";
 
 type PublicPage = {
+  slug: string;
   title: string;
   description: string;
   footer: string;
@@ -21,7 +24,31 @@ type PublicPage = {
   barCount: number;
   clamped: boolean;
   retentionDays: number;
-  overall: "operational" | "degraded" | "outage" | "empty" | "paused";
+  overall:
+    | "operational"
+    | "degraded"
+    | "outage"
+    | "empty"
+    | "paused"
+    | "maintenance";
+  incidents: {
+    id: string;
+    title: string;
+    status: string;
+    impact: string | null;
+    message: string;
+    monitors: { name: string; impact: string }[];
+  }[];
+  history: { id: string; title: string; resolvedAt: number }[];
+  maintenance: {
+    id: string;
+    title: string;
+    description: string;
+    start: number;
+    end: number;
+    state: "active" | "upcoming";
+    monitors: string[];
+  }[];
   groups: {
     name: string;
     items: {
@@ -30,10 +57,13 @@ type PublicPage = {
       status: string;
       uptime: number | null;
       responseMs: number | null;
+      maint?: number;
       bars: {
         start: number;
         uptime: number | null;
         responseMs: number | null;
+        state?: string;
+        maint?: number;
       }[];
     }[];
   }[];
@@ -56,7 +86,30 @@ function statusLabel(status: string) {
   if (status === "down") return t("status_down");
   if (status === "pending") return t("status_pending");
   if (status === "paused") return t("status_paused");
+  if (
+    status === "degraded" ||
+    status === "partial_outage" ||
+    status === "major_outage" ||
+    status === "maintenance" ||
+    status === "investigating" ||
+    status === "identified" ||
+    status === "monitoring" ||
+    status === "resolved"
+  ) {
+    return incidentStatusLabel(status);
+  }
   return t("status_unknown");
+}
+
+function barClass(bar: { uptime: number | null; state?: string }): string {
+  if (bar.state === "maintenance") return "bg-primary";
+  if (bar.state === "up") return "bg-status-up";
+  if (bar.state === "degraded") return "bg-status-pending";
+  if (bar.state === "down") return "bg-status-down";
+  if (bar.state === "empty" || bar.uptime === null) return "bg-muted";
+  if (bar.uptime >= 99) return "bg-status-up";
+  if (bar.uptime >= 90) return "bg-status-pending";
+  return "bg-status-down";
 }
 
 export function PublicStatusPage() {
@@ -90,6 +143,88 @@ export function PublicStatusPage() {
         banner={data.banner}
         overall={data.overall}
       />
+      {(data.incidents?.length ?? 0) > 0 ? (
+        <section className="mt-8 grid gap-3" aria-label={t("status_incidents")}>
+          <h2 className="text-sm font-medium text-muted-foreground">
+            {t("status_incidents")}
+          </h2>
+          {data.incidents.map((incident) => (
+            <article
+              key={incident.id}
+              className="min-w-0 rounded-lg border border-status-down/40 bg-card p-4"
+            >
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                <h3 className="min-w-0 break-words text-lg font-medium">
+                  <Link
+                    to="/s/$slug/incidents/$incidentId"
+                    params={{ slug: data.slug, incidentId: incident.id }}
+                    className="underline-offset-2 hover:underline"
+                  >
+                    {incident.title}
+                  </Link>
+                </h3>
+                <Badge tone={statusTone(incident.status)}>
+                  {statusLabel(incident.status)}
+                </Badge>
+              </div>
+              <div className="mt-2">
+                <Markdown source={incident.message} />
+              </div>
+              {incident.monitors.length > 0 ? (
+                <p className="mt-2 text-xs break-words text-muted-foreground">
+                  {incident.monitors
+                    .map(
+                      (monitor) =>
+                        `${monitor.name} (${incidentStatusLabel(monitor.impact)})`,
+                    )
+                    .join(", ")}
+                </p>
+              ) : null}
+            </article>
+          ))}
+        </section>
+      ) : null}
+      {(data.maintenance?.length ?? 0) > 0 ? (
+        <section
+          id="maintenance"
+          className="mt-8 grid gap-3"
+          aria-label={t("status_maintenance_section")}
+        >
+          <h2 className="text-sm font-medium text-muted-foreground">
+            {t("status_maintenance_section")}
+          </h2>
+          {data.maintenance.map((window) => (
+            <article
+              key={window.id}
+              className="min-w-0 rounded-lg border border-primary/30 bg-card p-4"
+            >
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                <h3 className="min-w-0 break-words font-medium">
+                  {window.title}
+                </h3>
+                <Badge tone="maintenance">
+                  {window.state === "active"
+                    ? t("public_maintenance_active")
+                    : t("public_maintenance_upcoming")}
+                </Badge>
+              </div>
+              {window.description ? (
+                <p className="mt-2 text-sm break-words text-muted-foreground">
+                  {window.description}
+                </p>
+              ) : null}
+              <p className="mt-2 text-xs text-muted-foreground">
+                {formatDateTime(window.start)} – {formatDateTime(window.end)}
+              </p>
+              {window.monitors.length > 0 ? (
+                <p className="mt-1 text-xs break-words text-muted-foreground">
+                  {window.monitors.join(", ")}
+                </p>
+              ) : null}
+            </article>
+          ))}
+        </section>
+      ) : null}
       {data.clamped ? (
         <p className="mt-4 max-w-full text-sm break-words text-muted-foreground">
           {t("status_range_clamped", {
@@ -124,7 +259,9 @@ export function PublicStatusPage() {
                   <p className="mt-1 text-xs break-words text-muted-foreground">
                     {shownLabel(data)}{" "}
                     {item.uptime === null
-                      ? t("uptime_empty")
+                      ? (item.maint ?? 0) > 0
+                        ? t("uptime_maintenance")
+                        : t("uptime_empty")
                       : t("uptime_percent", { value: item.uptime })}
                     {" · "}
                     {t("response_label")} {responseText(item.responseMs)}
@@ -137,23 +274,21 @@ export function PublicStatusPage() {
                       <div
                         key={bar.start}
                         title={
-                          bar.uptime === null
-                            ? t("chart_empty")
-                            : t("status_bar_title", {
-                                uptime: t("uptime_percent", {
-                                  value: bar.uptime,
-                                }),
-                                response: responseText(bar.responseMs),
-                              })
+                          bar.state === "maintenance"
+                            ? t("status_bar_maintenance")
+                            : bar.uptime === null
+                              ? t("chart_empty")
+                              : t("status_bar_title", {
+                                  uptime: t("uptime_percent", {
+                                    value: bar.uptime,
+                                  }),
+                                  response: responseText(bar.responseMs),
+                                })
                         }
-                        className={`min-w-0 flex-1 ${
-                          bar.uptime === null
-                            ? "bg-muted"
-                            : bar.uptime >= 99
-                              ? "bg-status-up"
-                              : bar.uptime >= 90
-                                ? "bg-status-pending"
-                                : "bg-status-down"
+                        className={`min-w-0 flex-1 ${barClass(bar)} ${
+                          (bar.maint ?? 0) > 0 && bar.state !== "maintenance"
+                            ? "border-t-2 border-primary"
+                            : ""
                         }`}
                         style={{ height: 16 }}
                       />
@@ -165,6 +300,28 @@ export function PublicStatusPage() {
           </section>
         ))}
       </div>
+      {(data.history?.length ?? 0) > 0 ? (
+        <section className="mt-8" aria-label={t("status_history")}>
+          <h2 className="mb-2 text-sm font-medium text-muted-foreground">
+            {t("status_history")}
+          </h2>
+          <div className="grid gap-2">
+            {data.history.map((incident) => (
+              <Link
+                key={incident.id}
+                to="/s/$slug/incidents/$incidentId"
+                params={{ slug: data.slug, incidentId: incident.id }}
+                className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm"
+              >
+                <span className="min-w-0 break-words">{incident.title}</span>
+                <span className="text-xs text-muted-foreground">
+                  {formatDateTime(incident.resolvedAt)}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
       {data.footer ? (
         <p className="mt-8 text-sm text-muted-foreground">{data.footer}</p>
       ) : null}

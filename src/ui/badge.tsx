@@ -10,6 +10,10 @@ const tones = {
   unknown: "bg-muted text-muted-foreground",
   paused: "bg-muted text-muted-foreground",
   neutral: "bg-muted text-muted-foreground",
+  maintenance: "bg-primary/15 text-primary",
+  degraded: "bg-status-pending/20 text-status-pending-foreground",
+  partial: "bg-status-pending/20 text-status-pending-foreground",
+  major: "bg-status-down/15 text-status-down-foreground",
 };
 
 export function Badge({

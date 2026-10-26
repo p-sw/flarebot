@@ -25,6 +25,10 @@ const minimum: Record<Action, Role> = {
   "monitors.heartbeat": "viewer",
   "outages.read": "viewer",
   "outages.ack": "editor",
+  "incidents.read": "viewer",
+  "incidents.write": "editor",
+  "maintenance.read": "viewer",
+  "maintenance.write": "editor",
   "channels.read": "viewer",
   "channels.write": "admin",
   "status_pages.read": "viewer",
@@ -77,6 +81,15 @@ describe("can", () => {
     expect(
       can({ role: "editor", tokenScopes: ["read"] }, "monitors.write"),
     ).toBe(false);
+    expect(
+      can({ role: "editor", tokenScopes: ["read"] }, "incidents.write"),
+    ).toBe(false);
+    expect(
+      can(
+        { role: "editor", tokenScopes: ["monitors:write"] },
+        "maintenance.write",
+      ),
+    ).toBe(true);
     expect(
       can({ role: "editor", tokenScopes: ["heartbeat"] }, "monitors.heartbeat"),
     ).toBe(true);

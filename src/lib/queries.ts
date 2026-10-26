@@ -62,7 +62,7 @@ export function statsQuery(id: string) {
     queryKey: ["stats", id],
     queryFn: () =>
       api<{
-        recent: { t: number; ok: boolean; ms: number }[];
+        recent: { t: number; ok: boolean; ms: number; maint?: boolean }[];
         uptime: {
           h24: number | null;
           d7: number | null;
@@ -226,6 +226,98 @@ export const mailQuery = queryOptions({
   queryFn: () => api<MailSettings>("/api/settings/mail"),
   staleTime: fresh,
 });
+
+export type IncidentSummary = {
+  id: string;
+  title: string;
+  status: string;
+  resolvedAt: number | null;
+  updatedAt: number;
+  message: string;
+};
+
+export type IncidentUpdate = {
+  id: string;
+  status: string;
+  body: string;
+  postedAt: number;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type IncidentDetail = {
+  id: string;
+  title: string;
+  notify: boolean;
+  resolvedAt: number | null;
+  status: string;
+  createdAt: number;
+  updatedAt: number;
+  sourceOutageId: string | null;
+  monitors: { monitorId: string; name: string; impact: string }[];
+  pages: { pageId: string; title: string; slug: string }[];
+  channels: { channelId: string; name: string }[];
+  updates: IncidentUpdate[];
+};
+
+export function incidentsQuery(state: "active" | "resolved") {
+  return queryOptions({
+    queryKey: ["incidents", state],
+    queryFn: () =>
+      api<{ incidents: IncidentSummary[] }>(`/api/incidents?state=${state}`),
+    staleTime: fresh,
+  });
+}
+
+export function incidentQuery(id: string) {
+  return queryOptions({
+    queryKey: ["incident", id],
+    queryFn: () => api<IncidentDetail>(`/api/incidents/${id}`),
+    staleTime: fresh,
+  });
+}
+
+export type MaintenanceSummary = {
+  id: string;
+  title: string;
+  description: string;
+  timezone: string;
+  startAt: number;
+  endAt: number;
+  recurrence: string;
+  notify: boolean;
+  cancelledAt: number | null;
+  state: "active" | "upcoming" | "past";
+  next: { start: number; end: number } | null;
+};
+
+export type MaintenanceDetail = MaintenanceSummary & {
+  weekdays: number[];
+  createdAt: number;
+  updatedAt: number;
+  monitorIds: string[];
+  pageIds: string[];
+  channelIds: string[];
+  monitors: { id: string; name: string }[];
+  pages: { id: string; title: string; slug: string }[];
+};
+
+export function maintenanceListQuery(view: "upcoming" | "active" | "past") {
+  return queryOptions({
+    queryKey: ["maintenance", view],
+    queryFn: () =>
+      api<{ windows: MaintenanceSummary[] }>(`/api/maintenance?view=${view}`),
+    staleTime: fresh,
+  });
+}
+
+export function maintenanceQuery(id: string) {
+  return queryOptions({
+    queryKey: ["maintenance-window", id],
+    queryFn: () => api<MaintenanceDetail>(`/api/maintenance/${id}`),
+    staleTime: fresh,
+  });
+}
 
 export const accountQuery = queryOptions({
   queryKey: ["account"],

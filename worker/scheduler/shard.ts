@@ -8,7 +8,7 @@ import { decryptString } from "../crypto/secret";
 import { getDb } from "../db/client";
 import { monitorChannels, notificationChannels } from "../db/schema";
 import { enqueueMail } from "../mail/mailer";
-import { isInMaintenance } from "../maintenance";
+import { isInMaintenance, loadActiveMaintenanceIds } from "../maintenance";
 import { type ChannelDelivery, deliverChannel } from "../notify/dispatch";
 import { CHECK_CONCURRENCY, CHECKS_PER_ALARM } from "./capacity";
 import {
@@ -36,15 +36,21 @@ export type Snapshot = {
   regions: string[];
 };
 
-type Point = { t: number; ok: boolean; ms: number };
+type Point = { t: number; ok: boolean; ms: number; maint?: boolean };
 type Rollup = {
   hourStart: number;
   ok: number;
   fail: number;
+  maint: number;
   sum: number;
   max: number;
   samples: number[];
 };
+function normalizeRollup(rollup: Rollup | undefined): Rollup | null {
+  if (!rollup) return null;
+  return { ...rollup, maint: rollup.maint ?? 0 };
+}
+
 type Store = {
   monitors: Record<string, Snapshot>;
   recent: Record<string, Point[]>;
@@ -82,7 +88,11 @@ export class SchedulerShard extends DurableObject<Env> {
     await this.enqueue(async () => {
       const store = await this.load();
       if (!store.monitors[id]) return;
-      await this.recordSample(store, id, sample);
+      const active = await loadActiveMaintenanceIds(this.env.DB, sample.t);
+      await this.recordSample(store, id, {
+        ...sample,
+        maintenance: isInMaintenance(id, active),
+      });
       await this.persist(store);
     });
   }
@@ -127,7 +137,7 @@ export class SchedulerShard extends DurableObject<Env> {
       recent: (store.recent[monitor.id] ?? []).slice(-40),
       nextCheckAt: monitor.nextCheckAt,
       lastPushAt: monitor.lastPushAt,
-      rollup: store.rollups[monitor.id] ?? null,
+      rollup: normalizeRollup(store.rollups[monitor.id]),
     }));
   }
 
@@ -146,7 +156,7 @@ export class SchedulerShard extends DurableObject<Env> {
       recent: (store.recent[id] ?? []).slice(-60),
       nextCheckAt: monitor.nextCheckAt,
       lastPushAt: monitor.lastPushAt,
-      rollup: store.rollups[id] ?? null,
+      rollup: normalizeRollup(store.rollups[id]),
     };
   }
 
@@ -187,6 +197,7 @@ export class SchedulerShard extends DurableObject<Env> {
   }
 
   async runDue(now: number): Promise<{ ran: number }> {
+    const activeMaintenance = await loadActiveMaintenanceIds(this.env.DB, now);
     const store = await this.load();
     const due = Object.values(store.monitors)
       .filter((monitor) => !monitor.paused && monitor.nextCheckAt <= now)
@@ -199,7 +210,7 @@ export class SchedulerShard extends DurableObject<Env> {
         cursor += 1;
         const monitor = due[index];
         if (!monitor) continue;
-        await this.checkOne(monitor.id, now);
+        await this.checkOne(monitor.id, now, activeMaintenance);
       }
     };
     await Promise.all(
@@ -221,7 +232,11 @@ export class SchedulerShard extends DurableObject<Env> {
     return { ran: due.length };
   }
 
-  private async checkOne(id: string, now: number): Promise<void> {
+  private async checkOne(
+    id: string,
+    now: number,
+    activeMaintenance: ReadonlySet<string>,
+  ): Promise<void> {
     const preview = await this.load();
     const monitor = preview.monitors[id];
     if (!monitor || monitor.paused || monitor.nextCheckAt > now) return;
@@ -247,11 +262,13 @@ export class SchedulerShard extends DurableObject<Env> {
       current.state = transition.state;
       current.nextCheckAt =
         now + (transition.nextDelayMs ?? current.intervalMs);
+      const inMaintenance = isInMaintenance(id, activeMaintenance);
       await this.recordSample(store, id, {
         t: now,
         ok: outcome.ok,
         ms: outcome.responseMs,
         internal: outcome.internal,
+        maintenance: inMaintenance,
       });
       await this.persist(store);
       if (transition.openedOutage) {
@@ -302,7 +319,7 @@ export class SchedulerShard extends DurableObject<Env> {
         outcome.ok ? null : outcome.error,
       ).catch(() => undefined);
     }
-    if (committed.alert && !isInMaintenance(id, now)) {
+    if (committed.alert && !isInMaintenance(id, activeMaintenance)) {
       await this.notify(
         { ...monitor, name: committed.name },
         committed.alert,
@@ -314,50 +331,71 @@ export class SchedulerShard extends DurableObject<Env> {
   private async recordSample(
     store: Store,
     id: string,
-    sample: { t: number; ok: boolean; ms: number; internal: boolean },
+    sample: {
+      t: number;
+      ok: boolean;
+      ms: number;
+      internal: boolean;
+      maintenance?: boolean;
+    },
   ): Promise<void> {
     const points = store.recent[id] ?? [];
     points.push({
       t: sample.t,
       ok: sample.ok && !sample.internal,
       ms: sample.ms,
+      maint: sample.maintenance || undefined,
     });
     store.recent[id] = points.slice(-60);
     const hourStart = Math.floor(sample.t / 3_600_000) * 3_600_000;
-    const rollup = store.rollups[id] ?? {
-      hourStart,
-      ok: 0,
-      fail: 0,
-      sum: 0,
-      max: 0,
-      samples: [],
-    };
-    if (rollup.hourStart !== hourStart && rollup.ok + rollup.fail > 0) {
+    const existing = store.rollups[id];
+    const rollup: Rollup = existing
+      ? { ...existing, maint: existing.maint ?? 0 }
+      : {
+          hourStart,
+          ok: 0,
+          fail: 0,
+          maint: 0,
+          sum: 0,
+          max: 0,
+          samples: [],
+        };
+    if (
+      rollup.hourStart !== hourStart &&
+      rollup.ok + rollup.fail + rollup.maint > 0
+    ) {
       await mergeHourly(this.env.DB, id, rollup).catch(() => undefined);
       store.rollups[id] = {
         hourStart,
         ok: 0,
         fail: 0,
+        maint: 0,
         sum: 0,
         max: 0,
         samples: [],
       };
     }
     const current = store.rollups[id] ?? rollup;
+    current.maint = current.maint ?? 0;
     if (!sample.internal) {
-      if (sample.ok) current.ok += 1;
-      else current.fail += 1;
-      current.sum += sample.ms;
-      current.max = Math.max(current.max, sample.ms);
-      current.samples.push(sample.ms);
-      current.samples = current.samples.slice(-120);
+      if (sample.maintenance) {
+        current.maint += 1;
+      } else {
+        if (sample.ok) current.ok += 1;
+        else current.fail += 1;
+        current.sum += sample.ms;
+        current.max = Math.max(current.max, sample.ms);
+        current.samples.push(sample.ms);
+        current.samples = current.samples.slice(-120);
+      }
     }
     store.rollups[id] = current;
   }
 
   private async flush(store: Store, now: number): Promise<void> {
-    for (const [id, rollup] of Object.entries(store.rollups)) {
-      if (rollup.ok + rollup.fail === 0) continue;
+    for (const [id, stored] of Object.entries(store.rollups)) {
+      const rollup = { ...stored, maint: stored.maint ?? 0 };
+      if (rollup.ok + rollup.fail + rollup.maint === 0) continue;
       await mergeHourly(this.env.DB, id, rollup);
       const monitor = store.monitors[id];
       if (monitor) await saveRuntime(this.env.DB, id, monitor.state);
@@ -365,6 +403,7 @@ export class SchedulerShard extends DurableObject<Env> {
         hourStart: rollup.hourStart,
         ok: 0,
         fail: 0,
+        maint: 0,
         sum: 0,
         max: 0,
         samples: [],

@@ -170,17 +170,24 @@ export type CountRow = {
   ok: number;
   fail: number;
   sum: number;
+  /** Checks that ran inside a maintenance window. Left out of uptime. */
+  maint?: number;
 };
+
+export type BarState = "empty" | "up" | "degraded" | "down" | "maintenance";
 
 export type HistoryBar = {
   start: number;
   uptime: number | null;
   responseMs: number | null;
+  state: BarState;
+  maint: number;
 };
 
 export type HistorySummary = {
   uptime: number | null;
   responseMs: number | null;
+  maint: number;
   bars: HistoryBar[];
 };
 
@@ -188,6 +195,15 @@ export function uptimePercent(ok: number, fail: number): number | null {
   const total = ok + fail;
   if (total === 0) return null;
   return Math.round((ok / total) * 1000) / 10;
+}
+
+/** Maintenance samples do not move the percentage. A bucket of only those is maintenance. */
+export function barState(ok: number, fail: number, maint: number): BarState {
+  if (ok + fail === 0) return maint > 0 ? "maintenance" : "empty";
+  const uptime = uptimePercent(ok, fail) ?? 0;
+  if (uptime >= 99) return "up";
+  if (uptime >= 90) return "degraded";
+  return "down";
 }
 
 export function responseAverage(
@@ -201,7 +217,7 @@ export function responseAverage(
 }
 
 function emptyCount(start: number): CountRow {
-  return { start, ok: 0, fail: 0, sum: 0 };
+  return { start, ok: 0, fail: 0, sum: 0, maint: 0 };
 }
 
 function addCount(base: CountRow, extra: CountRow): CountRow {
@@ -210,14 +226,18 @@ function addCount(base: CountRow, extra: CountRow): CountRow {
     ok: base.ok + extra.ok,
     fail: base.fail + extra.fail,
     sum: base.sum + extra.sum,
+    maint: (base.maint ?? 0) + (extra.maint ?? 0),
   };
 }
 
 function barFrom(count: CountRow): HistoryBar {
+  const maint = count.maint ?? 0;
   return {
     start: count.start,
     uptime: uptimePercent(count.ok, count.fail),
     responseMs: responseAverage(count.sum, count.ok, count.fail),
+    state: barState(count.ok, count.fail, maint),
+    maint,
   };
 }
 
@@ -228,6 +248,7 @@ function sumRows(rows: CountRow[], from: number, until: number): CountRow {
       total.ok += row.ok;
       total.fail += row.fail;
       total.sum += row.sum;
+      total.maint = (total.maint ?? 0) + (row.maint ?? 0);
     }
   }
   return total;
@@ -245,6 +266,7 @@ export function summarizeHistory(input: {
   let ok = 0;
   let fail = 0;
   let sum = 0;
+  let maint = 0;
   for (let index = 0; index < input.window.bars; index += 1) {
     const start = input.window.start + index * input.window.step;
     let count = emptyCount(start);
@@ -267,17 +289,25 @@ export function summarizeHistory(input: {
     } else {
       const daily = input.daily.find((row) => row.start === start);
       count = daily
-        ? { start, ok: daily.ok, fail: daily.fail, sum: daily.sum }
+        ? {
+            start,
+            ok: daily.ok,
+            fail: daily.fail,
+            sum: daily.sum,
+            maint: daily.maint ?? 0,
+          }
         : addCount(count, sumRows(input.hourly, start, start + DAY_MS));
     }
     ok += count.ok;
     fail += count.fail;
     sum += count.sum;
+    maint += count.maint ?? 0;
     bars.push(barFrom(count));
   }
   return {
     uptime: uptimePercent(ok, fail),
     responseMs: responseAverage(sum, ok, fail),
+    maint,
     bars,
   };
 }

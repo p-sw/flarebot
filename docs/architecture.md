@@ -43,4 +43,8 @@ These D1 columns are deprecated and unused. They stay so existing production row
 
 The Worker handles those HTML routes before the asset SPA fallback, so the browser does not paint the admin shell for a public page or the public page for an admin URL. Only one `status_pages.serve_at_root` value can be `1`. The API clears the previous row in the same D1 batch that sets the new one.
 
-Maintenance windows and multi-region checks are extension points. `isInMaintenance` returns false. Only `regions[0]` is executed.
+Maintenance windows suppress alerts and leave those samples out of uptime. Each alarm loads the active windows in one D1 read and passes the monitor set into the check loop. A sample taken during a window increments `maint_count` instead of `ok_count` or `fail_count`, and it is left out of the latency total. Status bars paint a maintenance-only bucket on its own, and a mixed bucket keeps the uptime color with a maintenance edge. The uptime percentage is still `ok / (ok + fail)`.
+
+Manual incidents are separate from automatic `outages`. An open incident's impact overrides the live check on the status page: major outage counts as down, and degraded or partial outage counts as degraded. An active maintenance window overrides the live check when no incident impact applies. See `docs/announcements.md` for the event log those two features share.
+
+Only `regions[0]` is executed.

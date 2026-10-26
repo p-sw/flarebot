@@ -37,6 +37,29 @@ export function Field({
   );
 }
 
+/** A labelled group of controls. A label would steal each control's name. */
+export function GroupField({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <fieldset className="grid min-w-0 gap-1.5 border-0 p-0 text-sm">
+      <legend className="font-medium">{label}</legend>
+      {children}
+      {hint ? (
+        <span className="text-xs font-normal text-muted-foreground">
+          {hint}
+        </span>
+      ) : null}
+    </fieldset>
+  );
+}
+
 // A heartbeat has no round trip, and a connect that finishes in the same
 // millisecond is stored as 0. Both read as an empty measurement.
 export function responseText(ms: number | null): string {
@@ -46,7 +69,20 @@ export function responseText(ms: number | null): string {
 
 export function statusTone(
   status: string,
-): "up" | "down" | "pending" | "paused" | "unknown" {
+):
+  | "up"
+  | "down"
+  | "pending"
+  | "paused"
+  | "unknown"
+  | "maintenance"
+  | "degraded"
+  | "partial"
+  | "major" {
+  if (status === "maintenance") return "maintenance";
+  if (status === "degraded") return "degraded";
+  if (status === "partial_outage") return "partial";
+  if (status === "major_outage") return "major";
   if (
     status === "up" ||
     status === "down" ||

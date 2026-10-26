@@ -11,7 +11,13 @@ export default function StatusHero({
   title: string;
   description: string;
   banner: string;
-  overall: "operational" | "degraded" | "outage" | "empty" | "paused";
+  overall:
+    | "operational"
+    | "degraded"
+    | "outage"
+    | "empty"
+    | "paused"
+    | "maintenance";
 }) {
   const label =
     overall === "outage"
@@ -22,13 +28,17 @@ export default function StatusHero({
           ? t("status_all_paused")
           : overall === "empty"
             ? t("status_empty")
-            : t("status_all_operational");
+            : overall === "maintenance"
+              ? t("status_all_maintenance")
+              : t("status_all_operational");
   const tone =
     overall === "outage" || overall === "degraded"
       ? "bg-status-down"
-      : overall === "paused" || overall === "empty"
-        ? "bg-status-unknown"
-        : "bg-status-up";
+      : overall === "maintenance"
+        ? "bg-primary"
+        : overall === "paused" || overall === "empty"
+          ? "bg-status-unknown"
+          : "bg-status-up";
   return (
     <section className="rounded-lg border border-border bg-card p-8">
       <p className="text-sm text-muted-foreground">

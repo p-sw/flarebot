@@ -51,4 +51,6 @@ Confirming a state change notifies that monitor's channels inside the scheduler 
 
 A monitor can attach up to 20 channels. Those requests sit beside the check that just finished, so a monitor with many channels spends more of the 50-subrequest budget on the invocation that pages you. No new cron, table, or migration is required. Config stays in the encrypted column that already exists.
 
+Incident and maintenance announcements use this same transport when their notify switch is on. They are queued and sent from the five-minute cron, at most eight rows a run. See [announcements.md](announcements.md).
+
 The console lists channels with a search once there are more than six, and the add form has a searchable type picker. The monitor form uses the same search when it attaches channels.

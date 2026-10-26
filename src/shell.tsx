@@ -13,12 +13,14 @@ import {
 } from "@tanstack/react-router";
 import {
   Bell,
+  CalendarClock,
   CircleUser,
   Globe,
   KeyRound,
   LayoutDashboard,
   LogOut,
   type LucideIcon,
+  Megaphone,
   Plus,
   ScrollText,
   Settings,
@@ -69,6 +71,8 @@ const links: {
   to:
     | "/console"
     | "/console/monitors/new"
+    | "/console/incidents"
+    | "/console/maintenance"
     | "/console/status-pages"
     | "/console/channels"
     | "/console/team"
@@ -79,6 +83,8 @@ const links: {
   action:
     | "dashboard.read"
     | "monitors.write"
+    | "incidents.read"
+    | "maintenance.read"
     | "status_pages.read"
     | "channels.read"
     | "users.read"
@@ -86,6 +92,7 @@ const links: {
     | "audit.read"
     | "instance.settings";
   icon: LucideIcon;
+  match?: "prefix";
 }[] = [
   {
     to: "/console",
@@ -100,10 +107,25 @@ const links: {
     icon: Plus,
   },
   {
+    to: "/console/incidents",
+    label: () => t("nav_incidents"),
+    action: "incidents.read",
+    icon: Megaphone,
+    match: "prefix",
+  },
+  {
+    to: "/console/maintenance",
+    label: () => t("nav_maintenance"),
+    action: "maintenance.read",
+    icon: CalendarClock,
+    match: "prefix",
+  },
+  {
     to: "/console/status-pages",
     label: () => t("nav_status_pages"),
     action: "status_pages.read",
     icon: Globe,
+    match: "prefix",
   },
   {
     to: "/console/channels",
@@ -207,7 +229,7 @@ function NavLinks({ user }: { user: SessionUser }) {
             <Link
               to={link.to}
               activeOptions={{
-                exact: link.to !== "/console/status-pages",
+                exact: link.match !== "prefix",
               }}
               aria-busy={isPending || undefined}
               data-pending={isPending ? "true" : undefined}
