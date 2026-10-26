@@ -90,7 +90,7 @@ async function expectNoOverflowAtWidths(page: import("@playwright/test").Page) {
 }
 
 test("key pages do not overflow at mobile widths", async ({ page }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(120_000);
   const slug = `mobile-${test.info().parallelIndex}-${Date.now().toString(36)}`;
   const longName = `Billing API ${"Northstar ".repeat(6)}monitor`;
   await signIn(page);
@@ -124,6 +124,45 @@ test("key pages do not overflow at mobile widths", async ({ page }) => {
   });
   expect(created.ok()).toBeTruthy();
   const pageId = ((await created.json()) as { id: string }).id;
+  const headers = {
+    origin: "http://127.0.0.1:4173",
+    "content-type": "application/json",
+  };
+  const longToken = `Outage${"X".repeat(72)}`;
+  const incident = await page.request.post("/api/incidents", {
+    headers,
+    data: {
+      title: longToken,
+      notify: false,
+      channelIds: [],
+      pageIds: [pageId],
+      monitors: [{ monitorId: id, impact: "partial_outage" }],
+      update: {
+        status: "investigating",
+        body: "Looking into a public incident that must wrap on a narrow phone.",
+        postedAt: Date.now(),
+      },
+    },
+  });
+  expect(incident.ok(), await incident.text()).toBeTruthy();
+  const startAt = Date.now() - 60_000;
+  const maintenance = await page.request.post("/api/maintenance", {
+    headers,
+    data: {
+      title: `Maintenance ${longToken}`.slice(0, 200),
+      description: `Window ${"detail ".repeat(16)}`,
+      timezone: "UTC",
+      startAt,
+      endAt: startAt + 2 * 60 * 60 * 1000,
+      recurrence: "once",
+      weekdays: [],
+      notify: false,
+      channelIds: [],
+      pageIds: [pageId],
+      monitorIds: [id],
+    },
+  });
+  expect(maintenance.ok(), await maintenance.text()).toBeTruthy();
 
   const signedIn = [
     "/console",
@@ -132,6 +171,8 @@ test("key pages do not overflow at mobile widths", async ({ page }) => {
     `/console/monitors/${id}/edit`,
     "/console/status-pages",
     `/console/status-pages/${pageId}`,
+    "/console/incidents",
+    "/console/maintenance",
     "/console/channels",
     "/console/team",
     "/console/tokens",
