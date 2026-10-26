@@ -74,13 +74,13 @@ Open http://127.0.0.1:5173/setup. The sample setup secret is `change-me-setup-se
 
 ## URLs
 
-| URL         | Purpose                                                               |
-| ----------- | --------------------------------------------------------------------- |
-| `/`         | Public status page chosen as the site root, or a redirect to `/login` |
-| `/s/<slug>` | Public status page. Still works for the page served at `/`            |
-| `/login`    | Sign in. A signed-in visit redirects to `/console`                    |
-| `/console`  | Admin dashboard and the rest of the admin UI                          |
-| `/setup`    | Create the first owner. Redirects to `/login` once setup is done      |
+| URL                      | Purpose                                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `/`                      | Public status page chosen as the site root, or a redirect to `/login`                                 |
+| `/s/<slug>`              | Public status page. Still works for the page served at `/`                                            |
+| `/login`                 | Sign in. A signed-in visit redirects to `/console`                                                    |
+| `/console`               | Admin dashboard and the rest of the admin UI                                                          |
+| `/setup`                 | Create the first owner. Redirects to `/login` once setup is done                                      |
 | `/badge/<id>/status.svg` | Status badge. `uptime.svg` and `response.svg` are the other two. See [docs/badges.md](docs/badges.md) |
 
 Bookmarks under the old admin paths (`/monitors/...`, `/status-pages`, `/settings`, and the other console sections) redirect to `/console/...`. A status page setting, "Serve at the site root", chooses which published page answers `/`. Only one page can hold that setting. Turning it on for one page turns it off for the other. Create a page at `/console/status-pages/new` and edit it at `/console/status-pages/<id>`. The public monitor label is the optional display name, or the monitor name when that field is blank.

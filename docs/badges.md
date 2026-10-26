@@ -15,10 +15,10 @@ If the monitor is missing, private, or the id is not a monitor id, the response 
 
 ## URLs
 
-| Badge | Path |
-| ----- | ---- |
-| Status | `/badge/<monitor-id>/status.svg` |
-| Uptime | `/badge/<monitor-id>/uptime.svg` |
+| Badge         | Path                               |
+| ------------- | ---------------------------------- |
+| Status        | `/badge/<monitor-id>/status.svg`   |
+| Uptime        | `/badge/<monitor-id>/uptime.svg`   |
 | Response time | `/badge/<monitor-id>/response.svg` |
 
 `<monitor-id>` is the monitor's id from the console URL (`/console/monitors/<monitor-id>`).
@@ -27,11 +27,11 @@ The console monitor page has a Badges panel with a live preview and copy buttons
 
 ### Query
 
-| Name | Values | Default |
-| ---- | ------ | ------- |
-| `style` | `flat`, `flat-square`, `for-the-badge` | `flat` |
-| `window` | `24h`, `7d`, `30d`, `90d` | `24h` |
-| `label` | Up to 48 characters | `status`, `uptime 24h`, or `response 24h` |
+| Name     | Values                                 | Default                                   |
+| -------- | -------------------------------------- | ----------------------------------------- |
+| `style`  | `flat`, `flat-square`, `for-the-badge` | `flat`                                    |
+| `window` | `24h`, `7d`, `30d`, `90d`              | `24h`                                     |
+| `label`  | Up to 48 characters                    | `status`, `uptime 24h`, or `response 24h` |
 
 `window` applies to uptime and response time. Unknown `style` and `window` values fall back to the defaults. Any other query parameter is ignored, so a random parameter cannot bypass the cache.
 
@@ -39,13 +39,13 @@ The console monitor page has a Badges panel with a live preview and copy buttons
 
 ### Status colors
 
-| Stored state | Badge | Color |
-| ------------ | ----- | ----- |
-| up | up | green `#4c1` |
-| down | down | red `#e05d44` |
-| paused | paused | yellow `#dfb317` |
+| Stored state                           | Badge    | Color            |
+| -------------------------------------- | -------- | ---------------- |
+| up                                     | up       | green `#4c1`     |
+| down                                   | down     | red `#e05d44`    |
+| paused                                 | paused   | yellow `#dfb317` |
 | pending, or a check that ended unknown | degraded | orange `#fe7d37` |
-| not public, or no such monitor | unknown | gray `#9f9f9f` |
+| not public, or no such monitor         | unknown  | gray `#9f9f9f`   |
 
 Pending is the console's "Checking" state. The badge uses **degraded** so a public monitor is never drawn with the same word as a private one. A fork can change the words in `brand/locale.json` (`badge_value_up`, `badge_value_down`, `badge_value_paused`, `badge_value_degraded`, `badge_value_unknown`).
 
