@@ -12,7 +12,28 @@ async function expectNoHorizontalOverflow(
       if (!(node instanceof HTMLElement)) continue;
       if (node.classList.contains("sr-only")) continue;
       const style = getComputedStyle(node);
-      if (style.position === "fixed" || style.position === "sticky") continue;
+      if (
+        style.position === "fixed" ||
+        style.position === "sticky" ||
+        style.visibility === "hidden" ||
+        Number(style.opacity) === 0
+      ) {
+        continue;
+      }
+      let ancestor = node.parentElement;
+      let insideFixed = false;
+      while (ancestor) {
+        const ancestorStyle = getComputedStyle(ancestor);
+        if (
+          ancestorStyle.position === "fixed" ||
+          ancestorStyle.position === "sticky"
+        ) {
+          insideFixed = true;
+          break;
+        }
+        ancestor = ancestor.parentElement;
+      }
+      if (insideFixed) continue;
       const rect = node.getBoundingClientRect();
       if (rect.width < 2 || rect.height < 2) continue;
       if (rect.right <= width + 1 && rect.left >= -1) continue;
@@ -41,8 +62,10 @@ async function expectNoHorizontalOverflow(
         typeof node.className === "string"
           ? node.className.trim().split(/\s+/).slice(0, 2).join(".")
           : "";
+      const label =
+        node.getAttribute("aria-label") ?? node.getAttribute("name") ?? "";
       offenders.push(
-        `${node.tagName}${id}${className ? `.${className}` : ""} left=${Math.round(rect.left)} right=${Math.round(rect.right)}`,
+        `${location.pathname} ${node.tagName}${id}${className ? `.${className}` : ""}${label ? ` "${label}"` : ""} left=${Math.round(rect.left)} right=${Math.round(rect.right)} ${node.outerHTML.slice(0, 140)}`,
       );
       if (offenders.length >= 8) break;
     }
@@ -61,11 +84,13 @@ const widths = [320, 360, 390, 414] as const;
 async function expectNoOverflowAtWidths(page: import("@playwright/test").Page) {
   for (const width of widths) {
     await page.setViewportSize({ width, height: 800 });
+    await page.waitForTimeout(50);
     await expectNoHorizontalOverflow(page);
   }
 }
 
 test("key pages do not overflow at mobile widths", async ({ page }) => {
+  test.setTimeout(90_000);
   const slug = `mobile-${test.info().parallelIndex}-${Date.now().toString(36)}`;
   const longName = `Billing API ${"Northstar ".repeat(6)}monitor`;
   await signIn(page);

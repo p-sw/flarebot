@@ -4,6 +4,7 @@ import presetsSource from "@brand/motion";
 import type { ResolvedMotion } from "@shared/brand";
 import { MotionConfig, motion, useReducedMotion } from "motion/react";
 import type { ReactNode } from "react";
+import { cn } from "../lib/cn";
 
 const presets: ResolvedMotion = presetsSource;
 
@@ -49,10 +50,12 @@ export function Stagger({
   className?: string;
 }) {
   const motionPrefs = useMotionPrefs();
-  if (motionPrefs.still) return <div className={className}>{children}</div>;
+  if (motionPrefs.still) {
+    return <div className={cn("min-w-0", className)}>{children}</div>;
+  }
   return (
     <motion.div
-      className={className}
+      className={cn("min-w-0", className)}
       initial="hidden"
       animate="show"
       variants={{
@@ -72,10 +75,12 @@ export function StaggerItem({
   className?: string;
 }) {
   const motionPrefs = useMotionPrefs();
-  if (motionPrefs.still) return <div className={className}>{children}</div>;
+  if (motionPrefs.still) {
+    return <div className={cn("min-w-0", className)}>{children}</div>;
+  }
   return (
     <motion.div
-      className={className}
+      className={cn("min-w-0", className)}
       variants={{
         hidden: { opacity: 0, y: motionPrefs.distance },
         show: {
