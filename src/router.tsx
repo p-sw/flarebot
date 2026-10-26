@@ -38,10 +38,10 @@ import {
   ResetPage,
   SetupPage,
 } from "./pages/auth";
+import { ChannelsPage } from "./pages/channels";
 import {
   AccountPage,
   AuditPage,
-  ChannelsPage,
   NotFoundPage,
   SettingsPage,
   StatusPagesPage,

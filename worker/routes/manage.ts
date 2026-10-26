@@ -3,6 +3,14 @@
 import { and, desc, eq, ne } from "drizzle-orm";
 import type { Hono } from "hono";
 import { z } from "zod";
+import {
+  type ChannelType,
+  channelDestination,
+  channelTypeSchema,
+  channelWriteSchema,
+  redactChannelConfig,
+  resolveChannelConfig,
+} from "../../shared/channels";
 import { t, textLang } from "../../shared/copy";
 import {
   HISTORY_RETENTION_KEY,
@@ -19,7 +27,6 @@ import {
 } from "../../shared/permissions";
 import {
   accountPatchSchema,
-  channelWriteSchema,
   inviteSchema,
   mailSettingsSchema,
   passwordChangeSchema,
@@ -117,6 +124,37 @@ async function ownerCount(env: Env, organizationId: string): Promise<number> {
   return rows.length;
 }
 
+async function readChannelConfig(
+  key: string,
+  encrypted: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const parsed = JSON.parse(await decryptString(key, encrypted)) as unknown;
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed))
+      return parsed as Record<string, unknown>;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function channelConfigOrThrow(
+  type: ChannelType,
+  config: unknown,
+  stored: Record<string, unknown> | null,
+  clearSecrets: readonly string[] | undefined,
+): Record<string, unknown> {
+  const resolved = resolveChannelConfig(
+    type,
+    config,
+    stored,
+    clearSecrets ?? [],
+  );
+  if (!resolved.ok)
+    throw new ApiError(400, "validation", t("error_validation"));
+  return resolved.config;
+}
+
 export function registerManage(app: Hono<AppEnv>): void {
   app.get("/api/channels", async (c) => {
     const actor = await requireActor(c);
@@ -128,17 +166,27 @@ export function registerManage(app: Hono<AppEnv>): void {
     const reveal = can(actor, "channels.write");
     const items = [];
     for (const row of rows) {
-      let config: unknown;
-      if (reveal && c.env.ENCRYPTION_KEY) {
-        config = JSON.parse(
-          await decryptString(c.env.ENCRYPTION_KEY, row.configEncrypted),
+      const parsedType = channelTypeSchema.safeParse(row.type);
+      let stored: Record<string, unknown> | null = null;
+      if (parsedType.success && reveal && c.env.ENCRYPTION_KEY) {
+        stored = await readChannelConfig(
+          c.env.ENCRYPTION_KEY,
+          row.configEncrypted,
         );
       }
+      const presented = parsedType.success
+        ? redactChannelConfig(parsedType.data, stored)
+        : null;
       items.push({
         id: row.id,
         name: row.name,
         type: row.type,
-        config,
+        destination: parsedType.success
+          ? channelDestination(parsedType.data, stored)
+          : "",
+        ...(reveal && presented
+          ? { config: presented.config, secrets: presented.secrets }
+          : {}),
       });
     }
     return c.json({ channels: items });
@@ -149,6 +197,12 @@ export function registerManage(app: Hono<AppEnv>): void {
     assertMutationOrigin(c, actor);
     requireCan(actor, "channels.write");
     const body = await parseBody(c, channelWriteSchema);
+    const config = channelConfigOrThrow(
+      body.type,
+      body.config,
+      null,
+      body.clearSecrets,
+    );
     const id = crypto.randomUUID();
     const now = Date.now();
     await getDb(c.env.DB)
@@ -160,7 +214,7 @@ export function registerManage(app: Hono<AppEnv>): void {
         type: body.type,
         configEncrypted: await encryptString(
           requireEncryptionKey(c.env),
-          JSON.stringify(body.config),
+          JSON.stringify(config),
         ),
         locale: null,
         createdAt: now,
@@ -191,6 +245,16 @@ export function registerManage(app: Hono<AppEnv>): void {
       .get();
     if (!row || row.organizationId !== actor.organizationId)
       throw new ApiError(404, "not_found", t("error_channel_not_found"));
+    const stored =
+      row.type === body.type && c.env.ENCRYPTION_KEY
+        ? await readChannelConfig(c.env.ENCRYPTION_KEY, row.configEncrypted)
+        : null;
+    const config = channelConfigOrThrow(
+      body.type,
+      body.config,
+      stored,
+      body.clearSecrets,
+    );
     await db
       .update(notificationChannels)
       .set({
@@ -198,7 +262,7 @@ export function registerManage(app: Hono<AppEnv>): void {
         type: body.type,
         configEncrypted: await encryptString(
           requireEncryptionKey(c.env),
-          JSON.stringify(body.config),
+          JSON.stringify(config),
         ),
         updatedAt: Date.now(),
       })
@@ -254,11 +318,16 @@ export function registerManage(app: Hono<AppEnv>): void {
       .get();
     if (!row || row.organizationId !== actor.organizationId)
       throw new ApiError(404, "not_found", t("error_channel_not_found"));
-    const config = JSON.parse(
-      await decryptString(requireEncryptionKey(c.env), row.configEncrypted),
-    ) as Record<string, unknown>;
+    const parsedType = channelTypeSchema.safeParse(row.type);
+    if (!parsedType.success)
+      throw new ApiError(400, "validation", t("error_unknown_channel"));
+    const stored = await readChannelConfig(
+      requireEncryptionKey(c.env),
+      row.configEncrypted,
+    );
+    const config = channelConfigOrThrow(parsedType.data, stored, null, []);
     const sample = sampleChannelText(row.name);
-    if (row.type === "email") {
+    if (parsedType.data === "email") {
       const settings = await db
         .select()
         .from(mailSettings)
@@ -284,10 +353,7 @@ export function registerManage(app: Hono<AppEnv>): void {
       return c.json({ ok: true });
     }
     const result = await deliverChannel(
-      {
-        type: row.type as "discord" | "slack" | "telegram" | "webhook",
-        config,
-      },
+      { type: parsedType.data, config },
       { kind: "down", monitorName: row.name, reason: t("notify_reason_test") },
       {},
     );

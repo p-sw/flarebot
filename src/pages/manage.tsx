@@ -13,7 +13,6 @@ import { api, errorText, mailFailureText } from "../lib/api";
 import {
   accountQuery,
   auditQuery,
-  channelsQuery,
   mailQuery,
   settingsQuery,
   statusPagesQuery,
@@ -115,91 +114,6 @@ export function StatusPagesPage() {
                   )}
                 </div>
               </article>
-            </StaggerItem>
-          ))}
-        </Stagger>
-      )}
-    </>
-  );
-}
-
-export function ChannelsPage() {
-  const channels = useQuery(channelsQuery);
-  const client = useQueryClient();
-  const [name, setName] = useState(() => t("channel_name_default"));
-  const [to, setTo] = useState("");
-  const [message, setMessage] = useState("");
-  const submit = useSubmitGuard();
-  const test = useSubmitGuard();
-  return (
-    <>
-      <AppHeader title={t("nav_channels")} />
-      <form
-        className="mb-6 grid max-w-xl gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void submit.run(async () => {
-            await api("/api/channels", {
-              method: "POST",
-              body: JSON.stringify({ name, type: "email", config: { to } }),
-            });
-            await refreshQueries(client, [["channels"]]);
-          });
-        }}
-      >
-        <Field label={t("channel_name")}>
-          <Input
-            name="channelName"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            required
-          />
-        </Field>
-        <Field label={t("channel_email_to")}>
-          <Input
-            name="to"
-            type="email"
-            value={to}
-            onChange={(event) => setTo(event.target.value)}
-            required
-          />
-        </Field>
-        <PendingButton type="submit" pending={submit.pending}>
-          {t("channel_new")}
-        </PendingButton>
-      </form>
-      {message ? <p className="mb-3 text-sm">{message}</p> : null}
-      {channels.isPending ? (
-        <ContentSkeleton />
-      ) : (
-        <Stagger className="grid gap-2">
-          {channels.data?.channels.map((channel) => (
-            <StaggerItem key={channel.id}>
-              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
-                <span>
-                  {channel.name} · {channel.type}
-                </span>
-                <PendingButton
-                  size="sm"
-                  variant="outline"
-                  type="button"
-                  pending={test.pending}
-                  onClick={() => {
-                    void test.run(async () => {
-                      try {
-                        await api(`/api/channels/${channel.id}/test`, {
-                          method: "POST",
-                        });
-                        setMessage(t("channel_test_sent"));
-                      } catch (cause) {
-                        setMessage(errorText(cause));
-                      }
-                    });
-                  }}
-                >
-                  {t("action_test")}
-                </PendingButton>
-              </div>
             </StaggerItem>
           ))}
         </Stagger>

@@ -39,6 +39,7 @@ import { Input } from "../ui/input";
 import { ContentSkeleton } from "../ui/skeleton";
 import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
+import { ChannelAttachList } from "./channels";
 import { controlClass, Field } from "./fields";
 import { monitorTypeLabel } from "./monitor-labels";
 
@@ -379,30 +380,13 @@ function MonitorForm({
                     {t("monitor_no_channels")}
                   </p>
                 ) : (
-                  <ul className="grid min-w-0 gap-2">
-                    {channels.data?.channels.map((channel) => (
-                      <li key={channel.id}>
-                        <label className="flex min-w-0 items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            className="size-4 shrink-0"
-                            checked={draft.channelIds.includes(channel.id)}
-                            onChange={(event) => {
-                              const channelIds = event.target.checked
-                                ? [...draft.channelIds, channel.id]
-                                : draft.channelIds.filter(
-                                    (id) => id !== channel.id,
-                                  );
-                              setDraft({ ...draft, channelIds });
-                            }}
-                          />
-                          <span className="min-w-0 break-words">
-                            {channel.name}
-                          </span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
+                  <ChannelAttachList
+                    channels={channels.data?.channels ?? []}
+                    selected={draft.channelIds}
+                    onChange={(channelIds) =>
+                      setDraft({ ...draft, channelIds })
+                    }
+                  />
                 )}
               </CardContent>
             </Card>

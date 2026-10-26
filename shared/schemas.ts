@@ -162,64 +162,6 @@ export function parseMonitorConfig(type: MonitorType, config: unknown) {
   }
 }
 
-export const channelTypeSchema = z.enum([
-  "email",
-  "discord",
-  "slack",
-  "telegram",
-  "webhook",
-]);
-
-export const channelWriteSchema = z
-  .object({
-    name: z.string().min(1).max(80),
-    type: channelTypeSchema,
-    config: z.unknown(),
-  })
-  .superRefine((value, ctx) => {
-    const parsed = parseChannelConfig(value.type, value.config);
-    if (!parsed.success) {
-      for (const issue of parsed.error.issues) {
-        ctx.addIssue({ ...issue, path: ["config", ...issue.path] });
-      }
-    }
-  });
-
-export function parseChannelConfig(
-  type: z.infer<typeof channelTypeSchema>,
-  config: unknown,
-) {
-  switch (type) {
-    case "email":
-      return z.object({ to: z.string().email() }).safeParse(config);
-    case "discord":
-    case "slack":
-      return z.object({ webhookUrl: z.string().url() }).safeParse(config);
-    case "telegram":
-      return z
-        .object({
-          botToken: z.string().min(10).max(200),
-          chatId: z.string().min(1).max(64),
-        })
-        .safeParse(config);
-    case "webhook":
-      return z
-        .object({
-          url: z.string().url(),
-          headers: z
-            .array(
-              z.object({
-                name: z.string().min(1).max(80),
-                value: z.string().max(500),
-              }),
-            )
-            .max(10)
-            .optional(),
-        })
-        .safeParse(config);
-  }
-}
-
 const slugSchema = z.string().regex(statusSlugPattern).max(60);
 
 export const statusPageWriteSchema = z.object({
