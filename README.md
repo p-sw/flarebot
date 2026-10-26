@@ -5,13 +5,46 @@ Self-hosted uptime monitoring and status pages on Cloudflare Workers.
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Cloudflare Workers](https://img.shields.io/badge/runs%20on-Cloudflare%20Workers-f38020)](https://workers.cloudflare.com/)
 
-<p align="center">
-  <img src="docs/images/dashboard.webp" alt="Console dashboard with the Website row expanded into a response chart" width="820" />
-</p>
+Flarebot checks HTTP, TCP, DNS, certificate expiry, and heartbeat endpoints, confirms an outage before it notifies you, and publishes a status page. It runs entirely on the Workers free plan: a Hono API, Durable Objects for the schedule and the mail outbox, D1 for configuration and uptime rollups, and Analytics Engine for raw samples.
+
+## Preview
+
+<table>
+  <tr>
+    <td width="410" align="center" valign="top">
+      <img src="docs/images/dashboard.webp" alt="Console dashboard" width="410" height="444" />
+      <br />
+      Console dashboard
+    </td>
+    <td width="410" align="center" valign="top">
+      <img src="docs/images/status.webp" alt="Public status page" width="410" height="631" />
+      <br />
+      Public status page
+    </td>
+  </tr>
+</table>
 
 The dashboard lists every monitor. Expand a row to see recent response time. The images in this file are from a local demo database. Regenerate them with `pnpm screenshots`. That command does not read production data.
 
-Flarebot checks HTTP, TCP, DNS, certificate expiry, and heartbeat endpoints, confirms an outage before it notifies you, and publishes a status page. It runs entirely on the Workers free plan: a Hono API, Durable Objects for the schedule and the mail outbox, D1 for configuration and uptime rollups, and Analytics Engine for raw samples.
+## Table of contents
+
+- [Preview](#preview)
+- [Table of contents](#table-of-contents)
+- [Features](#features)
+- [Status page](#status-page)
+- [Monitor](#monitor)
+- [Layout](#layout)
+- [Incidents and maintenance](#incidents-and-maintenance)
+- [Notifications](#notifications)
+- [Sign-in](#sign-in)
+- [Deploy](#deploy)
+- [Run locally](#run-locally)
+- [URLs](#urls)
+- [Configuration](#configuration)
+- [Branding your deployment](#branding-your-deployment)
+- [Updating](#updating)
+- [Development](#development)
+- [License](#license)
 
 ## Features
 
@@ -39,31 +72,9 @@ Flarebot checks HTTP, TCP, DNS, certificate expiry, and heartbeat endpoints, con
 
 Thin rounded bars show the last 24 hours, 7 days, 30 days, or 90 days. Incidents and maintenance use alert backgrounds with black or white text. Visitors can subscribe by email, webhook, or an RSS and Atom feed when those switches are on.
 
-<p align="center">
-  <img src="docs/images/status.webp" alt="Public Harbor status page on a desktop, with incident and maintenance alerts, subscribe links, and uptime bars" width="820" />
-</p>
-
-<p align="center">
-  <img src="docs/images/status-mobile.webp" alt="Public Harbor status page on a phone, with the same alerts, subscribe button, and uptime bars" width="390" />
-</p>
-
-<p align="center">
-  <img src="docs/images/subscribe.webp" alt="Subscribe dialog with email, webhook, and component choices" width="820" />
-</p>
-
 ## Monitor
 
 The monitor page shows uptime for 24 hours through 90 days, a response chart, and the public badge preview.
-
-<p align="center">
-  <img src="docs/images/monitor.webp" alt="Monitor detail for the Harbor website, with uptime ranges, a response chart, and badge previews" width="820" />
-</p>
-
-<p align="center">
-  <img src="docs/images/badge-status.svg" alt="Status badge showing up" />
-  <img src="docs/images/badge-uptime.svg" alt="Uptime badge for the last 24 hours" />
-  <img src="docs/images/badge-response.svg" alt="Response time badge for the last 24 hours" />
-</p>
 
 A private monitor returns an unknown badge. See [docs/badges.md](docs/badges.md).
 
@@ -71,37 +82,17 @@ A private monitor returns an unknown badge. See [docs/badges.md](docs/badges.md)
 
 The status page editor orders sections and monitors, and sets the name visitors see.
 
-<p align="center">
-  <img src="docs/images/layout.webp" alt="Status page layout editor with Edge and Platform sections" width="820" />
-</p>
-
 ## Incidents and maintenance
 
 Manual incidents keep a public timeline. Maintenance windows hold alerts and stay out of the uptime percentage. Both use the same alert colors in the console and on the status page.
-
-<p align="center">
-  <img src="docs/images/incidents.webp" alt="Console incidents list with an active investigating alert" width="820" />
-</p>
-
-<p align="center">
-  <img src="docs/images/maintenance.webp" alt="Console maintenance list with an in-progress window" width="820" />
-</p>
 
 ## Notifications
 
 Email, Discord, Slack, Telegram, webhooks, ntfy, Gotify, Pushover, Microsoft Teams, Google Chat, and Matrix. The type picker is on the new-channel dialog.
 
-<p align="center">
-  <img src="docs/images/channels.webp" alt="New notification channel dialog with the type picker" width="820" />
-</p>
-
 ## Sign-in
 
 Owners and Admins add OpenID Connect providers and Cloudflare Access in Settings. The steps for Authentik are in [docs/sso.md](docs/sso.md).
-
-<p align="center">
-  <img src="docs/images/sso.webp" alt="Single sign-on settings with an Example IdP provider and Cloudflare Access" width="820" />
-</p>
 
 ## Deploy
 
@@ -176,7 +167,7 @@ If you have local branding, use the `upgrade-flarebot` skill and read [brand/MIG
 
 ## Development
 
-[docs/development.md](docs/development.md) and [CONTRIBUTING.md](CONTRIBUTING.md). Hooks format staged files, typecheck, and require Conventional Commits. GitHub Actions runs the same checks plus Playwright. `pnpm screenshots` rewrites the images in this file from local demo data.
+[docs/development.md](docs/development.md) and [CONTRIBUTING.md](CONTRIBUTING.md). Hooks format staged files, typecheck, and require Conventional Commits. GitHub Actions runs the same checks plus Playwright. `pnpm screenshots` rewrites the two preview images in this file from local demo data.
 
 ## License
 
