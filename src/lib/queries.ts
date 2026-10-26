@@ -215,6 +215,13 @@ export const settingsQuery = queryOptions({
       instanceName: string;
       authMode: string;
       historyRetentionDays: number;
+      subscribeTurnstile: {
+        siteKey: string;
+        hasSecret: boolean;
+        configured: boolean;
+        source: "settings" | "env" | "none";
+      };
+      subscribeAllowHttp: boolean;
     }>("/api/settings"),
   staleTime: fresh,
 });

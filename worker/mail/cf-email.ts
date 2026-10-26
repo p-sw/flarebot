@@ -12,6 +12,7 @@ export async function sendCfEmail(
     subject: string;
     text: string;
     messageId: string;
+    headers?: Record<string, string>;
   },
 ): Promise<MailResult> {
   if (!binding) {
@@ -31,6 +32,7 @@ export async function sendCfEmail(
       `To: ${message.to}`,
       `Subject: ${encodeSubject(message.subject)}`,
       `Message-ID: ${message.messageId}`,
+      ...headerLines(message.headers),
       "MIME-Version: 1.0",
       "Content-Type: text/plain; charset=utf-8",
       "Content-Transfer-Encoding: 8bit",
@@ -52,6 +54,15 @@ export async function sendCfEmail(
       permanent: true,
     };
   }
+}
+
+function headerLines(headers: Record<string, string> | undefined): string[] {
+  if (!headers) return [];
+  return Object.entries(headers).map(([name, value]) => {
+    const safeName = name.replace(/[^\w-]/g, "");
+    const safeValue = value.replace(/[\r\n]/g, "");
+    return `${safeName}: ${safeValue}`;
+  });
 }
 
 function encodeSubject(value: string): string {

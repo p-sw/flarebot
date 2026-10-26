@@ -66,6 +66,7 @@ export class Mailer extends DurableObject<Env> {
       subject: next.subject,
       text: next.textBody,
       messageId: next.messageId,
+      headers: parseHeaders(next.headersJson),
     });
     const attempts = next.attempts + 1;
     if (result.ok) {
@@ -96,9 +97,33 @@ export class Mailer extends DurableObject<Env> {
   }
 }
 
+function parseHeaders(
+  value: string | null,
+): Record<string, string> | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== "object") return undefined;
+    const headers: Record<string, string> = {};
+    for (const [name, header] of Object.entries(parsed)) {
+      if (typeof header === "string") headers[name] = header;
+    }
+    return headers;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function enqueueMail(
   env: Env,
-  input: { kind: string; to: string; subject: string; text: string },
+  input: {
+    kind: string;
+    to: string;
+    subject: string;
+    text: string;
+    headers?: Record<string, string>;
+  },
+  options?: { kick?: boolean },
 ): Promise<string> {
   const db = getDb(env.DB);
   const id = crypto.randomUUID();
@@ -115,10 +140,13 @@ export async function enqueueMail(
     nextAttemptAt: now,
     lastError: null,
     messageId: `<${id}@flarebot.local>`,
+    headersJson: input.headers ? JSON.stringify(input.headers) : null,
     createdAt: now,
     sentAt: null,
   });
-  const stub = env.MAILER.get(env.MAILER.idFromName("mailer"));
-  await stub.kick();
+  if (options?.kick !== false) {
+    const stub = env.MAILER.get(env.MAILER.idFromName("mailer"));
+    await stub.kick();
+  }
   return id;
 }

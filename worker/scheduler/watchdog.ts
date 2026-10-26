@@ -6,6 +6,7 @@ import { emitMaintenanceSignals } from "../announce/signals";
 import { getDb } from "../db/client";
 import { mailOutbox, monitors } from "../db/schema";
 import { pruneHistory } from "../retention";
+import { drainSubscriptions, fanoutSubscriptions } from "../subscribe/deliver";
 import { rollDaily } from "./persist";
 
 export async function watchdog(env: Env): Promise<void> {
@@ -22,6 +23,8 @@ export async function watchdog(env: Env): Promise<void> {
   await pruneHistory(env);
   await emitMaintenanceSignals(env);
   await drainAnnouncements(env);
+  await fanoutSubscriptions(env);
+  await drainSubscriptions(env);
   const cutoff = Date.now() - 14 * 86_400_000;
   await db
     .delete(mailOutbox)

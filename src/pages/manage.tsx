@@ -28,6 +28,7 @@ import { ContentSkeleton } from "../ui/skeleton";
 import { controlClass, Field } from "./fields";
 import { RootSwitch, rootToggleError } from "./root-switch";
 import { SsoSettings } from "./sso-settings";
+import { SubscribeSettings } from "./subscribe-settings";
 
 export function StatusPagesPage() {
   const pages = useQuery(statusPagesQuery);
@@ -684,6 +685,7 @@ export function SettingsPage() {
               </p>
             ) : null}
           </form>
+          <SubscribeSettings />
           <h2 className="mb-3 font-medium">{t("settings_mail")}</h2>
           <p className="mb-3 max-w-xl text-sm text-muted-foreground">
             {t("settings_mail_intro")}

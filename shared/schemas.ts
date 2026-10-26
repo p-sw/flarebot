@@ -198,6 +198,34 @@ export const statusPageRootSchema = z.object({
   serveAtRoot: z.boolean(),
 });
 
+export const subscriptionFlagsSchema = z
+  .object({
+    email: z.boolean().optional(),
+    webhook: z.boolean().optional(),
+    rss: z.boolean().optional(),
+  })
+  .refine(
+    (value) =>
+      value.email !== undefined ||
+      value.webhook !== undefined ||
+      value.rss !== undefined,
+  );
+
+export const subscribeRequestSchema = z.object({
+  slug: slugSchema,
+  kind: z.enum(["email", "webhook"]),
+  email: z.string().email().max(200).optional(),
+  webhookUrl: z.string().max(2000).optional(),
+  followAll: z.boolean().default(true),
+  monitorIds: z.array(z.string().uuid()).max(200).default([]),
+  turnstileToken: z.string().max(4000).optional(),
+});
+
+export const subscribePreferencesSchema = z.object({
+  followAll: z.boolean(),
+  monitorIds: z.array(z.string().uuid()).max(200).default([]),
+});
+
 export const setupSchema = z.object({
   setupSecret: z.string().min(8).max(200),
   turnstileToken: z.string().optional(),

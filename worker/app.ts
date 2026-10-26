@@ -11,6 +11,7 @@ import { registerMaintenance } from "./routes/maintenance";
 import { registerManage } from "./routes/manage";
 import { registerMonitors } from "./routes/monitors";
 import { registerSso } from "./routes/sso";
+import { registerSubscriptions } from "./routes/subscriptions";
 
 export function createApp(): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -38,6 +39,7 @@ export function createApp(): Hono<AppEnv> {
   registerIncidents(app);
   registerMaintenance(app);
   registerManage(app);
+  registerSubscriptions(app);
   registerFrontDoor(app);
   app.all("/api/*", (c) =>
     c.json(

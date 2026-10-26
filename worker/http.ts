@@ -197,12 +197,13 @@ export async function verifyTurnstile(
   env: Env,
   token: string | undefined,
   ip: string | null,
+  secret = env.TURNSTILE_SECRET_KEY,
 ): Promise<void> {
-  if (!env.TURNSTILE_SECRET_KEY) return;
+  if (!secret) return;
   if (!token)
     throw new ApiError(400, "turnstile", t("error_turnstile_required"));
   const body = new URLSearchParams();
-  body.set("secret", env.TURNSTILE_SECRET_KEY);
+  body.set("secret", secret);
   body.set("response", token);
   if (ip) body.set("remoteip", ip);
   const response = await fetch(

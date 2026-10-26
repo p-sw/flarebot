@@ -34,6 +34,7 @@ import {
 } from "../db/schema";
 import { schedulerStub } from "../monitors/sync";
 import { historyRetentionDays } from "../retention";
+import { publicSubscriptionState } from "../subscribe/view";
 import { loadPageAnnouncements } from "./announcements";
 
 export type PublicStatus = {
@@ -81,6 +82,13 @@ export type PublicStatus = {
     state: "active" | "upcoming";
     monitors: string[];
   }[];
+  subscriptions: {
+    email: boolean;
+    webhook: boolean;
+    rss: boolean;
+    turnstileSiteKey: string | null;
+    components: { id: string; name: string }[];
+  };
   groups: {
     name: string;
     items: {
@@ -236,12 +244,16 @@ export async function loadPublicStatus(
     string,
     { name: string; items: PublicStatus["groups"][number]["items"] }
   >();
+  const components: { id: string; name: string }[] = [];
   for (const item of items) {
     const name =
       statusItemLabel(item.displayName, nameById.get(item.monitorId) ?? "") ||
       t("monitor_fallback_name");
     const groupKey = item.groupName;
     const groupName = item.groupName.trim();
+    if (!components.some((entry) => entry.id === item.monitorId)) {
+      components.push({ id: item.monitorId, name });
+    }
     const summary = summarizeHistory({
       window,
       now: nowMs,
@@ -303,6 +315,7 @@ export async function loadPublicStatus(
   }
   const flat = [...groups.values()].flatMap((group) => group.items);
   const overall = pageOverall(flat.map((item) => item.status));
+  const subscriptions = await publicSubscriptionState(env, page, components);
   return {
     slug: page.slug,
     title: page.title,
@@ -322,6 +335,7 @@ export async function loadPublicStatus(
     incidents: announcements.incidents,
     history: announcements.history,
     maintenance: announcements.maintenance,
+    subscriptions,
     groups: [...groups.values()].map((group) => ({
       name: group.name,
       items: group.items,
@@ -364,11 +378,23 @@ export function injectDocument(
     `<meta property="og:title" content="${escapeHtml(page.title)}" />`,
     `<meta property="og:description" content="${escapeHtml(page.description)}" />`,
     `<link rel="canonical" href="${escapeHtml(canonical)}" />`,
-  ].join("");
+  ];
+  if (page.subscriptions.rss) {
+    const feed = page.serveAtRoot
+      ? new URL("/feed.rss", canonical).href
+      : new URL(`/s/${page.slug}/feed.rss`, canonical).href;
+    meta.push(
+      `<link rel="alternate" type="application/rss+xml" title="${escapeHtml(page.title)}" href="${escapeHtml(feed)}" />`,
+    );
+    meta.push(
+      `<link rel="alternate" type="application/atom+xml" title="${escapeHtml(page.title)}" href="${escapeHtml(feed.replace(/feed\.rss$/, "feed.atom"))}" />`,
+    );
+  }
+  const metaTags = meta.join("");
   let next = html;
   const hadTitle = /<title>[\s\S]*?<\/title>/.test(next);
   if (hadTitle) next = next.replace(/<title>[\s\S]*?<\/title>/, title);
-  const head = `${hadTitle ? "" : title}${meta}`;
+  const head = `${hadTitle ? "" : title}${metaTags}`;
   next = next.includes("<!--flarebot-meta-->")
     ? next.replace("<!--flarebot-meta-->", head)
     : next.replace("</head>", `${head}</head>`);

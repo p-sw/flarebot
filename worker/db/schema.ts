@@ -194,6 +194,15 @@ export const statusPages = sqliteTable(
     logoUrl: text("logo_url"),
     accent: text("accent"),
     displayRange: text("display_range").notNull().default("24h"),
+    subscribeEmail: integer("subscribe_email", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    subscribeWebhook: integer("subscribe_webhook", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    subscribeRss: integer("subscribe_rss", { mode: "boolean" })
+      .notNull()
+      .default(false),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
@@ -303,6 +312,7 @@ export const mailOutbox = sqliteTable("mail_outbox", {
   nextAttemptAt: integer("next_attempt_at").notNull(),
   lastError: text("last_error"),
   messageId: text("message_id").notNull(),
+  headersJson: text("headers_json"),
   createdAt: integer("created_at").notNull(),
   sentAt: integer("sent_at"),
 });
@@ -490,6 +500,83 @@ export const ssoIdentities = sqliteTable(
     ),
   ],
 );
+
+export const subscribers = sqliteTable(
+  "subscribers",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id").notNull(),
+    statusPageId: text("status_page_id").notNull(),
+    kind: text("kind").notNull(),
+    status: text("status").notNull(),
+    email: text("email"),
+    addressHash: text("address_hash").notNull(),
+    webhookUrlEncrypted: text("webhook_url_encrypted"),
+    webhookSecretEncrypted: text("webhook_secret_encrypted"),
+    followAll: integer("follow_all", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    monitorIdsJson: text("monitor_ids_json").notNull().default("[]"),
+    confirmTokenHash: text("confirm_token_hash"),
+    manageTokenHash: text("manage_token_hash").notNull(),
+    unsubTokenHash: text("unsub_token_hash").notNull(),
+    confirmExpiresAt: integer("confirm_expires_at"),
+    failCount: integer("fail_count").notNull().default(0),
+    origin: text("origin").notNull(),
+    createdAt: integer("created_at").notNull(),
+    confirmedAt: integer("confirmed_at"),
+    disabledAt: integer("disabled_at"),
+    disabledReason: text("disabled_reason"),
+  },
+  (table) => [
+    uniqueIndex("subscribers_manage_token").on(table.manageTokenHash),
+    uniqueIndex("subscribers_unsub_token").on(table.unsubTokenHash),
+  ],
+);
+
+export const subscriptionDeliveries = sqliteTable(
+  "subscription_deliveries",
+  {
+    id: text("id").primaryKey(),
+    statusPageId: text("status_page_id").notNull(),
+    subscriberId: text("subscriber_id").notNull(),
+    eventId: text("event_id").notNull(),
+    status: text("status").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: integer("next_attempt_at").notNull(),
+    lastError: text("last_error"),
+    createdAt: integer("created_at").notNull(),
+    sentAt: integer("sent_at"),
+  },
+  (table) => [
+    uniqueIndex("subscription_deliveries_once").on(
+      table.subscriberId,
+      table.eventId,
+    ),
+  ],
+);
+
+export const subscriptionFanout = sqliteTable("subscription_fanout", {
+  eventId: text("event_id").primaryKey(),
+  cursorCreatedAt: integer("cursor_created_at").notNull().default(0),
+  cursorId: text("cursor_id").notNull().default(""),
+  done: integer("done", { mode: "boolean" }).notNull().default(false),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const subscriptionLimits = sqliteTable("subscription_limits", {
+  bucket: text("bucket").primaryKey(),
+  hits: integer("hits").notNull(),
+  windowStart: integer("window_start").notNull(),
+});
+
+export const subscriptionTokens = sqliteTable("subscription_tokens", {
+  tokenHash: text("token_hash").primaryKey(),
+  subscriberId: text("subscriber_id").notNull(),
+  purpose: text("purpose").notNull(),
+  expiresAt: integer("expires_at"),
+  createdAt: integer("created_at").notNull(),
+});
 
 export const oidcTransactions = sqliteTable("oidc_transactions", {
   id: text("id").primaryKey(),

@@ -90,6 +90,12 @@ import { instanceName, readSetting, writeSetting } from "../settings-store";
 import { createStatusPage, replaceStatusPage } from "../status/persist";
 import { loadPublicStatus, loadRootPublicStatus } from "../status/public";
 import { setServeAtRoot } from "../status/root";
+import {
+  ALLOW_HTTP_KEY,
+  allowHttpWebhooks,
+  subscribeTurnstile,
+  TURNSTILE_SETTING_KEY,
+} from "../subscribe/view";
 
 const settingsSchema = z.object({
   instanceName: z.string().min(1).max(80).optional(),
@@ -100,6 +106,10 @@ const settingsSchema = z.object({
     .min(MIN_RETENTION_DAYS)
     .max(MAX_RETENTION_DAYS)
     .optional(),
+  turnstileSiteKey: z.string().max(200).optional(),
+  turnstileSecret: z.string().max(200).optional(),
+  clearTurnstileSecret: z.boolean().optional(),
+  subscribeAllowHttp: z.boolean().optional(),
 });
 
 function legacyLocaleColumns() {
@@ -1019,11 +1029,23 @@ export function registerManage(app: Hono<AppEnv>): void {
   app.get("/api/settings", async (c) => {
     const actor = await requireActor(c);
     requireCan(actor, "instance.settings");
+    const turnstile = await subscribeTurnstile(c.env);
+    const storedTurnstile = await readSetting<{
+      siteKey?: string;
+      secretEncrypted?: string | null;
+    } | null>(c.env, TURNSTILE_SETTING_KEY, null);
     return c.json({
       instanceName: await instanceName(c.env),
       authMode: await readSetting(c.env, "auth_mode", "local"),
       turnstile: Boolean(c.env.TURNSTILE_SITE_KEY),
       historyRetentionDays: await historyRetentionDays(c.env),
+      subscribeTurnstile: {
+        siteKey: storedTurnstile?.siteKey ?? "",
+        hasSecret: Boolean(storedTurnstile?.secretEncrypted),
+        configured: Boolean(turnstile),
+        source: turnstile?.source ?? "none",
+      },
+      subscribeAllowHttp: await allowHttpWebhooks(c.env),
     });
   });
 
@@ -1045,13 +1067,53 @@ export function registerManage(app: Hono<AppEnv>): void {
         body.historyRetentionDays,
       );
     }
+    if (
+      body.turnstileSiteKey !== undefined ||
+      body.turnstileSecret ||
+      body.clearTurnstileSecret
+    ) {
+      const current = await readSetting<{
+        siteKey?: string;
+        secretEncrypted?: string | null;
+      } | null>(c.env, TURNSTILE_SETTING_KEY, null);
+      const siteKey =
+        body.turnstileSiteKey !== undefined
+          ? body.turnstileSiteKey.trim()
+          : (current?.siteKey ?? "");
+      let secretEncrypted = current?.secretEncrypted ?? null;
+      if (body.clearTurnstileSecret) secretEncrypted = null;
+      if (body.turnstileSecret) {
+        if (!c.env.ENCRYPTION_KEY) {
+          throw new ApiError(
+            400,
+            "validation",
+            t("error_subscribe_encryption"),
+          );
+        }
+        secretEncrypted = await encryptString(
+          c.env.ENCRYPTION_KEY,
+          body.turnstileSecret,
+        );
+      }
+      await writeSetting(c.env, TURNSTILE_SETTING_KEY, {
+        siteKey,
+        secretEncrypted,
+      });
+    }
+    if (body.subscribeAllowHttp !== undefined) {
+      await writeSetting(c.env, ALLOW_HTTP_KEY, body.subscribeAllowHttp);
+    }
+    const audited = {
+      ...body,
+      turnstileSecret: body.turnstileSecret ? "[redacted]" : undefined,
+    };
     await audit(
       c.env,
       actor,
       "instance.settings",
       null,
       null,
-      body,
+      audited,
       clientIp(c),
     );
     return c.json({ ok: true });

@@ -96,7 +96,13 @@ export async function resolveMail(
 export async function deliverWith(
   env: Env,
   resolved: ResolvedMail,
-  message: { to: string; subject: string; text: string; messageId: string },
+  message: {
+    to: string;
+    subject: string;
+    text: string;
+    messageId: string;
+    headers?: Record<string, string>;
+  },
 ): Promise<MailResult> {
   if (resolved.driver === "test") return { ok: true };
   if (resolved.driver === "none" || !resolved.fromAddress) {

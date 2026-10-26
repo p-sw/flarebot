@@ -6,7 +6,7 @@ Flarebot sends mail through a `MailTransport` interface. Invitation, password-re
 - **Cloudflare Email Service** uses the optional `EMAIL` binding. It is not in the committed Wrangler config. A missing binding fails with reason `missing_binding`.
 - **Test** succeeds immediately and exists only when `ALLOW_TEST_MAIL=1`. With that flag, the settings test also accepts loopback hosts (`127.0.0.1`, `localhost`, `::1`) on ports 1024–65535. Production does not set the flag, so those ports return `unsupported_port`.
 
-Invites, password resets, and alert emails are written to `mail_outbox` and delivered by the `Mailer` Durable Object. Retries are 1 minute, 5 minutes, 30 minutes, and 2 hours, then the row is marked failed. Authentication and most 5xx responses are permanent. Network errors are transient. Timeouts are reported as stage `connect`.
+Invites, password resets, alert emails, and visitor subscription messages are written to `mail_outbox` and delivered by the `Mailer` Durable Object. Subscription messages add `List-Unsubscribe` and `List-Unsubscribe-Post` headers. See [subscriptions](subscriptions.md). Retries are 1 minute, 5 minutes, 30 minutes, and 2 hours, then the row is marked failed. Authentication and most 5xx responses are permanent. Network errors are transient. Timeouts are reported as stage `connect`.
 
 Worker secrets override the database row whenever `SMTP_HOST` and `MAIL_FROM` are both present. `SMTP_HOST` without `MAIL_FROM` does not override.
 
