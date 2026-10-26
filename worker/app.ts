@@ -10,6 +10,7 @@ import { registerIncidents } from "./routes/incidents";
 import { registerMaintenance } from "./routes/maintenance";
 import { registerManage } from "./routes/manage";
 import { registerMonitors } from "./routes/monitors";
+import { registerScreenshotSeed } from "./routes/screenshot-seed";
 import { registerSso } from "./routes/sso";
 import { registerSubscriptions } from "./routes/subscriptions";
 
@@ -40,6 +41,7 @@ export function createApp(): Hono<AppEnv> {
   registerMaintenance(app);
   registerManage(app);
   registerSubscriptions(app);
+  registerScreenshotSeed(app);
   registerFrontDoor(app);
   app.all("/api/*", (c) =>
     c.json(
