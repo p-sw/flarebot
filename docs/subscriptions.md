@@ -22,11 +22,11 @@ When a Turnstile site key and secret are saved in Settings, or both `TURNSTILE_S
 
 Limits, per status page:
 
-| Limit | Value |
-| --- | --- |
-| Attempts per IP per hour | 8 |
-| Attempts per email or webhook address per hour | 4 |
-| Pending unconfirmed email rows | 100 |
+| Limit                                          | Value |
+| ---------------------------------------------- | ----- |
+| Attempts per IP per hour                       | 8     |
+| Attempts per email or webhook address per hour | 4     |
+| Pending unconfirmed email rows                 | 100   |
 
 Pending rows expire after 48 hours. Retention then deletes those expired pending rows. It does not delete confirmed or disabled subscribers.
 
@@ -40,10 +40,10 @@ A webhook that fails five deliveries is disabled. The row stays so it can be rem
 
 The Worker cron stays `*/5 * * * *` (288 runs per day). Each run already drains at most 8 announcement-channel sends. Subscriptions add:
 
-| Step | Per run | Per day at the cap | Subrequests |
-| --- | --- | --- | --- |
-| Fan-out into `subscription_deliveries` | 12 rows | n/a | 0 |
-| Drain | 6 deliveries | 1,728 | 1 fetch per webhook, plus one Mailer kick if any email was queued |
+| Step                                   | Per run      | Per day at the cap | Subrequests                                                       |
+| -------------------------------------- | ------------ | ------------------ | ----------------------------------------------------------------- |
+| Fan-out into `subscription_deliveries` | 12 rows      | n/a                | 0                                                                 |
+| Drain                                  | 6 deliveries | 1,728              | 1 fetch per webhook, plus one Mailer kick if any email was queued |
 
 1,728 is the most subscribers a single event can finish in one day, and only when that event is the only thing draining. Several incidents share the six sends. A longer list stays queued; the console shows the backlog; the next runs continue it.
 
