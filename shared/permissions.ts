@@ -13,6 +13,10 @@ export const ACTIONS = [
   "monitors.heartbeat",
   "outages.read",
   "outages.ack",
+  "incidents.read",
+  "incidents.write",
+  "maintenance.read",
+  "maintenance.write",
   "channels.read",
   "channels.write",
   "status_pages.read",
@@ -39,6 +43,10 @@ const MIN_ROLE: Record<Action, Role> = {
   "monitors.heartbeat": "viewer",
   "outages.read": "viewer",
   "outages.ack": "editor",
+  "incidents.read": "viewer",
+  "incidents.write": "editor",
+  "maintenance.read": "viewer",
+  "maintenance.write": "editor",
   "channels.read": "viewer",
   "channels.write": "admin",
   "status_pages.read": "viewer",
@@ -79,7 +87,12 @@ export function roleAllows(role: Role, action: Action): boolean {
 
 export function scopeAllows(scopes: readonly Scope[], action: Action): boolean {
   if (action === "monitors.heartbeat") return scopes.includes("heartbeat");
-  if (action === "monitors.write" || action === "outages.ack") {
+  if (
+    action === "monitors.write" ||
+    action === "outages.ack" ||
+    action === "incidents.write" ||
+    action === "maintenance.write"
+  ) {
     return scopes.includes("monitors:write");
   }
   if (

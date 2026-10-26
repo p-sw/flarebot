@@ -14,7 +14,11 @@ import {
   accountQuery,
   auditQuery,
   channelsQuery,
+  incidentQuery,
+  incidentsQuery,
   mailQuery,
+  maintenanceListQuery,
+  maintenanceQuery,
   monitorQuery,
   monitorsQuery,
   outagesQuery,
@@ -39,6 +43,14 @@ import {
   SetupPage,
 } from "./pages/auth";
 import { ChannelsPage } from "./pages/channels";
+import { IncidentCreatePage, IncidentEditPage } from "./pages/incident-form";
+import { PublicIncidentPage } from "./pages/incident-public";
+import { IncidentsPage } from "./pages/incidents";
+import { MaintenancePage } from "./pages/maintenance";
+import {
+  MaintenanceCreatePage,
+  MaintenanceEditPage,
+} from "./pages/maintenance-form";
 import {
   AccountPage,
   AuditPage,
@@ -153,6 +165,11 @@ const publicRoute = createRoute({
   path: "/s/$slug",
   component: PublicStatusPage,
 });
+const publicIncidentRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/s/$slug/incidents/$incidentId",
+  component: PublicIncidentPage,
+});
 
 const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -260,6 +277,74 @@ const editMonitorRoute = createRoute({
   ...pending,
   component: MonitorEditPage,
 });
+const incidentsRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: "/incidents",
+  loader: () =>
+    loadQuery(queryClient, incidentsQuery("active")).catch(() => undefined),
+  ...pending,
+  component: IncidentsPage,
+});
+const newIncidentRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: "/incidents/new",
+  loader: () =>
+    Promise.all([
+      loadQuery(queryClient, monitorsQuery),
+      loadQuery(queryClient, statusPagesQuery),
+      loadQuery(queryClient, channelsQuery),
+    ]).catch(() => undefined),
+  ...pending,
+  component: IncidentCreatePage,
+});
+const editIncidentRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: "/incidents/$id",
+  loader: ({ params }) =>
+    Promise.all([
+      loadQuery(queryClient, incidentQuery(params.id)),
+      loadQuery(queryClient, monitorsQuery),
+      loadQuery(queryClient, statusPagesQuery),
+      loadQuery(queryClient, channelsQuery),
+    ]).catch(() => undefined),
+  ...pending,
+  component: IncidentEditPage,
+});
+const maintenanceRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: "/maintenance",
+  loader: () =>
+    loadQuery(queryClient, maintenanceListQuery("upcoming")).catch(
+      () => undefined,
+    ),
+  ...pending,
+  component: MaintenancePage,
+});
+const newMaintenanceRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: "/maintenance/new",
+  loader: () =>
+    Promise.all([
+      loadQuery(queryClient, monitorsQuery),
+      loadQuery(queryClient, statusPagesQuery),
+      loadQuery(queryClient, channelsQuery),
+    ]).catch(() => undefined),
+  ...pending,
+  component: MaintenanceCreatePage,
+});
+const editMaintenanceRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: "/maintenance/$id",
+  loader: ({ params }) =>
+    Promise.all([
+      loadQuery(queryClient, maintenanceQuery(params.id)),
+      loadQuery(queryClient, monitorsQuery),
+      loadQuery(queryClient, statusPagesQuery),
+      loadQuery(queryClient, channelsQuery),
+    ]).catch(() => undefined),
+  ...pending,
+  component: MaintenanceEditPage,
+});
 const pagesRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/status-pages",
@@ -340,6 +425,7 @@ const routeTree = rootRoute.addChildren([
   forgotRoute,
   resetRoute,
   inviteRoute,
+  publicIncidentRoute,
   publicRoute,
   homeRoute,
   consoleRoute.addChildren([
@@ -347,6 +433,12 @@ const routeTree = rootRoute.addChildren([
     newMonitorRoute,
     editMonitorRoute,
     monitorRoute,
+    incidentsRoute,
+    newIncidentRoute,
+    editIncidentRoute,
+    maintenanceRoute,
+    newMaintenanceRoute,
+    editMaintenanceRoute,
     pagesRoute,
     newPageRoute,
     editPageRoute,

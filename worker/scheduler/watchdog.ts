@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 import { and, eq, lt } from "drizzle-orm";
+import { drainAnnouncements } from "../announce/drain";
+import { emitMaintenanceSignals } from "../announce/signals";
 import { getDb } from "../db/client";
 import { mailOutbox, monitors } from "../db/schema";
 import { pruneHistory } from "../retention";
@@ -18,6 +20,8 @@ export async function watchdog(env: Env): Promise<void> {
   await env.MAILER.get(env.MAILER.idFromName("mailer")).kick();
   await rollDaily(env.DB);
   await pruneHistory(env);
+  await emitMaintenanceSignals(env);
+  await drainAnnouncements(env);
   const cutoff = Date.now() - 14 * 86_400_000;
   await db
     .delete(mailOutbox)

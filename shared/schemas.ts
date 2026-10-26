@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 
 import { z } from "zod";
+import { IMPACTS, INCIDENT_STATUSES } from "./impact";
 import { ROLES, SCOPES } from "./permissions";
+import { MAX_WINDOW_MS } from "./recurrence";
 import { statusSlugPattern } from "./status-layout";
 
 const privateHost =
@@ -278,3 +280,56 @@ export const totpConfirmSchema = z.object({
 });
 
 export const MIN_INTERVAL_SECONDS = 60;
+
+const idList = z.array(z.string().uuid()).max(50);
+
+export const incidentUpdateSchema = z.object({
+  status: z.enum(INCIDENT_STATUSES),
+  body: z.string().trim().min(1).max(8000),
+  postedAt: z.number().int().positive(),
+});
+
+export const incidentWriteSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  notify: z.boolean(),
+  channelIds: idList,
+  pageIds: idList,
+  monitors: z
+    .array(
+      z.object({
+        monitorId: z.string().uuid(),
+        impact: z.enum(IMPACTS),
+      }),
+    )
+    .min(1)
+    .max(50),
+  update: incidentUpdateSchema.optional(),
+});
+
+export const incidentResolveSchema = z.object({
+  body: z.string().trim().min(1).max(8000),
+  postedAt: z.number().int().positive().optional(),
+});
+
+export const maintenanceWriteSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200),
+    description: z.string().trim().max(8000),
+    timezone: z.string().trim().min(1).max(80),
+    startAt: z.number().int(),
+    endAt: z.number().int(),
+    recurrence: z.enum(["once", "daily", "weekly", "monthly"]),
+    weekdays: z.array(z.number().int().min(0).max(6)).max(7),
+    notify: z.boolean(),
+    channelIds: idList,
+    pageIds: idList,
+    monitorIds: z.array(z.string().uuid()).min(1).max(50),
+  })
+  .refine(
+    (value) =>
+      value.endAt > value.startAt &&
+      value.endAt - value.startAt <= MAX_WINDOW_MS,
+  )
+  .refine(
+    (value) => value.recurrence !== "weekly" || value.weekdays.length > 0,
+  );

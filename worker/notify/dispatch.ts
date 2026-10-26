@@ -18,23 +18,62 @@ type FetchImpl = typeof fetch;
 // One request per channel. Email is queued on the mail outbox, which already
 // retries. Repeating these HTTP calls here would multiply subrequests on the
 // scheduler invocation that confirmed the outage.
+export type PreparedDelivery = {
+  subject: string;
+  body: string;
+  /** Same three levels as a monitor alert. Priorities and colors follow it. */
+  severity: NoticeKind;
+  subtitle: string;
+  webhook: Record<string, unknown>;
+};
+
+type DeliveryDeps = {
+  fetch?: FetchImpl;
+  enqueueEmail?: (input: {
+    to: string;
+    subject: string;
+    text: string;
+  }) => Promise<void>;
+};
+
 export async function deliverChannel(
   channel: ChannelDelivery,
   message: { kind: NoticeKind; monitorName: string; reason: string },
-  deps: {
-    fetch?: FetchImpl;
-    enqueueEmail?: (input: {
-      to: string;
-      subject: string;
-      text: string;
-    }) => Promise<void>;
-  },
+  deps: DeliveryDeps,
 ): Promise<{ ok: boolean; error?: string }> {
   const text = notificationText(
     message.kind,
     message.monitorName,
     message.reason,
   );
+  return deliverPrepared(
+    channel,
+    {
+      subject: text.subject,
+      body: text.body,
+      severity: message.kind,
+      subtitle: message.monitorName,
+      webhook: {
+        event: message.kind,
+        monitor: message.monitorName,
+        reason: message.reason,
+        text: text.body,
+      },
+    },
+    deps,
+  );
+}
+
+/**
+ * Shared transport for monitor alerts and announcement events.
+ * Announcements pass their own subject, body, and webhook JSON.
+ */
+export async function deliverPrepared(
+  channel: ChannelDelivery,
+  message: PreparedDelivery,
+  deps: DeliveryDeps,
+): Promise<{ ok: boolean; error?: string }> {
+  const text = { subject: message.subject, body: message.body };
   const fetchImpl = deps.fetch ?? fetch;
   const parsedType = channelTypeSchema.safeParse(channel.type);
   if (!parsedType.success)
@@ -81,12 +120,7 @@ export async function deliverChannel(
         return await postJson(
           fetchImpl,
           String(channel.config.url ?? ""),
-          {
-            event: message.kind,
-            monitor: message.monitorName,
-            reason: message.reason,
-            text: text.body,
-          },
+          message.webhook,
           "error_webhook_status",
           { headers },
         );
@@ -99,8 +133,8 @@ export async function deliverChannel(
             topic: channel.config.topic,
             title: clip(text.subject, 250),
             message: clip(text.body, 4000),
-            priority: ntfyPriority(message.kind, channel.config.priority),
-            tags: ntfyTags(message.kind, String(channel.config.tags ?? "")),
+            priority: ntfyPriority(message.severity, channel.config.priority),
+            tags: ntfyTags(message.severity, String(channel.config.tags ?? "")),
           },
           "error_ntfy_status",
           { headers: bearer(channel.config.token) },
@@ -112,7 +146,7 @@ export async function deliverChannel(
           {
             title: clip(text.subject, 200),
             message: clip(text.body, 4000),
-            priority: gotifyPriority(message.kind, channel.config.priority),
+            priority: gotifyPriority(message.severity, channel.config.priority),
           },
           "error_gotify_status",
           {
@@ -125,21 +159,21 @@ export async function deliverChannel(
         return await postJson(
           fetchImpl,
           "https://api.pushover.net/1/messages.json",
-          pushoverBody(channel.config, text, message.kind),
+          pushoverBody(channel.config, text, message.severity),
           "error_pushover_status",
         );
       case "teams":
         return await postJson(
           fetchImpl,
           String(channel.config.webhookUrl ?? ""),
-          teamsCard(text, message.kind),
+          teamsCard(text, message.severity),
           "error_teams_status",
         );
       case "google_chat":
         return await postJson(
           fetchImpl,
           String(channel.config.webhookUrl ?? ""),
-          googleChatCard(text, message.monitorName),
+          googleChatCard(text, message.subtitle),
           "error_google_chat_status",
         );
       case "matrix": {

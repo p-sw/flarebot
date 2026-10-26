@@ -225,6 +225,7 @@ export const uptimeHourly = sqliteTable(
     latencySum: integer("latency_sum").notNull(),
     latencyMax: integer("latency_max").notNull(),
     samplesJson: text("samples_json").notNull(),
+    maintCount: integer("maint_count").notNull().default(0),
   },
   (table) => [primaryKey({ columns: [table.monitorId, table.hourStart] })],
 );
@@ -238,6 +239,7 @@ export const uptimeDaily = sqliteTable(
     failCount: integer("fail_count").notNull(),
     latencySum: integer("latency_sum").notNull(),
     latencyMax: integer("latency_max").notNull(),
+    maintCount: integer("maint_count").notNull().default(0),
   },
   (table) => [primaryKey({ columns: [table.monitorId, table.dayStart] })],
 );
@@ -295,6 +297,140 @@ export const emailTokens = sqliteTable("email_tokens", {
   expiresAt: integer("expires_at").notNull(),
   usedAt: integer("used_at"),
   attempts: integer("attempts").notNull(),
+});
+
+export const incidents = sqliteTable("incidents", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull(),
+  title: text("title").notNull(),
+  notify: integer("notify", { mode: "boolean" }).notNull().default(false),
+  createdBy: text("created_by"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+  resolvedAt: integer("resolved_at"),
+  sourceOutageId: text("source_outage_id"),
+});
+
+export const incidentMonitors = sqliteTable(
+  "incident_monitors",
+  {
+    incidentId: text("incident_id").notNull(),
+    monitorId: text("monitor_id").notNull(),
+    impact: text("impact").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.incidentId, table.monitorId] })],
+);
+
+export const incidentPages = sqliteTable(
+  "incident_pages",
+  {
+    incidentId: text("incident_id").notNull(),
+    pageId: text("page_id").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.incidentId, table.pageId] })],
+);
+
+export const incidentUpdates = sqliteTable("incident_updates", {
+  id: text("id").primaryKey(),
+  incidentId: text("incident_id").notNull(),
+  status: text("status").notNull(),
+  body: text("body").notNull(),
+  postedAt: integer("posted_at").notNull(),
+  createdBy: text("created_by"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const incidentChannels = sqliteTable(
+  "incident_channels",
+  {
+    incidentId: text("incident_id").notNull(),
+    channelId: text("channel_id").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.incidentId, table.channelId] })],
+);
+
+export const maintenanceWindows = sqliteTable("maintenance_windows", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  timezone: text("timezone").notNull(),
+  startAt: integer("start_at").notNull(),
+  endAt: integer("end_at").notNull(),
+  recurrence: text("recurrence").notNull(),
+  weekdaysJson: text("weekdays_json").notNull(),
+  notify: integer("notify", { mode: "boolean" }).notNull().default(false),
+  cancelledAt: integer("cancelled_at"),
+  createdBy: text("created_by"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const maintenanceMonitors = sqliteTable(
+  "maintenance_monitors",
+  {
+    maintenanceId: text("maintenance_id").notNull(),
+    monitorId: text("monitor_id").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.maintenanceId, table.monitorId] })],
+);
+
+export const maintenancePages = sqliteTable(
+  "maintenance_pages",
+  {
+    maintenanceId: text("maintenance_id").notNull(),
+    pageId: text("page_id").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.maintenanceId, table.pageId] })],
+);
+
+export const maintenanceChannels = sqliteTable(
+  "maintenance_channels",
+  {
+    maintenanceId: text("maintenance_id").notNull(),
+    channelId: text("channel_id").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.maintenanceId, table.channelId] })],
+);
+
+export const maintenanceSignals = sqliteTable(
+  "maintenance_signals",
+  {
+    maintenanceId: text("maintenance_id").notNull(),
+    occurrenceStart: integer("occurrence_start").notNull(),
+    kind: text("kind").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.maintenanceId, table.occurrenceStart, table.kind],
+    }),
+  ],
+);
+
+export const announcementEvents = sqliteTable("announcement_events", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull(),
+  kind: text("kind").notNull(),
+  subjectType: text("subject_type").notNull(),
+  subjectId: text("subject_id").notNull(),
+  title: text("title").notNull(),
+  summary: text("summary").notNull(),
+  href: text("href"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const announcementOutbox = sqliteTable("announcement_outbox", {
+  id: text("id").primaryKey(),
+  eventId: text("event_id").notNull(),
+  channelId: text("channel_id").notNull(),
+  status: text("status").notNull(),
+  attempts: integer("attempts").notNull(),
+  nextAttemptAt: integer("next_attempt_at").notNull(),
+  lastError: text("last_error"),
+  createdAt: integer("created_at").notNull(),
+  sentAt: integer("sent_at"),
 });
 
 export const auditLog = sqliteTable("audit_log", {

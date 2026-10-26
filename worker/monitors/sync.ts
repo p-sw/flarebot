@@ -29,13 +29,14 @@ export type SchedulerApi = {
     {
       id: string;
       state: RuntimeState;
-      recent: { t: number; ok: boolean; ms: number }[];
+      recent: { t: number; ok: boolean; ms: number; maint?: boolean }[];
       nextCheckAt: number;
       lastPushAt: number | null;
       rollup: {
         hourStart: number;
         ok: number;
         fail: number;
+        maint: number;
         sum: number;
         max: number;
         samples: number[];
@@ -44,13 +45,14 @@ export type SchedulerApi = {
   >;
   getOne(id: string): Promise<{
     state: RuntimeState;
-    recent: { t: number; ok: boolean; ms: number }[];
+    recent: { t: number; ok: boolean; ms: number; maint?: boolean }[];
     nextCheckAt: number;
     lastPushAt: number | null;
     rollup: {
       hourStart: number;
       ok: number;
       fail: number;
+      maint: number;
       sum: number;
       max: number;
       samples: number[];

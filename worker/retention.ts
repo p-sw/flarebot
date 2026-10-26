@@ -20,6 +20,9 @@ export type PruneResult = {
   hourly: number;
   daily: number;
   outages: number;
+  incidents: number;
+  maintenance: number;
+  announcements: number;
   caughtUp: boolean;
   retentionDays: number;
 };
@@ -42,6 +45,28 @@ const DELETE_OUTAGES = `DELETE FROM outages WHERE rowid IN (
   SELECT rowid FROM outages
   WHERE ended_at IS NOT NULL AND ended_at < ?
   ORDER BY ended_at ASC
+  LIMIT ?
+)`;
+
+const DELETE_INCIDENTS = `DELETE FROM incidents WHERE rowid IN (
+  SELECT rowid FROM incidents
+  WHERE resolved_at IS NOT NULL AND resolved_at < ?
+  ORDER BY resolved_at ASC
+  LIMIT ?
+)`;
+
+const DELETE_MAINTENANCE = `DELETE FROM maintenance_windows WHERE rowid IN (
+  SELECT rowid FROM maintenance_windows
+  WHERE (recurrence = 'once' AND end_at < ?)
+     OR (cancelled_at IS NOT NULL AND cancelled_at < ?)
+  ORDER BY COALESCE(cancelled_at, end_at) ASC
+  LIMIT ?
+)`;
+
+const DELETE_ANNOUNCEMENTS = `DELETE FROM announcement_events WHERE rowid IN (
+  SELECT rowid FROM announcement_events
+  WHERE created_at < ?
+  ORDER BY created_at ASC
   LIMIT ?
 )`;
 
@@ -78,6 +103,9 @@ export async function pruneHistory(
       hourly: 0,
       daily: 0,
       outages: 0,
+      incidents: 0,
+      maintenance: 0,
+      announcements: 0,
       caughtUp: state.caughtUp,
       retentionDays,
     };
@@ -96,15 +124,50 @@ export async function pruneHistory(
   const daily = await deleteBatch(env.DB, DELETE_DAILY, retainedFrom, dayLimit);
   budget -= daily;
   const outageLimit = Math.min(PRUNE_BATCH, budget);
+  const cutoff = retentionCutoff(now, retentionDays);
   const outages = await deleteBatch(
     env.DB,
     DELETE_OUTAGES,
-    retentionCutoff(now, retentionDays),
+    cutoff,
     outageLimit,
   );
-  const deleted = hourly + daily + outages;
+  budget -= outages;
+  const incidentLimit = Math.min(PRUNE_BATCH, budget);
+  const incidents = await deleteBatch(
+    env.DB,
+    DELETE_INCIDENTS,
+    cutoff,
+    incidentLimit,
+  );
+  budget -= incidents;
+  const maintenanceLimit = Math.min(PRUNE_BATCH, budget);
+  const maintenance =
+    maintenanceLimit <= 0
+      ? 0
+      : Number(
+          (
+            await env.DB.prepare(DELETE_MAINTENANCE)
+              .bind(cutoff, cutoff, maintenanceLimit)
+              .run()
+          ).meta?.changes ?? 0,
+        );
+  budget -= maintenance;
+  const announcementLimit = Math.min(PRUNE_BATCH, budget);
+  const announcements = await deleteBatch(
+    env.DB,
+    DELETE_ANNOUNCEMENTS,
+    cutoff,
+    announcementLimit,
+  );
+  const deleted =
+    hourly + daily + outages + incidents + maintenance + announcements;
   const caughtUp =
-    hourly < hourLimit && daily < dayLimit && outages < outageLimit;
+    hourly < hourLimit &&
+    daily < dayLimit &&
+    outages < outageLimit &&
+    incidents < incidentLimit &&
+    maintenance < maintenanceLimit &&
+    announcements < announcementLimit;
   const next: PruneState = {
     at: now,
     dayStart: decision.dayStart,
@@ -118,6 +181,9 @@ export async function pruneHistory(
     hourly,
     daily,
     outages,
+    incidents,
+    maintenance,
+    announcements,
     caughtUp,
     retentionDays,
   };

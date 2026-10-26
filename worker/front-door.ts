@@ -8,6 +8,7 @@ import { type AppContext, type AppEnv, loadActor } from "./http";
 import {
   loadPublicStatus,
   loadRootPublicStatus,
+  publishedPageExists,
   statusDocument,
 } from "./status/public";
 
@@ -76,6 +77,12 @@ async function applyDecision(
 }
 
 export function registerFrontDoor(app: Hono<AppEnv>): void {
+  app.on(["GET", "HEAD"], "/s/:slug/incidents/:incidentId", async (c) => {
+    const exists = await publishedPageExists(c.env, c.req.param("slug"));
+    if (!exists) return c.notFound();
+    return spa(c);
+  });
+
   app.on(["GET", "HEAD"], "/s/:slug", async (c) => {
     const page = await loadPublicStatus(c.env, c.req.param("slug"));
     if (!page) return c.notFound();

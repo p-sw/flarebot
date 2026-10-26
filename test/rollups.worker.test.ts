@@ -95,6 +95,8 @@ describe("rollups", () => {
       expect(names.has(name)).toBe(true);
     }
     expect(names.has("subscribers")).toBe(false);
-    expect(names.has("incidents")).toBe(false);
+    expect(names.has("incidents")).toBe(true);
+    expect(names.has("maintenance_windows")).toBe(true);
+    expect(names.has("announcement_events")).toBe(true);
   });
 });

@@ -6,6 +6,8 @@ import { registerFrontDoor } from "./front-door";
 import { ApiError, type AppEnv } from "./http";
 import { registerAuth } from "./routes/auth";
 import { registerBadges } from "./routes/badges";
+import { registerIncidents } from "./routes/incidents";
+import { registerMaintenance } from "./routes/maintenance";
 import { registerManage } from "./routes/manage";
 import { registerMonitors } from "./routes/monitors";
 
@@ -31,6 +33,8 @@ export function createApp(): Hono<AppEnv> {
   registerAuth(app);
   registerMonitors(app);
   registerBadges(app);
+  registerIncidents(app);
+  registerMaintenance(app);
   registerManage(app);
   registerFrontDoor(app);
   app.all("/api/*", (c) =>

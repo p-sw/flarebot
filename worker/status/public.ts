@@ -10,7 +10,12 @@ import {
   summarizeHistory,
   utcDayStart,
 } from "../../shared/history";
-import { visibleStatus } from "../../shared/monitor-status";
+import {
+  type Impact,
+  type IncidentStatus,
+  pageOverall,
+  presentStatus,
+} from "../../shared/impact";
 import { statusItemLabel } from "../../shared/status-layout";
 import { getDb } from "../db/client";
 import {
@@ -23,6 +28,7 @@ import {
 } from "../db/schema";
 import { schedulerStub } from "../monitors/sync";
 import { historyRetentionDays } from "../retention";
+import { loadPageAnnouncements } from "./announcements";
 
 export type PublicStatus = {
   slug: string;
@@ -38,7 +44,36 @@ export type PublicStatus = {
   barCount: number;
   clamped: boolean;
   retentionDays: number;
-  overall: "operational" | "degraded" | "outage" | "empty" | "paused";
+  overall:
+    | "operational"
+    | "degraded"
+    | "outage"
+    | "empty"
+    | "paused"
+    | "maintenance";
+  incidents: {
+    id: string;
+    title: string;
+    status: IncidentStatus;
+    updatedAt: number;
+    impact: Impact | null;
+    message: string;
+    monitors: { name: string; impact: Impact }[];
+  }[];
+  history: {
+    id: string;
+    title: string;
+    resolvedAt: number;
+  }[];
+  maintenance: {
+    id: string;
+    title: string;
+    description: string;
+    start: number;
+    end: number;
+    state: "active" | "upcoming";
+    monitors: string[];
+  }[];
   groups: {
     name: string;
     items: {
@@ -47,10 +82,13 @@ export type PublicStatus = {
       status: string;
       uptime: number | null;
       responseMs: number | null;
+      maint: number;
       bars: {
         start: number;
         uptime: number | null;
         responseMs: number | null;
+        state: "empty" | "up" | "degraded" | "down" | "maintenance";
+        maint: number;
       }[];
     }[];
   }[];
@@ -122,11 +160,13 @@ export async function loadPublicStatus(
           ok: 0,
           fail: 0,
           sum: 0,
+          maint: 0,
         };
         if (row.rollup.hourStart !== current.start) continue;
         current.ok += row.rollup.ok;
         current.fail += row.rollup.fail;
         current.sum += row.rollup.sum;
+        current.maint = (current.maint ?? 0) + (row.rollup.maint ?? 0);
         live.set(row.id, current);
       }
     }),
@@ -135,6 +175,13 @@ export async function loadPublicStatus(
   const stateById = new Map(states.map((row) => [row.monitorId, row.status]));
   const pausedById = new Map(owned.map((row) => [row.id, row.paused]));
   const nameById = new Map(owned.map((row) => [row.id, row.name]));
+  const announcements = await loadPageAnnouncements(
+    env,
+    page.id,
+    ids,
+    nameById,
+    nowMs,
+  );
   const groups = new Map<
     string,
     { name: string; items: PublicStatus["groups"][number]["items"] }
@@ -155,6 +202,7 @@ export async function loadPublicStatus(
           ok: row.okCount,
           fail: row.failCount,
           sum: row.latencySum,
+          maint: row.maintCount,
         })),
       hourly: hourly
         .filter((row) => row.monitorId === item.monitorId)
@@ -163,6 +211,7 @@ export async function loadPublicStatus(
           ok: row.okCount,
           fail: row.failCount,
           sum: row.latencySum,
+          maint: row.maintCount,
         })),
       live: live.get(item.monitorId) ?? null,
     });
@@ -171,28 +220,21 @@ export async function loadPublicStatus(
     bucket.items.push({
       id: item.id,
       name,
-      status: visibleStatus(
-        pausedById.get(item.monitorId) ?? false,
-        stateById.get(item.monitorId),
-      ),
+      status: presentStatus({
+        paused: pausedById.get(item.monitorId) ?? false,
+        runtime: stateById.get(item.monitorId),
+        impact: announcements.impactByMonitor.get(item.monitorId) ?? null,
+        maintenance: announcements.maintenanceMonitors.has(item.monitorId),
+      }),
       uptime: summary.uptime,
       responseMs: summary.responseMs,
+      maint: summary.maint,
       bars: summary.bars,
     });
     groups.set(groupKey, bucket);
   }
   const flat = [...groups.values()].flatMap((group) => group.items);
-  const active = flat.filter((item) => item.status !== "paused");
-  const overall: PublicStatus["overall"] =
-    flat.length === 0
-      ? "empty"
-      : active.length === 0
-        ? "paused"
-        : active.some((item) => item.status === "down")
-          ? active.every((item) => item.status === "down")
-            ? "outage"
-            : "degraded"
-          : "operational";
+  const overall = pageOverall(flat.map((item) => item.status));
   return {
     slug: page.slug,
     title: page.title,
@@ -208,6 +250,9 @@ export async function loadPublicStatus(
     clamped: window.clamped,
     retentionDays: window.retentionDays,
     overall,
+    incidents: announcements.incidents,
+    history: announcements.history,
+    maintenance: announcements.maintenance,
     groups: [...groups.values()].map((group) => ({
       name: group.name,
       items: group.items,

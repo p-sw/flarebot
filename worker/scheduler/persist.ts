@@ -88,11 +88,12 @@ export async function mergeHourly(
     sum: number;
     max: number;
     samples: number[];
+    maint?: number;
   },
 ): Promise<void> {
   const existing = await database
     .prepare(
-      "SELECT ok_count, fail_count, latency_sum, latency_max, samples_json FROM uptime_hourly WHERE monitor_id = ? AND hour_start = ?",
+      "SELECT ok_count, fail_count, latency_sum, latency_max, samples_json, maint_count FROM uptime_hourly WHERE monitor_id = ? AND hour_start = ?",
     )
     .bind(monitorId, rollup.hourStart)
     .first<{
@@ -101,20 +102,22 @@ export async function mergeHourly(
       latency_sum: number;
       latency_max: number;
       samples_json: string;
+      maint_count: number;
     }>();
   const samples = existing
     ? (JSON.parse(existing.samples_json) as number[]).concat(rollup.samples)
     : rollup.samples;
   await database
     .prepare(
-      `INSERT INTO uptime_hourly (monitor_id, hour_start, ok_count, fail_count, latency_sum, latency_max, samples_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO uptime_hourly (monitor_id, hour_start, ok_count, fail_count, latency_sum, latency_max, samples_json, maint_count)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (monitor_id, hour_start) DO UPDATE SET
          ok_count = excluded.ok_count,
          fail_count = excluded.fail_count,
          latency_sum = excluded.latency_sum,
          latency_max = excluded.latency_max,
-         samples_json = excluded.samples_json`,
+         samples_json = excluded.samples_json,
+         maint_count = excluded.maint_count`,
     )
     .bind(
       monitorId,
@@ -124,6 +127,7 @@ export async function mergeHourly(
       (existing?.latency_sum ?? 0) + rollup.sum,
       Math.max(existing?.latency_max ?? 0, rollup.max),
       JSON.stringify(samples.slice(-120)),
+      (existing?.maint_count ?? 0) + (rollup.maint ?? 0),
     )
     .run();
 }
@@ -131,11 +135,11 @@ export async function mergeHourly(
 export async function addHourly(
   database: D1Database,
   monitorId: string,
-  sample: { hourStart: number; ok: boolean; ms: number },
+  sample: { hourStart: number; ok: boolean; ms: number; maintenance?: boolean },
 ): Promise<void> {
   const existing = await database
     .prepare(
-      "SELECT ok_count, fail_count, latency_sum, latency_max, samples_json FROM uptime_hourly WHERE monitor_id = ? AND hour_start = ?",
+      "SELECT ok_count, fail_count, latency_sum, latency_max, samples_json, maint_count FROM uptime_hourly WHERE monitor_id = ? AND hour_start = ?",
     )
     .bind(monitorId, sample.hourStart)
     .first<{
@@ -144,26 +148,35 @@ export async function addHourly(
       latency_sum: number;
       latency_max: number;
       samples_json: string;
+      maint_count: number;
     }>();
   const samples = existing
     ? (JSON.parse(existing.samples_json) as number[])
     : [];
-  samples.push(sample.ms);
+  const maintenance = sample.maintenance === true;
+  if (!maintenance) samples.push(sample.ms);
   const trimmed = samples.slice(-120);
-  const okCount = (existing?.ok_count ?? 0) + (sample.ok ? 1 : 0);
-  const failCount = (existing?.fail_count ?? 0) + (sample.ok ? 0 : 1);
-  const latencySum = (existing?.latency_sum ?? 0) + sample.ms;
-  const latencyMax = Math.max(existing?.latency_max ?? 0, sample.ms);
+  const okCount =
+    (existing?.ok_count ?? 0) + (!maintenance && sample.ok ? 1 : 0);
+  const failCount =
+    (existing?.fail_count ?? 0) + (!maintenance && !sample.ok ? 1 : 0);
+  const latencySum =
+    (existing?.latency_sum ?? 0) + (maintenance ? 0 : sample.ms);
+  const latencyMax = maintenance
+    ? (existing?.latency_max ?? 0)
+    : Math.max(existing?.latency_max ?? 0, sample.ms);
+  const maintCount = (existing?.maint_count ?? 0) + (maintenance ? 1 : 0);
   await database
     .prepare(
-      `INSERT INTO uptime_hourly (monitor_id, hour_start, ok_count, fail_count, latency_sum, latency_max, samples_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO uptime_hourly (monitor_id, hour_start, ok_count, fail_count, latency_sum, latency_max, samples_json, maint_count)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (monitor_id, hour_start) DO UPDATE SET
          ok_count = excluded.ok_count,
          fail_count = excluded.fail_count,
          latency_sum = excluded.latency_sum,
          latency_max = excluded.latency_max,
-         samples_json = excluded.samples_json`,
+         samples_json = excluded.samples_json,
+         maint_count = excluded.maint_count`,
     )
     .bind(
       monitorId,
@@ -173,6 +186,7 @@ export async function addHourly(
       latencySum,
       latencyMax,
       JSON.stringify(trimmed),
+      maintCount,
     )
     .run();
 }
@@ -217,6 +231,7 @@ export async function rollDaily(
       failCount: uptimeHourly.failCount,
       latencySum: uptimeHourly.latencySum,
       latencyMax: uptimeHourly.latencyMax,
+      maintCount: uptimeHourly.maintCount,
     })
     .from(uptimeHourly)
     .where(sql`${uptimeHourly.hourStart} < ${today}`);
@@ -229,6 +244,7 @@ export async function rollDaily(
       fail: number;
       sum: number;
       max: number;
+      maint: number;
     }
   >();
   for (const row of rows) {
@@ -245,11 +261,13 @@ export async function rollDaily(
       fail: 0,
       sum: 0,
       max: 0,
+      maint: 0,
     };
     current.ok += row.okCount;
     current.fail += row.failCount;
     current.sum += row.latencySum;
     current.max = Math.max(current.max, row.latencyMax);
+    current.maint += row.maintCount;
     buckets.set(key, current);
   }
   for (const bucket of buckets.values()) {
@@ -262,6 +280,7 @@ export async function rollDaily(
         failCount: bucket.fail,
         latencySum: bucket.sum,
         latencyMax: bucket.max,
+        maintCount: bucket.maint,
       })
       .onConflictDoUpdate({
         target: [uptimeDaily.monitorId, uptimeDaily.dayStart],
@@ -270,6 +289,7 @@ export async function rollDaily(
           failCount: bucket.fail,
           latencySum: bucket.sum,
           latencyMax: bucket.max,
+          maintCount: bucket.maint,
         },
       });
   }
