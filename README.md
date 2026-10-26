@@ -31,15 +31,8 @@ The dashboard lists every monitor. Expand a row to see recent response time. The
 - [Preview](#preview)
 - [Table of contents](#table-of-contents)
 - [Features](#features)
-- [Status page](#status-page)
-- [Monitor](#monitor)
-- [Layout](#layout)
-- [Incidents and maintenance](#incidents-and-maintenance)
-- [Notifications](#notifications)
-- [Sign-in](#sign-in)
 - [Deploy](#deploy)
 - [Run locally](#run-locally)
-- [URLs](#urls)
 - [Configuration](#configuration)
 - [Branding your deployment](#branding-your-deployment)
 - [Updating](#updating)
@@ -48,17 +41,9 @@ The dashboard lists every monitor. Expand a row to see recent response time. The
 
 ## Features
 
-- Setup wizard that creates the Owner
 - HTTP, TCP, DNS, SSL expiry (CT-log estimate), and heartbeat monitors
-- A monitor detail page and an editor for the check, schedule, and notifications
-- Pause and resume without deleting check history
-- Pending, then down, so a single blip does not page anyone
 - Email (SMTP or Cloudflare Email Service), Discord, Slack, Telegram, webhooks, ntfy, Gotify, Pushover, Microsoft Teams, Google Chat, and Matrix
-- Public status pages, including one published page served at the site root
-- A layout builder for sections, monitor order, and the name visitors see
-- Dashboard rows that expand into a response chart for recent checks
-- Each status page shows 24 hours, 7 days, 30 days, or 90 days. New pages start at 24 hours
-- Owners set how long check history is kept. Older hourly totals, daily totals, finished outages, resolved incidents, and past maintenance are deleted on a schedule
+- Public status pages, works in site root
 - Manual incidents with a public timeline, and maintenance windows that hold alerts and stay out of the uptime percentage
 - Visitor subscriptions on a status page: confirmed email, signed webhooks, and cached RSS and Atom feeds
 - Uptime and response charts from local rollups
@@ -66,33 +51,6 @@ The dashboard lists every monitor. Expand a row to see recent response time. The
 - Owner, Admin, Editor, and Viewer roles, passkeys, passwords, optional TOTP, scoped API tokens, and optional OpenID Connect or Cloudflare Access sign-in
 - One English copy file, `brand/locale.json`. A fork edits that file to translate the whole product
 - Rebrand by editing `brand/` and asking your own coding agent
-- [MIT license](LICENSE)
-
-## Status page
-
-Thin rounded bars show the last 24 hours, 7 days, 30 days, or 90 days. Incidents and maintenance use alert backgrounds with black or white text. Visitors can subscribe by email, webhook, or an RSS and Atom feed when those switches are on.
-
-## Monitor
-
-The monitor page shows uptime for 24 hours through 90 days, a response chart, and the public badge preview.
-
-A private monitor returns an unknown badge. See [docs/badges.md](docs/badges.md).
-
-## Layout
-
-The status page editor orders sections and monitors, and sets the name visitors see.
-
-## Incidents and maintenance
-
-Manual incidents keep a public timeline. Maintenance windows hold alerts and stay out of the uptime percentage. Both use the same alert colors in the console and on the status page.
-
-## Notifications
-
-Email, Discord, Slack, Telegram, webhooks, ntfy, Gotify, Pushover, Microsoft Teams, Google Chat, and Matrix. The type picker is on the new-channel dialog.
-
-## Sign-in
-
-Owners and Admins add OpenID Connect providers and Cloudflare Access in Settings. The steps for Authentik are in [docs/sso.md](docs/sso.md).
 
 ## Deploy
 
@@ -122,27 +80,12 @@ pnpm dev
 
 Open http://127.0.0.1:5173/setup. The sample setup secret is `change-me-setup-secret`. Replace it before you expose the dev server. Sign in at `/login`. The admin UI is `/console`.
 
-## URLs
-
-| URL                      | Purpose                                                                                               |
-| ------------------------ | ----------------------------------------------------------------------------------------------------- |
-| `/`                      | Public status page chosen as the site root, or a redirect to `/login`                                 |
-| `/s/<slug>`              | Public status page. Still works for the page served at `/`                                            |
-| `/login`                 | Sign in. A signed-in visit redirects to `/console`                                                    |
-| `/console`               | Admin dashboard and the rest of the admin UI                                                          |
-| `/setup`                 | Create the first owner. Redirects to `/login` once setup is done                                      |
-| `/badge/<id>/status.svg` | Status badge. `uptime.svg` and `response.svg` are the other two. See [docs/badges.md](docs/badges.md) |
-
-Bookmarks under the old admin paths (`/monitors/...`, `/status-pages`, `/settings`, and the other console sections) redirect to `/console/...`. A status page setting, "Serve at the site root", chooses which published page answers `/`. Only one page can hold that setting. Turning it on for one page turns it off for the other. Create a page at `/console/status-pages/new` and edit it at `/console/status-pages/<id>`. The public monitor label is the optional display name, or the monitor name when that field is blank.
-
 ## Configuration
 
 | Name                                                     | Purpose                                                 |
 | -------------------------------------------------------- | ------------------------------------------------------- |
 | `SETUP_SECRET`                                           | Required. Setup stays closed until this is set.         |
 | `ENCRYPTION_KEY`                                         | Required. Encrypts tokens, TOTP, and the SMTP password. |
-| `SMTP_HOST`, `MAIL_FROM`, and the other `SMTP_*` secrets | Optional. Override the mail settings stored in D1.      |
-| `TURNSTILE_SECRET_KEY`                                   | Optional. When set, login and setup require Turnstile.  |
 
 Details: [docs/configuration.md](docs/configuration.md). Email behavior: [docs/email.md](docs/email.md).
 
