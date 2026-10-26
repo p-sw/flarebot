@@ -55,9 +55,15 @@ test("enables a badge, previews it, and copies the public URL", async ({
     page.getByText("The switch is on, so the public badge URL is available."),
   ).toBeVisible();
 
-  const status = await page.request.get(`/badge/${id}/status.svg`);
-  expect(status.ok()).toBeTruthy();
-  expect(await status.text()).not.toContain(">unknown<");
+  const preview = await page.request.get(
+    `/api/monitors/${id}/badges/preview.svg?kind=status`,
+  );
+  expect(preview.ok()).toBeTruthy();
+  expect(preview.headers()["cache-control"]).toContain("no-store");
+  expect(await preview.text()).not.toContain(">unknown<");
+  const fresh = await page.request.get(`/badge/${id}/status.svg?label=Edge`);
+  expect(fresh.ok()).toBeTruthy();
+  expect(await fresh.text()).not.toContain(">unknown<");
   await expect(
     page.getByRole("img", { name: "Preview of the Status badge" }),
   ).toBeVisible();
@@ -65,20 +71,26 @@ test("enables a badge, previews it, and copies the public URL", async ({
   await page.getByRole("button", { name: "For the badge" }).click();
   await page.getByRole("button", { name: "7 days" }).click();
   await page.getByLabel("Label").fill("Edge");
+  await page
+    .context()
+    .grantPermissions(["clipboard-read", "clipboard-write"], { origin });
   await page.getByRole("button", { name: "Copy URL" }).first().click();
   await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toContain(`/badge/${id}/status.svg`);
+  expect(copied).toContain("style=for-the-badge");
+  expect(copied).toContain("label=Edge");
 
   mkdirSync(shots, { recursive: true });
+  const panel = page
+    .getByRole("heading", { name: "Badges" })
+    .locator("xpath=ancestor::*[contains(@class,'bg-card')][1]");
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.screenshot({
-    path: `${shots}/badges-desktop.png`,
-    fullPage: true,
-  });
+  await panel.scrollIntoViewIfNeeded();
+  await panel.screenshot({ path: `${shots}/badges-desktop.png` });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({
-    path: `${shots}/badges-mobile.png`,
-    fullPage: true,
-  });
+  await panel.scrollIntoViewIfNeeded();
+  await panel.screenshot({ path: `${shots}/badges-mobile.png` });
   await expectNoHorizontalOverflow(page);
 });
 
