@@ -34,7 +34,7 @@ These D1 columns are deprecated and unused. They stay so existing production row
 | `/s/:slug`                                                                                       | That status page. The slug keeps working when the page is also the root           |
 | `/s/:slug/feed.rss`, `/s/:slug/feed.atom`                                                        | Cached incident and maintenance feeds when RSS is enabled for that page           |
 | `/feed.rss`, `/feed.atom`                                                                        | The same feeds for the page served at the site root                               |
-| `/subscribe/confirm/:token`, `/subscribe/unsubscribe/:token`, `/subscribe/manage/:token`         | Confirm, unsubscribe, and manage a visitor subscription                            |
+| `/subscribe/confirm/:token`, `/subscribe/unsubscribe/:token`, `/subscribe/manage/:token`         | Confirm, unsubscribe, and manage a visitor subscription                           |
 | `/login`                                                                                         | Sign-in. An existing session redirects to `/console`                              |
 | `/console` and `/console/*`                                                                      | Admin app. Signed-out requests redirect to `/login?next=` with a same-origin path |
 | `/console/status-pages/new` and `/console/status-pages/:id`                                      | Create a status page, or edit its text, branding, and monitor layout              |
