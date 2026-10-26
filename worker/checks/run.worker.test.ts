@@ -149,23 +149,22 @@ describe("runCheck", () => {
     let now = 50_000;
     const original = Date.now;
     Date.now = () => now;
-    let pulls = 0;
-    const stream = () =>
-      new ReadableStream({
-        pull(controller) {
-          pulls += 1;
-          now += 5_000;
-          controller.enqueue(
-            new TextEncoder().encode('{"status":"keyword-hit"}'),
-          );
-          controller.close();
-        },
-      });
+    let reads = 0;
+    const instrument = (payload: string, status: number) => {
+      now += 30;
+      const response = new Response(payload, { status });
+      const body = response.body;
+      if (!body) throw new Error("missing body");
+      const getReader = body.getReader.bind(body);
+      body.getReader = (() => {
+        reads += 1;
+        now += 5_000;
+        return getReader();
+      }) as typeof body.getReader;
+      return response;
+    };
     try {
-      scripted(() => {
-        now += 30;
-        return new Response(stream(), { status: 200 });
-      });
+      scripted(() => instrument('{"status":"keyword-hit"}', 200));
       const statusOnly = await runCheck({
         ...base,
         type: "http",
@@ -178,9 +177,9 @@ describe("runCheck", () => {
       });
       expect(statusOnly.ok).toBe(true);
       expect(statusOnly.responseMs).toBeLessThan(1_000);
-      expect(pulls).toBe(0);
+      expect(reads).toBe(0);
 
-      pulls = 0;
+      reads = 0;
       now = 50_000;
       const keyword = await runCheck({
         ...base,
@@ -198,10 +197,11 @@ describe("runCheck", () => {
       expect(keyword.ok).toBe(true);
       expect(keyword.httpStatus).toBe(200);
       expect(keyword.responseMs).toBeLessThan(1_000);
-      expect(pulls).toBeGreaterThan(0);
+      expect(reads).toBeGreaterThan(0);
 
-      pulls = 0;
+      reads = 0;
       now = 50_000;
+      scripted(() => instrument('{"status":"keyword-hit"}', 500));
       const wrongStatus = await runCheck({
         ...base,
         type: "http",
@@ -215,7 +215,7 @@ describe("runCheck", () => {
       });
       expect(wrongStatus.ok).toBe(false);
       expect(wrongStatus.errorKind).toBe("status");
-      expect(pulls).toBe(0);
+      expect(reads).toBe(0);
 
       scripted(() => {
         throw new Error("The operation was aborted due to timeout");
