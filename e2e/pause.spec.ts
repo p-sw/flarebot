@@ -29,7 +29,7 @@ test("pause and resume update every screen without a reload", async ({
 
   await page.goto("/console");
   const card = monitorCard(page, name);
-  const pause = card.getByRole("button", { name: "Pause" });
+  const pause = card.getByRole("button", { name: "Pause", exact: true });
   await expect(pause).toBeVisible();
   await expect(card.getByText("Checking", { exact: true })).toBeVisible();
 
@@ -39,7 +39,9 @@ test("pause and resume update every screen without a reload", async ({
   await expect(pause).toHaveAccessibleName("Pause");
   release();
 
-  await expect(card.getByRole("button", { name: "Resume" })).toBeEnabled();
+  await expect(
+    card.getByRole("button", { name: "Resume", exact: true }),
+  ).toBeEnabled();
   await expect(card.getByText("Paused", { exact: true })).toBeVisible();
   await expect(card.getByText("Checking", { exact: true })).toHaveCount(0);
 
@@ -50,11 +52,15 @@ test("pause and resume update every screen without a reload", async ({
 
   await page.getByRole("link", { name: "Dashboard" }).click();
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-  await expect(card.getByRole("button", { name: "Resume" })).toBeVisible();
+  await expect(
+    card.getByRole("button", { name: "Resume", exact: true }),
+  ).toBeVisible();
   await expect(card.getByText("Paused", { exact: true })).toBeVisible();
 
-  await card.getByRole("button", { name: "Resume" }).click();
-  await expect(card.getByRole("button", { name: "Pause" })).toBeEnabled();
+  await card.getByRole("button", { name: "Resume", exact: true }).click();
+  await expect(
+    card.getByRole("button", { name: "Pause", exact: true }),
+  ).toBeEnabled();
   await expect(card.getByText("Checking", { exact: true })).toBeVisible();
   await expect(card.getByText("Paused", { exact: true })).toHaveCount(0);
 });
@@ -82,11 +88,13 @@ test("a failed pause keeps the previous status and explains why", async ({
   await page.goto("/console");
   const card = monitorCard(page, name);
   await expect(card.getByText("Checking", { exact: true })).toBeVisible();
-  await card.getByRole("button", { name: "Pause" }).click();
+  await card.getByRole("button", { name: "Pause", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveText(
     "Could not pause or resume this monitor. Nothing was changed.",
   );
-  await expect(card.getByRole("button", { name: "Pause" })).toBeEnabled();
+  await expect(
+    card.getByRole("button", { name: "Pause", exact: true }),
+  ).toBeEnabled();
   await expect(card.getByText("Paused", { exact: true })).toHaveCount(0);
   await expect(card.getByText("Checking", { exact: true })).toBeVisible();
 });

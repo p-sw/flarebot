@@ -71,6 +71,8 @@ export function MonitorRow({
   const shown = heading.monitorName || t("monitor_fallback_name");
   const publicName = heading.title || t("monitor_fallback_name");
   const typeLabel = type ? monitorTypeLabel(type) : "";
+  const source = t("page_monitor_source", { name: shown });
+  const meta = [source, typeLabel, target].filter(Boolean).join(" · ");
   return (
     <div
       className={cn(
@@ -124,15 +126,9 @@ export function MonitorRow({
           <p
             id={`${metaId}-meta`}
             className="truncate px-2 text-xs leading-5 text-muted-foreground"
-            title={[
-              t("page_monitor_source", { name: shown }),
-              typeLabel,
-              target,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
+            title={meta}
           >
-            <span className="font-medium text-foreground">{shown}</span>
+            <span className="font-medium text-foreground">{source}</span>
             {typeLabel ? (
               <span>
                 {" · "}
