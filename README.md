@@ -82,10 +82,10 @@ Open http://127.0.0.1:5173/setup. The sample setup secret is `change-me-setup-se
 
 ## Configuration
 
-| Name                                                     | Purpose                                                 |
-| -------------------------------------------------------- | ------------------------------------------------------- |
-| `SETUP_SECRET`                                           | Required. Setup stays closed until this is set.         |
-| `ENCRYPTION_KEY`                                         | Required. Encrypts tokens, TOTP, and the SMTP password. |
+| Name             | Purpose                                                 |
+| ---------------- | ------------------------------------------------------- |
+| `SETUP_SECRET`   | Required. Setup stays closed until this is set.         |
+| `ENCRYPTION_KEY` | Required. Encrypts tokens, TOTP, and the SMTP password. |
 
 Details: [docs/configuration.md](docs/configuration.md). Email behavior: [docs/email.md](docs/email.md).
 
