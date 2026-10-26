@@ -236,6 +236,52 @@ export type MailSettings = {
   lastTestError: string | null;
 };
 
+export const ssoQuery = queryOptions({
+  queryKey: ["sso"],
+  queryFn: () => api<SsoSettingsResponse>("/api/sso"),
+  staleTime: fresh,
+});
+
+export type SsoRole = "owner" | "admin" | "editor" | "viewer";
+
+export type SsoProviderView = {
+  id: string;
+  enabled: boolean;
+  displayName: string;
+  buttonLabel: string;
+  issuerUrl: string;
+  clientId: string;
+  clientSecretSet: boolean;
+  scopes: string;
+  groupsClaim: string;
+  jitEnabled: boolean;
+  jitRole: SsoRole;
+  allowedDomains: string[];
+  roleMappings: { value: string; role: SsoRole }[];
+  discoveryAt: number | null;
+};
+
+export type SsoAccessView = {
+  enabled: boolean;
+  teamName: string;
+  audiences: string[];
+  groupsClaim: string;
+  jitEnabled: boolean;
+  allowedDomains: string[];
+  rules: {
+    kind: "group" | "email" | "domain";
+    value: string;
+    role: SsoRole;
+  }[];
+};
+
+export type SsoSettingsResponse = {
+  redirectUri: string;
+  hideLocalLogin: boolean;
+  access: SsoAccessView;
+  providers: SsoProviderView[];
+};
+
 export const mailQuery = queryOptions({
   queryKey: ["mail"],
   queryFn: () => api<MailSettings>("/api/settings/mail"),

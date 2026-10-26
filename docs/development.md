@@ -28,7 +28,7 @@ Useful scripts:
 
 Hooks are Lefthook (`pnpm install` runs `lefthook install`). Pre-commit formats the staged files, checks language, and typechecks. Pre-push runs the Vitest suites, `copy:check`, and the production build. Playwright stays out of that hook so a push stays on the fast path; run `pnpm test:e2e` when you change the UI. Commit messages follow Conventional Commits. If `core.hooksPath` points somewhere else, Lefthook still needs an executable `pre-commit`, `commit-msg`, and `pre-push` in `.git/hooks` so that dispatcher can chain to them.
 
-Worker tests import the Hono app and the `cloudflare:test` env. They do not import `worker-mailer` from a Node test, because that package loads `cloudflare:sockets`.
+Worker tests import the Hono app and the `cloudflare:test` env. They do not import `worker-mailer` from a Node test, because that package loads `cloudflare:sockets`. Single sign-on is covered by `shared/sso.test.ts`, `worker/auth/jwt.test.ts`, and `test/sso.worker.test.ts`. Those tests sign tokens locally and do not call a real provider.
 
 `worker-configuration.d.ts` is gitignored. CI regenerates it. Copy is read from `brand/locale.json` with no compile step.
 

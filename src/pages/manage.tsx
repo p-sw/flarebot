@@ -3,8 +3,9 @@
 import AppHeader from "@brand/overrides/AppHeader";
 import { formatDateTime, t } from "@shared/copy";
 import { parseStoredMailError } from "@shared/mail-test";
+import { can } from "@shared/permissions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouteContext } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
@@ -26,6 +27,7 @@ import { Stagger, StaggerItem } from "../motion/page";
 import { ContentSkeleton } from "../ui/skeleton";
 import { controlClass, Field } from "./fields";
 import { RootSwitch, rootToggleError } from "./root-switch";
+import { SsoSettings } from "./sso-settings";
 
 export function StatusPagesPage() {
   const pages = useQuery(statusPagesQuery);
@@ -504,8 +506,11 @@ function mailSourceText(mail: MailSettings | undefined): string {
 }
 
 export function SettingsPage() {
-  const settings = useQuery(settingsQuery);
-  const mail = useQuery(mailQuery);
+  const { user } = useRouteContext({ from: "/console" });
+  const showInstance = can({ role: user.role }, "instance.settings");
+  const showSso = can({ role: user.role }, "sso.manage");
+  const settings = useQuery({ ...settingsQuery, enabled: showInstance });
+  const mail = useQuery({ ...mailQuery, enabled: showInstance });
   const [name, setName] = useState<string | null>(null);
   const [draft, setDraft] = useState<MailDraft | null>(null);
   const [note, setNote] = useState("");
@@ -538,373 +543,401 @@ export function SettingsPage() {
   return (
     <>
       <AppHeader title={t("nav_settings")} />
-      {settings.isPending || mail.isPending ? <ContentSkeleton /> : null}
-      <form
-        className="mb-8 grid max-w-xl gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void saveInstance.run(async () => {
-            try {
-              await api("/api/settings", {
-                method: "PUT",
-                body: JSON.stringify({ instanceName: shownName }),
-              });
-              await refreshQueries(client, [["settings"]]);
-              report("ok", t("saved"));
-            } catch (cause) {
-              report("error", errorText(cause));
-            }
-          });
-        }}
-      >
-        <Field
-          label={t("settings_instance_name")}
-          hint={t("settings_instance_hint")}
-        >
-          <Input
-            name="instanceName"
-            value={shownName}
-            onChange={(event) => setName(event.target.value)}
-            required
-          />
-        </Field>
-        <PendingButton type="submit" pending={saveInstance.pending}>
-          {t("action_save")}
-        </PendingButton>
-      </form>
-      <h2 className="mb-3 font-medium">{t("settings_history")}</h2>
-      <p className="mb-3 max-w-xl text-sm break-words text-muted-foreground">
-        {t("settings_history_intro")}
-      </p>
-      <form
-        className="mb-8 grid max-w-xl gap-3"
-        aria-label={t("settings_history")}
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (historyValue === null) {
-            setHistoryTone("error");
-            setHistoryNote(t("settings_history_invalid"));
-            return;
-          }
-          void saveHistory.run(async () => {
-            try {
-              await api("/api/settings", {
-                method: "PUT",
-                body: JSON.stringify({ historyRetentionDays: historyValue }),
-              });
-              await refreshQueries(client, [["settings"]]);
-              setHistory(null);
-              setHistoryTone("ok");
-              setHistoryNote(t("saved"));
-            } catch (cause) {
-              setHistoryTone("error");
-              setHistoryNote(errorText(cause));
-            }
-          });
-        }}
-      >
-        <Field
-          label={t("settings_history_days")}
-          hint={t("settings_history_hint")}
-        >
-          <select
-            className={controlClass}
-            name="historyRetention"
-            value={shownHistory.choice}
-            disabled={saveHistory.pending}
-            onChange={(event) => {
-              setHistoryNote("");
-              setHistory({
-                choice: event.target.value,
-                custom: shownHistory.custom,
-              });
-            }}
-          >
-            <option value="7">{t("range_7d")}</option>
-            <option value="30">{t("range_30d")}</option>
-            <option value="90">{t("range_90d")}</option>
-            <option value="180">{t("range_180d")}</option>
-            <option value="365">{t("range_365d")}</option>
-            <option value="custom">{t("settings_history_custom")}</option>
-          </select>
-        </Field>
-        {shownHistory.choice === "custom" ? (
-          <Field
-            label={t("settings_history_custom_days")}
-            hint={t("settings_history_custom_hint")}
-          >
-            <Input
-              name="historyRetentionDays"
-              type="number"
-              min={1}
-              max={3650}
-              step={1}
-              inputMode="numeric"
-              value={shownHistory.custom}
-              disabled={saveHistory.pending}
-              aria-invalid={
-                shownHistory.choice === "custom" && historyValue === null
-              }
-              onChange={(event) => {
-                setHistoryNote("");
-                setHistory({
-                  choice: "custom",
-                  custom: event.target.value,
-                });
-              }}
-              required
-            />
-          </Field>
-        ) : null}
-        <PendingButton
-          type="submit"
-          pending={saveHistory.pending}
-          disabled={historyValue === null}
-        >
-          {t("action_save")}
-        </PendingButton>
-        {historyNote ? (
-          <p
-            className={`text-sm break-words ${historyTone === "error" ? "text-destructive" : ""}`}
-            role={historyTone === "error" ? "alert" : "status"}
-          >
-            {historyNote}
-          </p>
-        ) : null}
-      </form>
-      <h2 className="mb-3 font-medium">{t("settings_mail")}</h2>
-      <p className="mb-3 max-w-xl text-sm text-muted-foreground">
-        {t("settings_mail_intro")}
-      </p>
-      <p
-        className="mb-4 max-w-xl rounded-lg border border-border bg-muted px-3 py-2 text-sm"
-        role="status"
-      >
-        {mailSourceText(mail.data)}
-      </p>
-      <form
-        className="grid max-w-xl gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!mail.data) return;
-          void saveMail.run(async () => {
-            try {
-              const body = mailPayload(form);
-              await api("/api/settings/mail", {
-                method: "PUT",
-                body: JSON.stringify(body),
-              });
-              setDraft({ ...form, password: "", clearPassword: false });
-              await refreshQueries(client, [["mail"]]);
-              report("ok", t("saved"));
-            } catch (cause) {
-              report("error", errorText(cause));
-            }
-          });
-        }}
-      >
-        <Field label={t("settings_driver")} hint={t("settings_driver_hint")}>
-          <select
-            className={controlClass}
-            name="driver"
-            value={form.driver}
-            onChange={(event) =>
-              patch({ driver: event.target.value as MailDriver })
-            }
-          >
-            <option value="smtp">{t("settings_driver_smtp")}</option>
-            <option value="cf-email">{t("settings_driver_cf")}</option>
-            <option value="none">{t("settings_driver_none")}</option>
-          </select>
-        </Field>
-        {form.driver === "smtp" ? (
-          <>
-            <Field label={t("settings_host")} hint={t("settings_host_hint")}>
-              <Input
-                name="smtpHost"
-                value={form.host}
-                onChange={(event) => patch({ host: event.target.value })}
-                required
-              />
-            </Field>
-            <Field label={t("settings_port")} hint={t("settings_port_hint")}>
-              <select
-                className={controlClass}
-                name="smtpPort"
-                value={form.port}
-                onChange={(event) =>
-                  patch({
-                    port: Number(event.target.value) === 465 ? 465 : 587,
-                  })
-                }
-              >
-                <option value={587}>587</option>
-                <option value={465}>465</option>
-              </select>
-            </Field>
-            <Field
-              label={t("settings_security")}
-              hint={t("settings_security_hint")}
-            >
-              <select
-                className={controlClass}
-                name="smtpSecurity"
-                value={form.security}
-                onChange={(event) =>
-                  patch({ security: event.target.value as MailSecurity })
-                }
-              >
-                <option value="starttls">
-                  {t("settings_security_starttls")}
-                </option>
-                <option value="tls">{t("settings_security_tls")}</option>
-                <option value="none">{t("settings_security_none")}</option>
-              </select>
-            </Field>
-            <Field
-              label={t("settings_username")}
-              hint={t("settings_username_hint")}
-            >
-              <Input
-                name="smtpUser"
-                autoComplete="username"
-                value={form.username}
-                onChange={(event) => patch({ username: event.target.value })}
-              />
-            </Field>
-            <Field
-              label={t("settings_password")}
-              hint={t("settings_password_hint")}
-            >
-              <Input
-                name="smtpPassword"
-                type="password"
-                autoComplete="new-password"
-                value={form.password}
-                onChange={(event) =>
-                  patch({ password: event.target.value, clearPassword: false })
-                }
-              />
-            </Field>
-            {mail.data?.hasPassword ? (
-              <p className="text-sm">{t("settings_password_set")}</p>
-            ) : null}
-            {mail.data?.hasPassword ? (
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={form.clearPassword}
-                  onChange={(event) =>
-                    patch({
-                      clearPassword: event.target.checked,
-                      password: event.target.checked ? "" : form.password,
-                    })
-                  }
-                />
-                {t("settings_password_clear")}
-              </label>
-            ) : null}
-          </>
-        ) : null}
-        {form.driver !== "none" ? (
-          <>
-            <Field
-              label={t("settings_from_name")}
-              hint={t("settings_from_name_hint")}
-            >
-              <Input
-                name="fromName"
-                value={form.fromName}
-                onChange={(event) => patch({ fromName: event.target.value })}
-                required
-              />
-            </Field>
-            <Field
-              label={t("settings_from_address")}
-              hint={t("settings_from_address_hint")}
-            >
-              <Input
-                name="from"
-                type="email"
-                value={form.fromAddress}
-                onChange={(event) => patch({ fromAddress: event.target.value })}
-                required
-              />
-            </Field>
-          </>
-        ) : null}
-        <Field label={t("settings_test_to")} hint={t("settings_test_hint")}>
-          <Input
-            name="testTo"
-            type="email"
-            value={form.testTo}
-            onChange={(event) => patch({ testTo: event.target.value })}
-            placeholder={t("settings_test_to_placeholder")}
-          />
-        </Field>
-        <p className="text-sm text-muted-foreground">
-          {testHelp(form, mail.data)}
-        </p>
-        {mail.data?.lastTestAt != null ? (
-          <p className="text-sm text-muted-foreground" role="status">
-            {lastTestText(mail.data)}
-          </p>
-        ) : null}
-        <div className="flex flex-wrap gap-2">
-          <PendingButton
-            type="submit"
-            pending={saveMail.pending}
-            disabled={!mail.data || mailBusy}
-          >
-            {t("action_save")}
-          </PendingButton>
-          <PendingButton
-            type="button"
-            variant="outline"
-            pending={testMail.pending}
-            disabled={!mail.data || mailBusy || block !== null}
-            onClick={() => {
-              void testMail.run(async () => {
+      {!showInstance && !showSso ? (
+        <p className="text-sm">{t("error_forbidden")}</p>
+      ) : null}
+      {showInstance ? (
+        <>
+          {settings.isPending || mail.isPending ? <ContentSkeleton /> : null}
+          <form
+            className="mb-8 grid max-w-xl gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveInstance.run(async () => {
                 try {
-                  const result = await api<{
-                    source: "secrets" | "saved" | "form";
-                  }>("/api/settings/mail/test", {
-                    method: "POST",
-                    body: JSON.stringify({
-                      ...mailPayload(form),
-                      ...(form.testTo.trim()
-                        ? { email: form.testTo.trim() }
-                        : {}),
-                    }),
+                  await api("/api/settings", {
+                    method: "PUT",
+                    body: JSON.stringify({ instanceName: shownName }),
                   });
-                  await refreshQueries(client, [["mail"]]);
-                  report(
-                    "ok",
-                    result.source === "secrets"
-                      ? t("settings_test_ok_secrets")
-                      : result.source === "form"
-                        ? t("settings_test_ok_form")
-                        : t("settings_test_ok"),
-                  );
+                  await refreshQueries(client, [["settings"]]);
+                  report("ok", t("saved"));
                 } catch (cause) {
-                  await refreshQueries(client, [["mail"]]);
                   report("error", errorText(cause));
                 }
               });
             }}
           >
-            {t("action_test")}
-          </PendingButton>
-        </div>
-      </form>
-      {note ? (
-        <p
-          className={`mt-3 text-sm ${noteTone === "error" ? "text-destructive" : ""}`}
-          role={noteTone === "error" ? "alert" : "status"}
-        >
-          {note}
-        </p>
+            <Field
+              label={t("settings_instance_name")}
+              hint={t("settings_instance_hint")}
+            >
+              <Input
+                name="instanceName"
+                value={shownName}
+                onChange={(event) => setName(event.target.value)}
+                required
+              />
+            </Field>
+            <PendingButton type="submit" pending={saveInstance.pending}>
+              {t("action_save")}
+            </PendingButton>
+          </form>
+          <h2 className="mb-3 font-medium">{t("settings_history")}</h2>
+          <p className="mb-3 max-w-xl text-sm break-words text-muted-foreground">
+            {t("settings_history_intro")}
+          </p>
+          <form
+            className="mb-8 grid max-w-xl gap-3"
+            aria-label={t("settings_history")}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (historyValue === null) {
+                setHistoryTone("error");
+                setHistoryNote(t("settings_history_invalid"));
+                return;
+              }
+              void saveHistory.run(async () => {
+                try {
+                  await api("/api/settings", {
+                    method: "PUT",
+                    body: JSON.stringify({
+                      historyRetentionDays: historyValue,
+                    }),
+                  });
+                  await refreshQueries(client, [["settings"]]);
+                  setHistory(null);
+                  setHistoryTone("ok");
+                  setHistoryNote(t("saved"));
+                } catch (cause) {
+                  setHistoryTone("error");
+                  setHistoryNote(errorText(cause));
+                }
+              });
+            }}
+          >
+            <Field
+              label={t("settings_history_days")}
+              hint={t("settings_history_hint")}
+            >
+              <select
+                className={controlClass}
+                name="historyRetention"
+                value={shownHistory.choice}
+                disabled={saveHistory.pending}
+                onChange={(event) => {
+                  setHistoryNote("");
+                  setHistory({
+                    choice: event.target.value,
+                    custom: shownHistory.custom,
+                  });
+                }}
+              >
+                <option value="7">{t("range_7d")}</option>
+                <option value="30">{t("range_30d")}</option>
+                <option value="90">{t("range_90d")}</option>
+                <option value="180">{t("range_180d")}</option>
+                <option value="365">{t("range_365d")}</option>
+                <option value="custom">{t("settings_history_custom")}</option>
+              </select>
+            </Field>
+            {shownHistory.choice === "custom" ? (
+              <Field
+                label={t("settings_history_custom_days")}
+                hint={t("settings_history_custom_hint")}
+              >
+                <Input
+                  name="historyRetentionDays"
+                  type="number"
+                  min={1}
+                  max={3650}
+                  step={1}
+                  inputMode="numeric"
+                  value={shownHistory.custom}
+                  disabled={saveHistory.pending}
+                  aria-invalid={
+                    shownHistory.choice === "custom" && historyValue === null
+                  }
+                  onChange={(event) => {
+                    setHistoryNote("");
+                    setHistory({
+                      choice: "custom",
+                      custom: event.target.value,
+                    });
+                  }}
+                  required
+                />
+              </Field>
+            ) : null}
+            <PendingButton
+              type="submit"
+              pending={saveHistory.pending}
+              disabled={historyValue === null}
+            >
+              {t("action_save")}
+            </PendingButton>
+            {historyNote ? (
+              <p
+                className={`text-sm break-words ${historyTone === "error" ? "text-destructive" : ""}`}
+                role={historyTone === "error" ? "alert" : "status"}
+              >
+                {historyNote}
+              </p>
+            ) : null}
+          </form>
+          <h2 className="mb-3 font-medium">{t("settings_mail")}</h2>
+          <p className="mb-3 max-w-xl text-sm text-muted-foreground">
+            {t("settings_mail_intro")}
+          </p>
+          <p
+            className="mb-4 max-w-xl rounded-lg border border-border bg-muted px-3 py-2 text-sm"
+            role="status"
+          >
+            {mailSourceText(mail.data)}
+          </p>
+          <form
+            className="grid max-w-xl gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!mail.data) return;
+              void saveMail.run(async () => {
+                try {
+                  const body = mailPayload(form);
+                  await api("/api/settings/mail", {
+                    method: "PUT",
+                    body: JSON.stringify(body),
+                  });
+                  setDraft({ ...form, password: "", clearPassword: false });
+                  await refreshQueries(client, [["mail"]]);
+                  report("ok", t("saved"));
+                } catch (cause) {
+                  report("error", errorText(cause));
+                }
+              });
+            }}
+          >
+            <Field
+              label={t("settings_driver")}
+              hint={t("settings_driver_hint")}
+            >
+              <select
+                className={controlClass}
+                name="driver"
+                value={form.driver}
+                onChange={(event) =>
+                  patch({ driver: event.target.value as MailDriver })
+                }
+              >
+                <option value="smtp">{t("settings_driver_smtp")}</option>
+                <option value="cf-email">{t("settings_driver_cf")}</option>
+                <option value="none">{t("settings_driver_none")}</option>
+              </select>
+            </Field>
+            {form.driver === "smtp" ? (
+              <>
+                <Field
+                  label={t("settings_host")}
+                  hint={t("settings_host_hint")}
+                >
+                  <Input
+                    name="smtpHost"
+                    value={form.host}
+                    onChange={(event) => patch({ host: event.target.value })}
+                    required
+                  />
+                </Field>
+                <Field
+                  label={t("settings_port")}
+                  hint={t("settings_port_hint")}
+                >
+                  <select
+                    className={controlClass}
+                    name="smtpPort"
+                    value={form.port}
+                    onChange={(event) =>
+                      patch({
+                        port: Number(event.target.value) === 465 ? 465 : 587,
+                      })
+                    }
+                  >
+                    <option value={587}>587</option>
+                    <option value={465}>465</option>
+                  </select>
+                </Field>
+                <Field
+                  label={t("settings_security")}
+                  hint={t("settings_security_hint")}
+                >
+                  <select
+                    className={controlClass}
+                    name="smtpSecurity"
+                    value={form.security}
+                    onChange={(event) =>
+                      patch({ security: event.target.value as MailSecurity })
+                    }
+                  >
+                    <option value="starttls">
+                      {t("settings_security_starttls")}
+                    </option>
+                    <option value="tls">{t("settings_security_tls")}</option>
+                    <option value="none">{t("settings_security_none")}</option>
+                  </select>
+                </Field>
+                <Field
+                  label={t("settings_username")}
+                  hint={t("settings_username_hint")}
+                >
+                  <Input
+                    name="smtpUser"
+                    autoComplete="username"
+                    value={form.username}
+                    onChange={(event) =>
+                      patch({ username: event.target.value })
+                    }
+                  />
+                </Field>
+                <Field
+                  label={t("settings_password")}
+                  hint={t("settings_password_hint")}
+                >
+                  <Input
+                    name="smtpPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    value={form.password}
+                    onChange={(event) =>
+                      patch({
+                        password: event.target.value,
+                        clearPassword: false,
+                      })
+                    }
+                  />
+                </Field>
+                {mail.data?.hasPassword ? (
+                  <p className="text-sm">{t("settings_password_set")}</p>
+                ) : null}
+                {mail.data?.hasPassword ? (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={form.clearPassword}
+                      onChange={(event) =>
+                        patch({
+                          clearPassword: event.target.checked,
+                          password: event.target.checked ? "" : form.password,
+                        })
+                      }
+                    />
+                    {t("settings_password_clear")}
+                  </label>
+                ) : null}
+              </>
+            ) : null}
+            {form.driver !== "none" ? (
+              <>
+                <Field
+                  label={t("settings_from_name")}
+                  hint={t("settings_from_name_hint")}
+                >
+                  <Input
+                    name="fromName"
+                    value={form.fromName}
+                    onChange={(event) =>
+                      patch({ fromName: event.target.value })
+                    }
+                    required
+                  />
+                </Field>
+                <Field
+                  label={t("settings_from_address")}
+                  hint={t("settings_from_address_hint")}
+                >
+                  <Input
+                    name="from"
+                    type="email"
+                    value={form.fromAddress}
+                    onChange={(event) =>
+                      patch({ fromAddress: event.target.value })
+                    }
+                    required
+                  />
+                </Field>
+              </>
+            ) : null}
+            <Field label={t("settings_test_to")} hint={t("settings_test_hint")}>
+              <Input
+                name="testTo"
+                type="email"
+                value={form.testTo}
+                onChange={(event) => patch({ testTo: event.target.value })}
+                placeholder={t("settings_test_to_placeholder")}
+              />
+            </Field>
+            <p className="text-sm text-muted-foreground">
+              {testHelp(form, mail.data)}
+            </p>
+            {mail.data?.lastTestAt != null ? (
+              <p className="text-sm text-muted-foreground" role="status">
+                {lastTestText(mail.data)}
+              </p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <PendingButton
+                type="submit"
+                pending={saveMail.pending}
+                disabled={!mail.data || mailBusy}
+              >
+                {t("action_save")}
+              </PendingButton>
+              <PendingButton
+                type="button"
+                variant="outline"
+                pending={testMail.pending}
+                disabled={!mail.data || mailBusy || block !== null}
+                onClick={() => {
+                  void testMail.run(async () => {
+                    try {
+                      const result = await api<{
+                        source: "secrets" | "saved" | "form";
+                      }>("/api/settings/mail/test", {
+                        method: "POST",
+                        body: JSON.stringify({
+                          ...mailPayload(form),
+                          ...(form.testTo.trim()
+                            ? { email: form.testTo.trim() }
+                            : {}),
+                        }),
+                      });
+                      await refreshQueries(client, [["mail"]]);
+                      report(
+                        "ok",
+                        result.source === "secrets"
+                          ? t("settings_test_ok_secrets")
+                          : result.source === "form"
+                            ? t("settings_test_ok_form")
+                            : t("settings_test_ok"),
+                      );
+                    } catch (cause) {
+                      await refreshQueries(client, [["mail"]]);
+                      report("error", errorText(cause));
+                    }
+                  });
+                }}
+              >
+                {t("action_test")}
+              </PendingButton>
+            </div>
+          </form>
+          {note ? (
+            <p
+              className={`mt-3 text-sm ${noteTone === "error" ? "text-destructive" : ""}`}
+              role={noteTone === "error" ? "alert" : "status"}
+            >
+              {note}
+            </p>
+          ) : null}
+        </>
       ) : null}
+      {showSso ? <SsoSettings /> : null}
     </>
   );
 }

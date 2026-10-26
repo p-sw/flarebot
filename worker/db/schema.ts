@@ -451,6 +451,63 @@ export const announcementOutbox = sqliteTable("announcement_outbox", {
   sentAt: integer("sent_at"),
 });
 
+export const ssoProviders = sqliteTable("sso_providers", {
+  id: text("id").primaryKey(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+  displayName: text("display_name").notNull(),
+  buttonLabel: text("button_label").notNull(),
+  issuerUrl: text("issuer_url").notNull(),
+  clientId: text("client_id").notNull(),
+  clientSecretEncrypted: text("client_secret_encrypted"),
+  scopes: text("scopes").notNull(),
+  groupsClaim: text("groups_claim").notNull().default("groups"),
+  jitEnabled: integer("jit_enabled", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  jitRole: text("jit_role").notNull().default("viewer"),
+  allowedDomainsJson: text("allowed_domains_json").notNull().default("[]"),
+  roleMappingsJson: text("role_mappings_json").notNull().default("[]"),
+  discoveryJson: text("discovery_json"),
+  discoveryAt: integer("discovery_at"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const ssoIdentities = sqliteTable(
+  "sso_identities",
+  {
+    id: text("id").primaryKey(),
+    providerId: text("provider_id").notNull(),
+    subject: text("subject").notNull(),
+    userId: text("user_id").notNull(),
+    email: text("email").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("sso_identities_provider_subject").on(
+      table.providerId,
+      table.subject,
+    ),
+  ],
+);
+
+export const oidcTransactions = sqliteTable("oidc_transactions", {
+  id: text("id").primaryKey(),
+  providerId: text("provider_id").notNull(),
+  stateHash: text("state_hash").notNull().unique(),
+  nonceHash: text("nonce_hash").notNull(),
+  codeVerifierEncrypted: text("code_verifier_encrypted").notNull(),
+  redirectUri: text("redirect_uri").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const ssoJwksCache = sqliteTable("sso_jwks_cache", {
+  url: text("url").primaryKey(),
+  body: text("body").notNull(),
+  fetchedAt: integer("fetched_at").notNull(),
+});
+
 export const auditLog = sqliteTable("audit_log", {
   id: text("id").primaryKey(),
   actorUserId: text("actor_user_id"),

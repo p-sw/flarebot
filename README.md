@@ -56,7 +56,7 @@ npx wrangler secret put SETUP_SECRET
 npx wrangler secret put ENCRYPTION_KEY
 ```
 
-`ENCRYPTION_KEY` is 32 bytes of base64 (`openssl rand -base64 32`). Open `/setup`, enter the setup secret, and create the Owner. After that, sign in at `/login`. The admin UI is `/console`. Mail can wait. See [docs/deployment.md](docs/deployment.md) for the manual path and for SMTP secrets.
+`ENCRYPTION_KEY` is 32 bytes of base64 (`openssl rand -base64 32`). Open `/setup`, enter the setup secret, and create the Owner. After that, sign in at `/login`. The admin UI is `/console`. Owners and Admins can add OpenID Connect and Cloudflare Access in Settings. The Authentik steps, and the steps for Authentik behind Cloudflare Access, are in [docs/sso.md](docs/sso.md). Mail can wait. See [docs/deployment.md](docs/deployment.md) for the manual path and for SMTP secrets.
 
 Nothing in this repository is deployed for you. The Wrangler config has no account id.
 

@@ -31,6 +31,7 @@ export const ACTIONS = [
   "mail.write",
   "instance.settings",
   "instance.transfer",
+  "sso.manage",
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -61,6 +62,7 @@ const MIN_ROLE: Record<Action, Role> = {
   "mail.write": "owner",
   "instance.settings": "owner",
   "instance.transfer": "owner",
+  "sso.manage": "admin",
 };
 
 export type Actor = {
