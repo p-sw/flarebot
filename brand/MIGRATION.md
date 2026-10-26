@@ -10,7 +10,7 @@ Current contract:
 - Slot props:
   - `AppHeader({ title, actions })`
   - `AppFooter()` with no props
-  - `StatusHero({ title, description, banner, overall })` where `overall` is `operational`, `degraded`, `outage`, `empty`, or `paused`
+  - `StatusHero({ title, description, banner, overall })` where `overall` is `operational`, `degraded`, `outage`, `empty`, `paused`, or `maintenance`
   - `EmptyState({ action })`
   - `LoginBackdrop({ children })`
 - Token names in `tokens.css` are the shadcn variables plus `--sidebar`, `--sidebar-foreground`, `--sidebar-muted`, and `--status-*-foreground`.

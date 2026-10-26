@@ -113,6 +113,51 @@ export class SchedulerShard extends DurableObject<Env> {
     });
   }
 
+  // README capture only. Replaces the in-memory chart and holds the next
+  // check so a live probe cannot overwrite the demo before the screenshot.
+  async seedDemo(
+    id: string,
+    input: {
+      paused: boolean;
+      status: RuntimeState["status"];
+      lastResponseMs: number | null;
+      lastError: string | null;
+      points: { t: number; ok: boolean; ms: number }[];
+      now: number;
+    },
+  ): Promise<boolean> {
+    return this.enqueue(async () => {
+      const store = await this.load();
+      const monitor = store.monitors[id];
+      if (!monitor) return false;
+      const status = input.paused ? "paused" : input.status;
+      monitor.paused = input.paused;
+      monitor.nextCheckAt = input.now + 86_400_000;
+      monitor.state = {
+        status,
+        consecutiveFailures: status === "down" ? 2 : 0,
+        consecutiveSuccesses: status === "up" ? 2 : 0,
+        transitions: [],
+        flappingNotified: false,
+        lastResponseMs: input.lastResponseMs,
+        statusSince: input.now - 20 * 60_000,
+        lastCheckAt: input.points.at(-1)?.t ?? input.now,
+        lastError: input.lastError,
+      };
+      store.recent[id] = input.points.slice(-60).map((point) => ({
+        t: point.t,
+        ok: point.ok,
+        ms: point.ms,
+      }));
+      delete store.rollups[id];
+      delete store.slots[id];
+      await this.persist(store);
+      await saveRuntime(this.env.DB, id, monitor.state);
+      await this.arm(store, input.now);
+      return true;
+    });
+  }
+
   async remove(id: string): Promise<void> {
     await this.enqueue(async () => {
       const store = await this.load();

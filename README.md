@@ -6,8 +6,10 @@ Self-hosted uptime monitoring and status pages on Cloudflare Workers.
 [![Cloudflare Workers](https://img.shields.io/badge/runs%20on-Cloudflare%20Workers-f38020)](https://workers.cloudflare.com/)
 
 <p align="center">
-  <img src="docs/images/dashboard.webp" alt="Console dashboard listing Harbor monitors that are up, down, and paused" width="820" />
+  <img src="docs/images/dashboard.webp" alt="Console dashboard with the Website row expanded into a response chart" width="820" />
 </p>
+
+The dashboard lists every monitor. Expand a row to see recent response time. The images in this file are from a local demo database. Regenerate them with `pnpm screenshots`. That command does not read production data.
 
 Flarebot checks HTTP, TCP, DNS, certificate expiry, and heartbeat endpoints, confirms an outage before it notifies you, and publishes a status page. It runs entirely on the Workers free plan: a Hono API, Durable Objects for the schedule and the mail outbox, D1 for configuration and uptime rollups, and Analytics Engine for raw samples.
 
@@ -21,30 +23,85 @@ Flarebot checks HTTP, TCP, DNS, certificate expiry, and heartbeat endpoints, con
 - Email (SMTP or Cloudflare Email Service), Discord, Slack, Telegram, webhooks, ntfy, Gotify, Pushover, Microsoft Teams, Google Chat, and Matrix
 - Public status pages, including one published page served at the site root
 - A layout builder for sections, monitor order, and the name visitors see
+- Dashboard rows that expand into a response chart for recent checks
 - Each status page shows 24 hours, 7 days, 30 days, or 90 days. New pages start at 24 hours
 - Owners set how long check history is kept. Older hourly totals, daily totals, finished outages, resolved incidents, and past maintenance are deleted on a schedule
 - Manual incidents with a public timeline, and maintenance windows that hold alerts and stay out of the uptime percentage
 - Visitor subscriptions on a status page: confirmed email, signed webhooks, and cached RSS and Atom feeds
 - Uptime and response charts from local rollups
 - Public SVG badges for status, uptime, and response time. A private monitor returns an unknown badge
-- Owner, Admin, Editor, and Viewer roles, passkeys, passwords, optional TOTP, and scoped API tokens
+- Owner, Admin, Editor, and Viewer roles, passkeys, passwords, optional TOTP, scoped API tokens, and optional OpenID Connect or Cloudflare Access sign-in
 - One English copy file, `brand/locale.json`. A fork edits that file to translate the whole product
 - Rebrand by editing `brand/` and asking your own coding agent
 - [MIT license](LICENSE)
 
+## Status page
+
+Thin rounded bars show the last 24 hours, 7 days, 30 days, or 90 days. Incidents and maintenance use alert backgrounds with black or white text. Visitors can subscribe by email, webhook, or an RSS and Atom feed when those switches are on.
+
 <p align="center">
-  <img src="docs/images/status.webp" alt="Public Harbor status page on a desktop, with Edge and Platform sections over the last 24 hours" width="820" />
+  <img src="docs/images/status.webp" alt="Public Harbor status page on a desktop, with incident and maintenance alerts, subscribe links, and uptime bars" width="820" />
 </p>
 
 <p align="center">
-  <img src="docs/images/status-mobile.webp" alt="Public Harbor status page on a phone, with the same sections and uptime bars" width="390" />
+  <img src="docs/images/status-mobile.webp" alt="Public Harbor status page on a phone, with the same alerts, subscribe button, and uptime bars" width="390" />
 </p>
 
 <p align="center">
-  <img src="docs/images/monitor.webp" alt="Monitor detail for the Harbor website, with uptime ranges and recent response time" width="820" />
+  <img src="docs/images/subscribe.webp" alt="Subscribe dialog with email, webhook, and component choices" width="820" />
 </p>
 
-The images above are from a local demo database. Regenerate them with `pnpm screenshots`. That command does not read production data.
+## Monitor
+
+The monitor page shows uptime for 24 hours through 90 days, a response chart, and the public badge preview.
+
+<p align="center">
+  <img src="docs/images/monitor.webp" alt="Monitor detail for the Harbor website, with uptime ranges, a response chart, and badge previews" width="820" />
+</p>
+
+<p align="center">
+  <img src="docs/images/badge-status.svg" alt="Status badge showing up" />
+  <img src="docs/images/badge-uptime.svg" alt="Uptime badge for the last 24 hours" />
+  <img src="docs/images/badge-response.svg" alt="Response time badge for the last 24 hours" />
+</p>
+
+A private monitor returns an unknown badge. See [docs/badges.md](docs/badges.md).
+
+## Layout
+
+The status page editor orders sections and monitors, and sets the name visitors see.
+
+<p align="center">
+  <img src="docs/images/layout.webp" alt="Status page layout editor with Edge and Platform sections" width="820" />
+</p>
+
+## Incidents and maintenance
+
+Manual incidents keep a public timeline. Maintenance windows hold alerts and stay out of the uptime percentage. Both use the same alert colors in the console and on the status page.
+
+<p align="center">
+  <img src="docs/images/incidents.webp" alt="Console incidents list with an active investigating alert" width="820" />
+</p>
+
+<p align="center">
+  <img src="docs/images/maintenance.webp" alt="Console maintenance list with an in-progress window" width="820" />
+</p>
+
+## Notifications
+
+Email, Discord, Slack, Telegram, webhooks, ntfy, Gotify, Pushover, Microsoft Teams, Google Chat, and Matrix. The type picker is on the new-channel dialog.
+
+<p align="center">
+  <img src="docs/images/channels.webp" alt="New notification channel dialog with the type picker" width="820" />
+</p>
+
+## Sign-in
+
+Owners and Admins add OpenID Connect providers and Cloudflare Access in Settings. The steps for Authentik are in [docs/sso.md](docs/sso.md).
+
+<p align="center">
+  <img src="docs/images/sso.webp" alt="Single sign-on settings with an Example IdP provider and Cloudflare Access" width="820" />
+</p>
 
 ## Deploy
 
@@ -98,9 +155,11 @@ Bookmarks under the old admin paths (`/monitors/...`, `/status-pages`, `/setting
 
 Details: [docs/configuration.md](docs/configuration.md). Email behavior: [docs/email.md](docs/email.md).
 
-## Branding
+## Branding your deployment
 
 The files a deployer is meant to change live in [`brand/`](brand/). Colors, type, motion, copy, logos, and a few slot components are there so a later `git pull` of Flarebot does not fight your theme.
+
+The step-by-step guide for a coding agent is [docs/customization.md](docs/customization.md): fork or use the deploy button, edit only `brand/`, review with `pnpm brand:check` and `pnpm brand:preview`, deploy, and pull upstream without losing the theme.
 
 Ask your agent to follow [AGENTS.md](AGENTS.md). The skills in [`.agents/skills/`](.agents/skills/) cover a rebrand, translating the UI, ejecting a component, upgrading, a notification channel, a monitor type, or a mail driver. `pnpm brand:check` fails if a rebrand spills outside `brand/`.
 

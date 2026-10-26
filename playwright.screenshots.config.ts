@@ -7,7 +7,7 @@ export default defineConfig({
   testMatch: /screenshots\.spec\.ts/,
   fullyParallel: false,
   workers: 1,
-  timeout: 120_000,
+  timeout: 180_000,
   expect: { timeout: 20_000 },
   use: {
     baseURL: origin,
@@ -18,7 +18,9 @@ export default defineConfig({
     command: "node scripts/screenshot-preview.mjs",
     url: `${origin}/api/health`,
     reuseExistingServer: false,
-    timeout: 120_000,
+    timeout: 180_000,
+    // Default teardown is SIGKILL, which skips the preview script's cleanup.
+    gracefulShutdown: { signal: "SIGTERM", timeout: 5_000 },
   },
   projects: [
     {

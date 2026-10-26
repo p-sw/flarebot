@@ -14,7 +14,7 @@ Edit only `brand/` when the task is a rebrand, a copy change, a motion change, o
 - `brand/overrides/` — slot components (header, footer, status hero, empty state, login backdrop)
 - `brand/ui/` — components copied out of `src/ui/` with `pnpm eject`
 
-Do not change Worker behavior, the database, or `src/` for a visual rebrand. `pnpm brand:check` fails when a dirty tree touches anything outside `brand/` (generated preview files under `.brand-preview/` are ignored). On a clean tree the scope gate is skipped so upstream CI can pass, and the contrast, typecheck, and unit-test steps still run.
+Do not change Worker behavior, the database, or `src/` for a visual rebrand. `pnpm brand:check` fails when a dirty tree touches anything outside `brand/` (generated preview files under `.brand-preview/` are ignored). On a clean tree the scope gate is skipped so upstream CI can pass, and the contrast, typecheck, and unit-test steps still run. The deployer walkthrough is [docs/customization.md](docs/customization.md).
 
 ## Commands
 

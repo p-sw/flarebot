@@ -14,6 +14,8 @@ declare global {
     MAIL_FROM_NAME?: string;
     TURNSTILE_SECRET_KEY?: string;
     TURNSTILE_SITE_KEY?: string;
+    // Local README capture only. Unset in production, so the seed route 404s.
+    FLAREBOT_SCREENSHOTS?: string;
     EMAIL?: SendEmail;
     TEST_MIGRATIONS?: { name: string; queries: string[] }[];
   }

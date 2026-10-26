@@ -88,6 +88,17 @@ export type SchedulerApi = {
     id: string,
     sample: { t: number; ok: boolean; ms: number; internal: boolean },
   ): Promise<void>;
+  seedDemo(
+    id: string,
+    input: {
+      paused: boolean;
+      status: RuntimeState["status"];
+      lastResponseMs: number | null;
+      lastError: string | null;
+      points: { t: number; ok: boolean; ms: number }[];
+      now: number;
+    },
+  ): Promise<boolean>;
 };
 
 export function schedulerStub(env: Env, shardId: string): SchedulerApi {
