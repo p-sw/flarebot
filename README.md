@@ -31,12 +31,6 @@ The dashboard lists every monitor. Expand a row to see recent response time. The
 - [Preview](#preview)
 - [Table of contents](#table-of-contents)
 - [Features](#features)
-- [Status page](#status-page)
-- [Monitor](#monitor)
-- [Layout](#layout)
-- [Incidents and maintenance](#incidents-and-maintenance)
-- [Notifications](#notifications)
-- [Sign-in](#sign-in)
 - [Deploy](#deploy)
 - [Run locally](#run-locally)
 - [URLs](#urls)
@@ -67,32 +61,6 @@ The dashboard lists every monitor. Expand a row to see recent response time. The
 - One English copy file, `brand/locale.json`. A fork edits that file to translate the whole product
 - Rebrand by editing `brand/` and asking your own coding agent
 - [MIT license](LICENSE)
-
-## Status page
-
-Thin rounded bars show the last 24 hours, 7 days, 30 days, or 90 days. Incidents and maintenance use alert backgrounds with black or white text. Visitors can subscribe by email, webhook, or an RSS and Atom feed when those switches are on.
-
-## Monitor
-
-The monitor page shows uptime for 24 hours through 90 days, a response chart, and the public badge preview.
-
-A private monitor returns an unknown badge. See [docs/badges.md](docs/badges.md).
-
-## Layout
-
-The status page editor orders sections and monitors, and sets the name visitors see.
-
-## Incidents and maintenance
-
-Manual incidents keep a public timeline. Maintenance windows hold alerts and stay out of the uptime percentage. Both use the same alert colors in the console and on the status page.
-
-## Notifications
-
-Email, Discord, Slack, Telegram, webhooks, ntfy, Gotify, Pushover, Microsoft Teams, Google Chat, and Matrix. The type picker is on the new-channel dialog.
-
-## Sign-in
-
-Owners and Admins add OpenID Connect providers and Cloudflare Access in Settings. The steps for Authentik are in [docs/sso.md](docs/sso.md).
 
 ## Deploy
 
