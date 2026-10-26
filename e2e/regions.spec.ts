@@ -54,14 +54,16 @@ test("saves the global check region and a per-monitor override", async ({
     await page.goto(`/console/monitors/${id}`);
     await expect(page.getByText("Asia-Pacific")).toBeVisible();
     await expect(page.getByText("From the global setting")).toBeVisible();
-    await expect(page.getByText("Response time (TTFB)")).toBeVisible();
+    await expect(
+      page.getByText("Response time (TTFB) ·", { exact: false }),
+    ).toBeVisible();
 
     await page.getByRole("button", { name: "Edit" }).click();
     await expect(
       page.getByRole("heading", { name: "Edit monitor" }),
     ).toBeVisible();
     const form = page.locator("form");
-    await form.getByRole("combobox").click();
+    await form.getByRole("combobox", { name: /Check region/ }).click();
     await page
       .getByRole("option", { name: "Western Europe", exact: true })
       .click();
