@@ -83,7 +83,7 @@ export function MonitorRow({
         type="button"
         size="icon"
         variant="ghost"
-        className="mt-0.5 h-11 w-11 shrink-0 touch-none text-muted-foreground"
+        className="h-11 w-11 shrink-0 touch-none text-muted-foreground"
         aria-label={t("page_drag", { name: publicName })}
         aria-keyshortcuts="ArrowUp ArrowDown"
         aria-describedby={reorderDescribedBy}
@@ -93,11 +93,11 @@ export function MonitorRow({
       >
         <GripVertical className="h-4 w-4" aria-hidden />
       </Button>
-      <div className="flex min-w-0 flex-1 items-start gap-2 py-1.5 pr-1">
-        <span className="mt-3">
+      <div className="flex min-w-0 flex-1 items-start gap-2 pr-1">
+        <span className="flex h-11 w-5 shrink-0 items-center justify-center">
           <StatusDot status={status} />
         </span>
-        <span className="mt-2.5">
+        <span className="flex h-11 w-4 shrink-0 items-center justify-center">
           <MonitorTypeIcon type={type} />
         </span>
         <div className="min-w-0 flex-1">
@@ -110,7 +110,8 @@ export function MonitorRow({
               disabled={disabled}
               placeholder={t("page_display_placeholder")}
               aria-describedby={`${displayDescribedBy} ${metaId}-meta`}
-              className="h-10 border-transparent bg-transparent px-2 text-base shadow-none hover:border-border focus-visible:border-input focus-visible:bg-card sm:text-sm"
+              title={item.displayName || publicName}
+              className="h-11 border-transparent bg-transparent px-2 text-base shadow-none hover:border-border focus-visible:border-input focus-visible:bg-card sm:text-sm"
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();
@@ -122,11 +123,16 @@ export function MonitorRow({
           </label>
           <p
             id={`${metaId}-meta`}
-            className="mt-1 break-words text-xs leading-5 text-muted-foreground"
+            className="truncate px-2 text-xs leading-5 text-muted-foreground"
+            title={[
+              t("page_monitor_source", { name: shown }),
+              typeLabel,
+              target,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           >
-            <span className="font-medium text-foreground">
-              {t("page_monitor_source", { name: shown })}
-            </span>
+            <span className="font-medium text-foreground">{shown}</span>
             {typeLabel ? (
               <span>
                 {" · "}
@@ -134,7 +140,7 @@ export function MonitorRow({
               </span>
             ) : null}
             {target ? (
-              <span className="break-all">
+              <span>
                 {" · "}
                 {target}
               </span>
@@ -148,7 +154,7 @@ export function MonitorRow({
             type="button"
             size="icon"
             variant="ghost"
-            className="mt-0.5 h-11 w-11 shrink-0 text-muted-foreground"
+            className="h-11 w-11 shrink-0 text-muted-foreground"
             aria-label={t("page_actions", { name: publicName })}
             disabled={disabled}
           >

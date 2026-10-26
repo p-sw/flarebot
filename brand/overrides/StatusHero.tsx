@@ -40,20 +40,29 @@ export default function StatusHero({
           ? "bg-status-unknown"
           : "bg-status-up";
   return (
-    <section className="rounded-lg border border-border bg-card p-8">
+    <section className="min-w-0 rounded-lg border border-border bg-card p-6 sm:p-8">
       <p className="text-sm text-muted-foreground">
         {t("status_hero_tagline")}
       </p>
-      <h1 className="mt-2 text-3xl font-medium tracking-tight">{title}</h1>
+      <h1
+        className="mt-2 min-w-0 break-words text-3xl font-medium tracking-tight"
+        title={title}
+      >
+        {title}
+      </h1>
       {description ? (
-        <p className="mt-2 max-w-2xl text-muted-foreground">{description}</p>
+        <p className="mt-2 max-w-2xl break-words text-muted-foreground">
+          {description}
+        </p>
       ) : null}
-      <p className="mt-6 inline-flex items-center gap-2 text-sm font-medium">
-        <span className={`h-2.5 w-2.5 rounded-full ${tone}`} />
-        {label}
+      <p className="mt-6 inline-flex max-w-full items-center gap-2 text-sm font-medium">
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${tone}`} />
+        <span className="min-w-0 truncate">{label}</span>
       </p>
       {banner ? (
-        <p className="mt-4 rounded-lg bg-muted px-3 py-2 text-sm">{banner}</p>
+        <p className="mt-4 break-words rounded-lg bg-muted px-3 py-2 text-sm">
+          {banner}
+        </p>
       ) : null}
     </section>
   );

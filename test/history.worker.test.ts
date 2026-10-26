@@ -12,6 +12,7 @@ import {
   PRUNE_CATCHUP_INTERVAL_MS,
   PRUNE_DAILY_CAP,
   retentionCutoff,
+  SLOT_MS,
   utcDayStart,
 } from "../shared/history";
 import { pruneHistory } from "../worker/retention";
@@ -138,6 +139,17 @@ describe("history retention", () => {
     };
     await hour(keptFrom - HOUR_MS);
     await hour(keptFrom);
+    const slot = async (start: number) => {
+      await env.DB.prepare(
+        `INSERT INTO uptime_slots (
+          monitor_id, slot_start, ok_count, fail_count, latency_sum, latency_max
+        ) VALUES (?, ?, 1, 0, 10, 10)`,
+      )
+        .bind(monitorId, start)
+        .run();
+    };
+    await slot(keptFrom - SLOT_MS);
+    await slot(keptFrom);
     await day(keptFrom - DAY_MS);
     await day(keptFrom);
     await outage(cutoff - 1, cutoff - DAY_MS);
@@ -148,6 +160,7 @@ describe("history retention", () => {
     await resetPruneClock();
     const result = await pruneHistory(env, now);
     expect(result.skipped).toBe(false);
+    expect(result.slots).toBeGreaterThanOrEqual(1);
     expect(result.hourly).toBeGreaterThanOrEqual(1);
     expect(result.daily).toBeGreaterThanOrEqual(1);
     expect(result.outages).toBeGreaterThanOrEqual(1);
@@ -158,6 +171,12 @@ describe("history retention", () => {
       .bind(monitorId)
       .all<{ start: number }>();
     expect(hours.results.map((row) => row.start)).toEqual([keptFrom]);
+    const slots = await env.DB.prepare(
+      "SELECT slot_start AS start FROM uptime_slots WHERE monitor_id = ? ORDER BY slot_start",
+    )
+      .bind(monitorId)
+      .all<{ start: number }>();
+    expect(slots.results.map((row) => row.start)).toEqual([keptFrom]);
     const days = await env.DB.prepare(
       "SELECT day_start AS start FROM uptime_daily WHERE monitor_id = ? ORDER BY day_start",
     )
@@ -343,12 +362,12 @@ describe("status page display range", () => {
       }[];
     };
     expect(body.displayRange).toBe("7d");
-    expect(body.bucket).toBe("day");
-    expect(body.barCount).toBe(7);
+    expect(body.bucket).toBe("hour");
+    expect(body.barCount).toBe(84);
     expect(body.clamped).toBe(false);
     expect(body.retentionDays).toBe(90);
     const item = body.groups[0]?.items[0];
-    expect(item?.bars).toHaveLength(7);
+    expect(item?.bars).toHaveLength(84);
     const yesterday = item?.bars.find((bar) => bar.start === today - DAY_MS);
     expect(yesterday).toMatchObject({ uptime: 90, responseMs: 10 });
     expect(item?.uptime).not.toBeNull();
@@ -386,10 +405,10 @@ describe("status page display range", () => {
       }[];
     };
     expect(dayBody.displayRange).toBe("24h");
-    expect(dayBody.bucket).toBe("hour");
+    expect(dayBody.bucket).toBe("slot");
     expect(dayBody.clamped).toBe(false);
-    expect(dayBody.barCount).toBeGreaterThanOrEqual(24);
-    expect(dayBody.barCount).toBeLessThanOrEqual(25);
+    expect(dayBody.barCount).toBe(96);
+    expect(dayBody.groups[0]?.items[0]?.bars).toHaveLength(96);
     const hourBar = dayBody.groups[0]?.items[0]?.bars.find(
       (bar) => bar.start === earlierHour,
     );

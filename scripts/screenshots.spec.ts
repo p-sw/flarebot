@@ -390,7 +390,7 @@ test("captures the four README screenshots from local demo data", async ({
     }[];
   };
   expect(status.displayRange).toBe("24h");
-  expect(status.bucket).toBe("hour");
+  expect(status.bucket).toBe("slot");
   const items = status.groups.flatMap((group) => group.items);
   const byName = new Map(items.map((item) => [item.name, item]));
   const websiteBars = byName.get("Website")?.bars ?? [];

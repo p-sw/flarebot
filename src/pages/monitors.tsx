@@ -40,7 +40,8 @@ import { useSubmitGuard } from "../lib/use-submit-guard";
 import { Stagger, StaggerItem } from "../motion/page";
 import { ConfirmDialog } from "../ui/confirm-dialog";
 import { ContentSkeleton } from "../ui/skeleton";
-import { responseText, statusTone } from "./fields";
+import { DashboardRow } from "./dashboard-row";
+import { statusTone } from "./fields";
 import { MonitorBadges } from "./monitor-badges";
 import { MonitorConfig } from "./monitor-config";
 import { monitorStatusLabel, monitorTypeLabel } from "./monitor-labels";
@@ -141,47 +142,15 @@ export function DashboardPage() {
           }
         />
       ) : (
-        <Stagger className="grid gap-3">
+        <Stagger className="grid min-w-0 gap-3">
           {rows.map((row) => (
-            <StaggerItem key={row.id}>
-              <Card>
-                <CardContent className="flex min-w-0 flex-wrap items-center justify-between gap-4 p-5">
-                  <Link
-                    to="/console/monitors/$id"
-                    params={{ id: row.id }}
-                    className="min-w-0 flex-1"
-                  >
-                    <p className="break-words font-medium">{row.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {monitorTypeLabel(row.type)}
-                    </p>
-                    {row.target ? (
-                      <p className="break-all text-sm text-muted-foreground">
-                        {row.target}
-                      </p>
-                    ) : null}
-                  </Link>
-                  <div className="flex max-w-full flex-wrap items-center gap-3 text-sm">
-                    <span>
-                      {row.uptime24 === null
-                        ? t("uptime_empty")
-                        : t("uptime_percent", { value: row.uptime24 })}
-                    </span>
-                    <span className="font-mono text-muted-foreground">
-                      {responseText(row.lastResponseMs)}
-                    </span>
-                    <Badge tone={statusTone(row.status)}>
-                      {monitorStatusLabel(row.status)}
-                    </Badge>
-                    <PauseControl
-                      paused={row.paused}
-                      pending={pause.pendingKey === row.id}
-                      disabled={pause.pending}
-                      onClick={() => void pause.toggle(row.id, row.paused)}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
+            <StaggerItem key={row.id} className="min-w-0">
+              <DashboardRow
+                row={row}
+                pausePending={pause.pendingKey === row.id}
+                pauseDisabled={pause.pending}
+                onPause={() => void pause.toggle(row.id, row.paused)}
+              />
             </StaggerItem>
           ))}
         </Stagger>
@@ -272,11 +241,16 @@ export function MonitorDetailPage() {
           {monitorTypeLabel(row.type)}
         </span>
         {row.lastError ? (
-          <span className="text-sm">{row.lastError}</span>
+          <span className="min-w-0 truncate text-sm" title={row.lastError}>
+            {row.lastError}
+          </span>
         ) : null}
       </div>
       {row.pushUrl ? (
-        <p className="mb-4 break-all rounded-lg bg-muted p-3 font-mono text-xs">
+        <p
+          className="mb-4 max-w-full min-w-0 overflow-x-auto whitespace-nowrap rounded-lg bg-muted p-3 font-mono text-xs"
+          title={row.pushUrl}
+        >
           {t("monitor_push_url")}: {row.pushUrl}
         </p>
       ) : null}
@@ -296,7 +270,7 @@ export function MonitorDetailPage() {
                         ? t("range_30d")
                         : t("range_90d")}
                 </p>
-                <p className="text-2xl font-medium">
+                <p className="truncate text-2xl font-medium tabular-nums">
                   {stats.data?.uptime[key] == null
                     ? t("uptime_empty")
                     : t("uptime_percent", { value: stats.data.uptime[key] })}

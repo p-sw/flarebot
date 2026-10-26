@@ -132,6 +132,53 @@ export async function mergeHourly(
     .run();
 }
 
+export async function mergeSlot(
+  database: D1Database,
+  monitorId: string,
+  slot: {
+    slotStart: number;
+    ok: number;
+    fail: number;
+    sum: number;
+    max: number;
+    maint?: number;
+  },
+): Promise<void> {
+  const existing = await database
+    .prepare(
+      "SELECT ok_count, fail_count, latency_sum, latency_max, maint_count FROM uptime_slots WHERE monitor_id = ? AND slot_start = ?",
+    )
+    .bind(monitorId, slot.slotStart)
+    .first<{
+      ok_count: number;
+      fail_count: number;
+      latency_sum: number;
+      latency_max: number;
+      maint_count: number;
+    }>();
+  await database
+    .prepare(
+      `INSERT INTO uptime_slots (monitor_id, slot_start, ok_count, fail_count, latency_sum, latency_max, maint_count)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (monitor_id, slot_start) DO UPDATE SET
+         ok_count = excluded.ok_count,
+         fail_count = excluded.fail_count,
+         latency_sum = excluded.latency_sum,
+         latency_max = excluded.latency_max,
+         maint_count = excluded.maint_count`,
+    )
+    .bind(
+      monitorId,
+      slot.slotStart,
+      (existing?.ok_count ?? 0) + slot.ok,
+      (existing?.fail_count ?? 0) + slot.fail,
+      (existing?.latency_sum ?? 0) + slot.sum,
+      Math.max(existing?.latency_max ?? 0, slot.max),
+      (existing?.maint_count ?? 0) + (slot.maint ?? 0),
+    )
+    .run();
+}
+
 export async function addHourly(
   database: D1Database,
   monitorId: string,

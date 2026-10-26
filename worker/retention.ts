@@ -17,6 +17,7 @@ import { readSetting, writeSetting } from "./settings-store";
 export type PruneResult = {
   skipped: boolean;
   deleted: number;
+  slots: number;
   hourly: number;
   daily: number;
   outages: number;
@@ -26,6 +27,13 @@ export type PruneResult = {
   caughtUp: boolean;
   retentionDays: number;
 };
+
+const DELETE_SLOTS = `DELETE FROM uptime_slots WHERE rowid IN (
+  SELECT rowid FROM uptime_slots
+  WHERE slot_start < ?
+  ORDER BY slot_start ASC
+  LIMIT ?
+)`;
 
 const DELETE_HOURLY = `DELETE FROM uptime_hourly WHERE rowid IN (
   SELECT rowid FROM uptime_hourly
@@ -100,6 +108,7 @@ export async function pruneHistory(
     return {
       skipped: true,
       deleted: 0,
+      slots: 0,
       hourly: 0,
       daily: 0,
       outages: 0,
@@ -112,6 +121,14 @@ export async function pruneHistory(
   }
   const retainedFrom = firstRetainedDay(retentionCutoff(now, retentionDays));
   let budget = PRUNE_DAILY_CAP - decision.deletedToday;
+  const slotLimit = Math.min(PRUNE_BATCH, budget);
+  const slots = await deleteBatch(
+    env.DB,
+    DELETE_SLOTS,
+    retainedFrom,
+    slotLimit,
+  );
+  budget -= slots;
   const hourLimit = Math.min(PRUNE_BATCH, budget);
   const hourly = await deleteBatch(
     env.DB,
@@ -160,8 +177,9 @@ export async function pruneHistory(
     announcementLimit,
   );
   const deleted =
-    hourly + daily + outages + incidents + maintenance + announcements;
+    slots + hourly + daily + outages + incidents + maintenance + announcements;
   const caughtUp =
+    slots < slotLimit &&
     hourly < hourLimit &&
     daily < dayLimit &&
     outages < outageLimit &&
@@ -178,6 +196,7 @@ export async function pruneHistory(
   return {
     skipped: false,
     deleted,
+    slots,
     hourly,
     daily,
     outages,

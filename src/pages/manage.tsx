@@ -19,7 +19,7 @@ import {
   teamQuery,
   tokensQuery,
 } from "../lib/queries";
-import { refreshQueries } from "../lib/query-sync";
+import { commitServeAtRoot, refreshQueries } from "../lib/query-sync";
 import { useToggleLock } from "../lib/toggle-guard";
 import { useSubmitGuard } from "../lib/use-submit-guard";
 import { Stagger, StaggerItem } from "../motion/page";
@@ -36,10 +36,14 @@ export function StatusPagesPage() {
     setError("");
     await toggles.run(id, async () => {
       try {
-        await api(`/api/status-pages/${id}/root`, {
-          method: "PUT",
-          body: JSON.stringify({ serveAtRoot }),
-        });
+        const saved = await api<{ id: string; serveAtRoot: boolean }>(
+          `/api/status-pages/${id}/root`,
+          {
+            method: "PUT",
+            body: JSON.stringify({ serveAtRoot }),
+          },
+        );
+        commitServeAtRoot(client, saved.id, saved.serveAtRoot);
         await refreshQueries(client, [["pages"], ["status-page"]]);
       } catch (cause) {
         setError(rootToggleError(cause));
@@ -72,14 +76,21 @@ export function StatusPagesPage() {
             <StaggerItem key={page.id}>
               <article className="min-w-0 rounded-lg border border-border bg-card p-4">
                 <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="break-words font-medium">{page.title}</p>
-                    <p className="text-sm break-all text-muted-foreground">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium" title={page.title}>
+                      {page.title}
+                    </p>
+                    <p
+                      className="truncate text-sm text-muted-foreground"
+                      title={`/s/${page.slug}`}
+                    >
                       /s/{page.slug} ·{" "}
-                      {t("monitors_count", { count: page.itemCount })}
+                      <span className="tabular-nums">
+                        {t("monitors_count", { count: page.itemCount })}
+                      </span>
                     </p>
                   </div>
-                  <div className="flex flex-wrap gap-3 text-sm">
+                  <div className="flex shrink-0 flex-wrap gap-3 text-sm whitespace-nowrap">
                     <Link
                       to="/console/status-pages/$id"
                       params={{ id: page.id }}
@@ -166,18 +177,30 @@ export function TeamPage() {
           {t("team_invite")}
         </PendingButton>
       </form>
-      {link ? <p className="mb-4 break-all font-mono text-xs">{link}</p> : null}
+      {link ? (
+        <p
+          className="mb-4 max-w-full min-w-0 truncate font-mono text-xs"
+          title={link}
+        >
+          {link}
+        </p>
+      ) : null}
       {team.isPending ? (
         <ContentSkeleton />
       ) : (
         <Stagger className="grid gap-2">
           {team.data?.members.map((member) => (
             <StaggerItem key={member.id}>
-              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
-                <span>
+              <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
+                <span
+                  className="min-w-0 truncate"
+                  title={`${member.name} · ${member.email}`}
+                >
                   {member.name} · {member.email}
                 </span>
-                <span>{member.role}</span>
+                <span className="shrink-0 whitespace-nowrap">
+                  {member.role}
+                </span>
               </div>
             </StaggerItem>
           ))}
@@ -224,7 +247,10 @@ export function TokensPage() {
         </PendingButton>
       </form>
       {raw ? (
-        <p className="mb-4 break-all rounded-lg bg-muted p-3 font-mono text-xs">
+        <p
+          className="mb-4 max-w-full min-w-0 overflow-x-auto whitespace-nowrap rounded-lg bg-muted p-3 font-mono text-xs"
+          title={raw}
+        >
           {t("token_once")} {raw}
         </p>
       ) : null}
@@ -234,8 +260,11 @@ export function TokensPage() {
         <Stagger className="grid gap-2">
           {tokens.data?.tokens.map((token) => (
             <StaggerItem key={token.id}>
-              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
-                <span>
+              <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
+                <span
+                  className="min-w-0 truncate"
+                  title={`${token.name} · ${token.scopes.join(", ")}`}
+                >
                   {token.name} · {token.scopes.join(", ")}
                 </span>
                 <PendingButton
@@ -276,8 +305,12 @@ export function AuditPage() {
         {audit.data?.events.map((event) => (
           <StaggerItem key={event.id}>
             <div className="grid min-w-0 gap-1 rounded-lg border border-border px-3 py-2 text-sm sm:grid-cols-3">
-              <span>{formatDateTime(event.createdAt)}</span>
-              <span>{event.action}</span>
+              <span className="truncate whitespace-nowrap tabular-nums">
+                {formatDateTime(event.createdAt)}
+              </span>
+              <span className="truncate" title={event.action}>
+                {event.action}
+              </span>
               <span className="truncate text-muted-foreground">
                 {event.target}
               </span>
@@ -882,7 +915,10 @@ export function AccountPage() {
     <>
       <AppHeader title={t("nav_account")} />
       {account.isPending ? <ContentSkeleton /> : null}
-      <p className="mb-4 break-all text-sm text-muted-foreground">
+      <p
+        className="mb-4 truncate text-sm text-muted-foreground"
+        title={account.data?.email}
+      >
         {account.data?.email}
       </p>
       <h2 className="mt-8 mb-2 font-medium">{t("account_passkeys")}</h2>

@@ -2,7 +2,12 @@
 
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import { commitMonitor, loadQuery, refreshQueries } from "./query-sync";
+import {
+  commitMonitor,
+  commitServeAtRoot,
+  loadQuery,
+  refreshQueries,
+} from "./query-sync";
 
 const monitor = {
   id: "mon-1",
@@ -140,5 +145,58 @@ describe("query cache after a confirmed mutation", () => {
       id: "mon-1",
       status: "paused",
     });
+  });
+
+  it("turns the other home page off as soon as the server confirms one root", () => {
+    const queryClient = client();
+    const page = {
+      slug: "a",
+      title: "A",
+      description: "",
+      footer: "",
+      banner: "",
+      published: true,
+      logoUrl: null,
+      accent: null,
+      displayRange: "24h" as const,
+      items: [],
+    };
+    queryClient.setQueryData(["pages"], {
+      pages: [
+        { id: "page-a", serveAtRoot: true },
+        { id: "page-b", serveAtRoot: false },
+      ],
+    });
+    queryClient.setQueryData(["status-page", "page-a"], {
+      ...page,
+      id: "page-a",
+      serveAtRoot: true,
+    });
+    queryClient.setQueryData(["status-page", "page-b"], {
+      ...page,
+      id: "page-b",
+      slug: "b",
+      title: "B",
+      serveAtRoot: false,
+    });
+    commitServeAtRoot(queryClient, "page-b", true);
+    expect(queryClient.getQueryData(["pages"])).toEqual({
+      pages: [
+        { id: "page-a", serveAtRoot: false },
+        { id: "page-b", serveAtRoot: true },
+      ],
+    });
+    expect(
+      queryClient.getQueryData<{ serveAtRoot: boolean }>([
+        "status-page",
+        "page-a",
+      ])?.serveAtRoot,
+    ).toBe(false);
+    expect(
+      queryClient.getQueryData<{ serveAtRoot: boolean }>([
+        "status-page",
+        "page-b",
+      ])?.serveAtRoot,
+    ).toBe(true);
   });
 });

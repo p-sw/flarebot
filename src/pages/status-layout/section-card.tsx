@@ -176,93 +176,97 @@ export function SectionCard({
         append && "shadow-[inset_0_-2px_0_0_var(--ring)]",
       )}
     >
-      <div className="flex min-w-0 flex-wrap items-start gap-1">
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className="h-11 w-11 shrink-0 touch-none text-muted-foreground"
-          aria-label={t("page_drag", { name: title })}
-          aria-keyshortcuts="ArrowUp ArrowDown"
-          aria-describedby={reorderDescribedBy}
-          disabled={disabled}
-          onPointerDown={(event) =>
-            onPointerDown(event, "section", null, title)
-          }
-          onKeyDown={(event) => moveWithArrows(event, onMoveUp, onMoveDown)}
-        >
-          <GripVertical className="h-4 w-4" aria-hidden />
-        </Button>
-        <div className="min-w-0 flex-1 basis-40">
-          <label className="grid min-w-0 gap-1" htmlFor={hintId}>
-            <span className="sr-only">{t("page_section_name")}</span>
-            <Input
-              id={hintId}
-              value={section.name}
-              maxLength={80}
-              disabled={disabled}
-              placeholder={t("page_section_placeholder")}
-              aria-describedby={`${hintId}-hint`}
-              className="h-11 border-transparent bg-transparent px-2 text-base font-medium shadow-none hover:border-border focus-visible:border-input focus-visible:bg-background sm:text-sm"
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  event.currentTarget.blur();
-                }
-              }}
-              onChange={(event) => onRename(event.target.value)}
-            />
-          </label>
-          <p
-            id={`${hintId}-hint`}
-            className="px-2 text-xs text-muted-foreground"
+      <div className="grid min-w-0 gap-1">
+        <div className="flex min-w-0 items-center gap-1">
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-11 w-11 shrink-0 touch-none text-muted-foreground"
+            aria-label={t("page_drag", { name: title })}
+            aria-keyshortcuts="ArrowUp ArrowDown"
+            aria-describedby={reorderDescribedBy}
+            disabled={disabled}
+            onPointerDown={(event) =>
+              onPointerDown(event, "section", null, title)
+            }
+            onKeyDown={(event) => moveWithArrows(event, onMoveUp, onMoveDown)}
           >
-            {t("page_section_hint")}
-          </p>
+            <GripVertical className="h-4 w-4" aria-hidden />
+          </Button>
+          <div className="min-w-0 flex-1">
+            <label className="grid min-w-0 gap-1" htmlFor={hintId}>
+              <span className="sr-only">{t("page_section_name")}</span>
+              <Input
+                id={hintId}
+                value={section.name}
+                maxLength={80}
+                disabled={disabled}
+                placeholder={t("page_section_placeholder")}
+                aria-describedby={`${hintId}-hint`}
+                title={section.name}
+                className="h-11 border-transparent bg-transparent px-2 text-base font-medium shadow-none hover:border-border focus-visible:border-input focus-visible:bg-background sm:text-sm"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  }
+                }}
+                onChange={(event) => onRename(event.target.value)}
+              />
+            </label>
+          </div>
+          <span className="inline-flex h-7 shrink-0 items-center rounded-full bg-muted px-2 text-xs tabular-nums whitespace-nowrap text-muted-foreground">
+            {t("monitors_count", { count: section.items.length })}
+          </span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-11 w-11 shrink-0 text-muted-foreground"
+                aria-label={t("page_actions", { name: title })}
+                disabled={disabled}
+              >
+                <MoreHorizontal className="h-4 w-4" aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="bottom" align="end">
+              <DropdownMenuItem
+                className="min-h-11"
+                disabled={sectionIndex === 0}
+                onSelect={onMoveUp}
+              >
+                {t("page_move_up", { name: title })}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="min-h-11"
+                disabled={sectionIndex >= sectionCount - 1}
+                onSelect={onMoveDown}
+              >
+                {t("page_move_down", { name: title })}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="min-h-11 text-destructive"
+                onSelect={onAskRemove}
+              >
+                {t("page_section_delete")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-        <span className="mt-3 shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-          {t("monitors_count", { count: section.items.length })}
-        </span>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-11 w-11 shrink-0 text-muted-foreground"
-              aria-label={t("page_actions", { name: title })}
-              disabled={disabled}
-            >
-              <MoreHorizontal className="h-4 w-4" aria-hidden />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="bottom" align="end">
-            <DropdownMenuItem
-              className="min-h-11"
-              disabled={sectionIndex === 0}
-              onSelect={onMoveUp}
-            >
-              {t("page_move_up", { name: title })}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="min-h-11"
-              disabled={sectionIndex >= sectionCount - 1}
-              onSelect={onMoveDown}
-            >
-              {t("page_move_down", { name: title })}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="min-h-11 text-destructive"
-              onSelect={onAskRemove}
-            >
-              {t("page_section_delete")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <p
+          id={`${hintId}-hint`}
+          className="truncate ps-12 text-xs text-muted-foreground"
+          title={t("page_section_hint")}
+        >
+          {t("page_section_hint")}
+        </p>
       </div>
       {section.items.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+        <p className="flex min-h-16 items-center rounded-lg border border-dashed border-border px-3 text-sm text-muted-foreground">
           {t("page_section_empty")}
         </p>
       ) : (

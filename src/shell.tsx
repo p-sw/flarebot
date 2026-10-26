@@ -392,7 +392,10 @@ function ShellFrame({ user }: { user: SessionUser }) {
             {t("app_name")}
           </span>
         </header>
-        <main className="relative flex-1 px-4 py-6 md:px-6" aria-busy={pending}>
+        <main
+          className="relative min-w-0 flex-1 px-4 py-6 md:px-6"
+          aria-busy={pending}
+        >
           <AnimatedOutlet key={routeKey} />
         </main>
         <div className="px-4 pb-6 md:px-6">

@@ -120,30 +120,31 @@ async function loadSummary(
   const window = resolveWindow(range, retentionDays, now);
   const db = getDb(env.DB);
   const daily =
-    window.bucket === "day"
-      ? await db
+    window.bucket === "slot"
+      ? []
+      : await db
           .select({
             dayStart: uptimeDaily.dayStart,
             okCount: uptimeDaily.okCount,
             failCount: uptimeDaily.failCount,
             latencySum: uptimeDaily.latencySum,
+            maintCount: uptimeDaily.maintCount,
           })
           .from(uptimeDaily)
           .where(
             and(
               eq(uptimeDaily.monitorId, row.id),
-              gte(uptimeDaily.dayStart, window.start),
+              gte(uptimeDaily.dayStart, utcDayStart(window.start)),
             ),
-          )
-      : [];
-  const hourlySince =
-    window.bucket === "hour" ? window.start : utcDayStart(now);
+          );
+  const hourlySince = window.bucket === "day" ? utcDayStart(now) : window.start;
   const hourly = await db
     .select({
       hourStart: uptimeHourly.hourStart,
       okCount: uptimeHourly.okCount,
       failCount: uptimeHourly.failCount,
       latencySum: uptimeHourly.latencySum,
+      maintCount: uptimeHourly.maintCount,
     })
     .from(uptimeHourly)
     .where(
@@ -163,12 +164,14 @@ async function loadSummary(
       ok: item.okCount,
       fail: item.failCount,
       sum: item.latencySum,
+      maint: item.maintCount,
     })),
     hourly: hourly.map((item) => ({
       start: item.hourStart,
       ok: item.okCount,
       fail: item.failCount,
       sum: item.latencySum,
+      maint: item.maintCount,
     })),
     live: live?.rollup
       ? {
@@ -176,6 +179,7 @@ async function loadSummary(
           ok: live.rollup.ok,
           fail: live.rollup.fail,
           sum: live.rollup.sum,
+          maint: live.rollup.maint ?? 0,
         }
       : null,
   });

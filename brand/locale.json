@@ -803,6 +803,16 @@
     "announcement_subject": "{title}",
     "announcement_body": "{kind}\n\n{title}\n{summary}\n{link}",
     "announcement_no_summary": "No details.",
-    "announcement_no_link": "No public page."
+    "announcement_no_link": "No public page.",
+    "status_bar_span": "{from} to {to}",
+    "status_bar_incidents": "{count, plural, one {# incident} other {# incidents}}",
+    "status_bar_clear": "No incidents",
+    "dashboard_expand": "Show recent response time for {name}",
+    "dashboard_collapse": "Hide recent response time for {name}",
+    "dashboard_current": "Current",
+    "dashboard_average": "Average",
+    "dashboard_uptime": "Uptime",
+    "dashboard_spark_hint": "Recent checks in this summary: {count}. Open the monitor for the full history.",
+    "dashboard_open": "View monitor"
   }
 }

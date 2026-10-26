@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: MIT
 
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, or } from "drizzle-orm";
 import { t, textLang } from "../../shared/copy";
 import {
   type CountRow,
   type DisplayRange,
+  type HistoryBar,
+  type HistoryBucket,
+  type IncidentSpan,
   parseDisplayRange,
   resolveWindow,
+  SLOT_MS,
   summarizeHistory,
   utcDayStart,
 } from "../../shared/history";
@@ -21,10 +25,12 @@ import { getDb } from "../db/client";
 import {
   monitorState,
   monitors,
+  outages,
   statusPageItems,
   statusPages,
   uptimeDaily,
   uptimeHourly,
+  uptimeSlots,
 } from "../db/schema";
 import { schedulerStub } from "../monitors/sync";
 import { historyRetentionDays } from "../retention";
@@ -40,8 +46,9 @@ export type PublicStatus = {
   accent: string | null;
   serveAtRoot: boolean;
   displayRange: DisplayRange;
-  bucket: "hour" | "day";
+  bucket: HistoryBucket;
   barCount: number;
+  shownDays: number;
   clamped: boolean;
   retentionDays: number;
   overall:
@@ -83,13 +90,7 @@ export type PublicStatus = {
       uptime: number | null;
       responseMs: number | null;
       maint: number;
-      bars: {
-        start: number;
-        uptime: number | null;
-        responseMs: number | null;
-        state: "empty" | "up" | "degraded" | "down" | "maintenance";
-        maint: number;
-      }[];
+      bars: HistoryBar[];
     }[];
   }[];
 };
@@ -118,20 +119,22 @@ export async function loadPublicStatus(
     nowMs,
   );
   const ids = items.map((item) => item.monitorId);
+  const windowEnd = window.start + window.bars * window.step;
+  const needsDaily = window.bucket !== "slot";
   const daily =
-    ids.length && window.bucket === "day"
+    ids.length && needsDaily
       ? await db
           .select()
           .from(uptimeDaily)
           .where(
             and(
-              gte(uptimeDaily.dayStart, window.start),
+              gte(uptimeDaily.dayStart, utcDayStart(window.start)),
               inArray(uptimeDaily.monitorId, ids),
             ),
           )
       : [];
   const hourlySince =
-    window.bucket === "hour" ? window.start : utcDayStart(nowMs);
+    window.bucket === "day" ? utcDayStart(nowMs) : window.start - 3_600_000;
   const hourly = ids.length
     ? await db
         .select()
@@ -143,10 +146,39 @@ export async function loadPublicStatus(
           ),
         )
     : [];
+  const slots =
+    ids.length && window.bucket === "slot"
+      ? await db
+          .select()
+          .from(uptimeSlots)
+          .where(
+            and(
+              gte(uptimeSlots.slotStart, window.start),
+              inArray(uptimeSlots.monitorId, ids),
+            ),
+          )
+      : [];
+  const incidentRows = ids.length
+    ? await db
+        .select({
+          monitorId: outages.monitorId,
+          startedAt: outages.startedAt,
+          endedAt: outages.endedAt,
+        })
+        .from(outages)
+        .where(
+          and(
+            inArray(outages.monitorId, ids),
+            lt(outages.startedAt, windowEnd),
+            or(isNull(outages.endedAt), gte(outages.endedAt, window.start)),
+          ),
+        )
+    : [];
   const owned = ids.length
     ? await db.select().from(monitors).where(inArray(monitors.id, ids))
     : [];
   const live = new Map<string, CountRow>();
+  const liveSlots = new Map<string, CountRow>();
   const shardIds = [...new Set(owned.map((row) => row.shardId))];
   await Promise.all(
     shardIds.map(async (shardId) => {
@@ -154,20 +186,38 @@ export async function loadPublicStatus(
         .getAll()
         .catch(() => []);
       for (const row of rows) {
-        if (!row.rollup || row.rollup.hourStart < window.start) continue;
-        const current = live.get(row.id) ?? {
-          start: row.rollup.hourStart,
-          ok: 0,
-          fail: 0,
-          sum: 0,
-          maint: 0,
-        };
-        if (row.rollup.hourStart !== current.start) continue;
-        current.ok += row.rollup.ok;
-        current.fail += row.rollup.fail;
-        current.sum += row.rollup.sum;
-        current.maint = (current.maint ?? 0) + (row.rollup.maint ?? 0);
-        live.set(row.id, current);
+        if (row.rollup && row.rollup.hourStart + 3_600_000 > window.start) {
+          const current = live.get(row.id) ?? {
+            start: row.rollup.hourStart,
+            ok: 0,
+            fail: 0,
+            sum: 0,
+            maint: 0,
+          };
+          if (current.start === row.rollup.hourStart) {
+            current.ok += row.rollup.ok;
+            current.fail += row.rollup.fail;
+            current.sum += row.rollup.sum;
+            current.maint = (current.maint ?? 0) + (row.rollup.maint ?? 0);
+            live.set(row.id, current);
+          }
+        }
+        if (row.slot && row.slot.slotStart + SLOT_MS > window.start) {
+          const current = liveSlots.get(row.id) ?? {
+            start: row.slot.slotStart,
+            ok: 0,
+            fail: 0,
+            sum: 0,
+            maint: 0,
+          };
+          if (current.start === row.slot.slotStart) {
+            current.ok += row.slot.ok;
+            current.fail += row.slot.fail;
+            current.sum += row.slot.sum;
+            current.maint = (current.maint ?? 0) + (row.slot.maint ?? 0);
+            liveSlots.set(row.id, current);
+          }
+        }
       }
     }),
   );
@@ -213,7 +263,25 @@ export async function loadPublicStatus(
           sum: row.latencySum,
           maint: row.maintCount,
         })),
+      slots: slots
+        .filter((row) => row.monitorId === item.monitorId)
+        .map((row) => ({
+          start: row.slotStart,
+          ok: row.okCount,
+          fail: row.failCount,
+          sum: row.latencySum,
+          maint: row.maintCount,
+        })),
       live: live.get(item.monitorId) ?? null,
+      liveSlot: liveSlots.get(item.monitorId) ?? null,
+      incidents: incidentRows
+        .filter((row) => row.monitorId === item.monitorId)
+        .map(
+          (row): IncidentSpan => ({
+            start: row.startedAt,
+            end: row.endedAt,
+          }),
+        ),
     });
     const bucket = groups.get(groupKey) ?? { name: groupName, items: [] };
     if (!bucket.name && groupName) bucket.name = groupName;
@@ -247,6 +315,7 @@ export async function loadPublicStatus(
     displayRange: window.configured,
     bucket: window.bucket,
     barCount: window.bars,
+    shownDays: window.shownDays,
     clamped: window.clamped,
     retentionDays: window.retentionDays,
     overall,
