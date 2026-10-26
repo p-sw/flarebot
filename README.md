@@ -47,8 +47,8 @@ The dashboard lists every monitor. Expand a row to see recent response time. The
 - Public status pages, works in site root
 - Manual incidents with a public timeline, and maintenance windows that hold alerts and stay out of the uptime percentage
 - Visitor subscriptions on a status page: confirmed email, signed webhooks, and cached RSS and Atom feeds
-- Uptime and response charts from local rollups
-- Public SVG badges for status, uptime, and response time. A private monitor returns an unknown badge
+- Uptime charts and response time (TTFB for HTTP) from local rollups
+- Public SVG badges for status, uptime, and response time (TTFB for HTTP). A private monitor returns an unknown badge
 - Owner, Admin, Editor, and Viewer roles, passkeys, passwords, optional TOTP, scoped API tokens, and optional OpenID Connect or Cloudflare Access sign-in
 - One English copy file, `brand/locale.json`. A fork edits that file to translate the whole product
 - Rebrand by editing `brand/` and asking your own coding agent
@@ -67,6 +67,10 @@ npx wrangler secret put ENCRYPTION_KEY
 `ENCRYPTION_KEY` is 32 bytes of base64 (`openssl rand -base64 32`). Open `/setup`, enter the setup secret, and create the Owner. After that, sign in at `/login`. The admin UI is `/console`. Owners and Admins can add OpenID Connect and Cloudflare Access in Settings. The Authentik steps, and the steps for Authentik behind Cloudflare Access, are in [docs/sso.md](docs/sso.md). Mail can wait. See [docs/deployment.md](docs/deployment.md) for the manual path and for SMTP secrets.
 
 Nothing in this repository is deployed for you. The Wrangler config has no account id.
+
+## Check region
+
+Settings → Check region chooses where the scheduler runs. **Automatic** is the default and does not send a location hint, which is the behavior of an existing installation: the first shard is `shard-0`, created near the cron that first touched it. Pick a region close to the hosts you monitor and to the people who open the status page. `apac` is Asia-Pacific. `apac-ne` is the northeast of that region (Korea, Japan, and nearby). `apac-se` is the southeast. A Durable Object does not move after it is created, so a new choice creates a new shard and moves checks onto it. Status, confirmations, open incidents, and uptime history stay. The in-memory recent response chart starts over. A monitor can override the global choice, or stay on Automatic while the rest of the installation moves. See [docs/development.md](docs/development.md).
 
 ## Workers Paid plan
 
@@ -121,6 +125,8 @@ The whole cron stops at 40 statements. That cap is under Free's 50 queries per i
 Pruning deletes at most 80 rows per table per run and at most 20,000 rows per UTC day. Deletes count as rows written. Steady state is much smaller than the cap: about one day of slots, hours, and a daily row per monitor (`96 + 24 + 1`). The cap is there so a retention cut does not consume the whole 100,000 writes.
 
 **Durable Objects.** An alarm invocation and each RPC (`ensureAlarm`, `getAll`, `getOne`, the mailer `kick`) count as a Durable Object request. Duration is wall-clock time while the object is active, billed as if it holds 128 MB: GB-s = `seconds * 128 / 1000`. Waiting on a check counts. Hibernating between alarms does not.
+
+Check regions do not multiply that cost. The cron calls `ensureAlarm` once per shard that has monitors in D1, not once per location hint. An unused region has no shard and no alarm. Changing the global region or a monitor override moves monitors in batches of 4, and each move is one detach, one upsert, and one `ensureAlarm` on the destination. That is a few Durable Object requests per moved monitor, paid once. After the move, the alarm rate is the formula below: it follows how many checks run, not how many regions are listed in Settings. A shard with no monitors deletes its alarm, so the old region stops spending duration. The placement pass itself is at most 14 D1 statements (`2 + 4 * 3`), inside the cron cap of 40.
 
 If monitors are spread out, each check is its own alarm. Estimate: `N * (86400 / intervalSeconds)` alarm requests per day. At 60 seconds that is `N * 1440`, plus `288` `ensureAlarm` calls per shard and `288` mailer kicks. Thirty-six monitors are `36 * 1440 = 51,840` alarms, under the Free 100,000. One hundred staggered monitors are `100 * 1440 = 144,000` alarms, over it. If checks share an alarm (up to 12), the request count drops toward `ceil(N / 12) * 1440`.
 

@@ -65,6 +65,7 @@ type PublicPage = {
       uptime: number | null;
       responseMs: number | null;
       maint: number;
+      type?: string;
       bars: HistoryBar[];
     }[];
   }[];
@@ -274,7 +275,10 @@ export function PublicStatusPage() {
                         : t("uptime_empty")
                       : t("uptime_percent", { value: item.uptime })}
                     {" · "}
-                    {t("response_label")} {responseText(item.responseMs)}
+                    {item.type === "http"
+                      ? t("response_time_ttfb")
+                      : t("response_label")}{" "}
+                    {responseText(item.responseMs)}
                   </p>
                   <UptimeBars bars={item.bars} />
                 </article>

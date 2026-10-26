@@ -21,6 +21,7 @@ import {
 } from "../ui/collapsible";
 import { responseText, statusTone } from "./fields";
 import { monitorStatusLabel, monitorTypeLabel } from "./monitor-labels";
+import { regionLabel } from "./region-select";
 
 function PauseControl({
   paused,
@@ -54,7 +55,7 @@ function PauseControl({
   );
 }
 
-function SparkPanel({ id }: { id: string }) {
+function SparkPanel({ id, type }: { id: string; type: string }) {
   const spark = useQuery(sparkQuery(id));
   const data = spark.data;
   const points = data?.points ?? [];
@@ -97,7 +98,13 @@ function SparkPanel({ id }: { id: string }) {
           ) : (
             <ChartContainer
               config={{
-                ms: { label: t("chart_response"), color: "var(--primary)" },
+                ms: {
+                  label:
+                    type === "http"
+                      ? t("chart_response_ttfb")
+                      : t("chart_response"),
+                  color: "var(--primary)",
+                },
               }}
               className="h-28"
             >
@@ -161,6 +168,8 @@ export function DashboardRow({
     row.uptime24 === null
       ? t("uptime_empty")
       : t("uptime_percent", { value: row.uptime24 });
+  const showRegion = row.region !== "inherit" || row.effectiveRegion !== "auto";
+  const regionText = regionLabel(row.effectiveRegion);
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <Card className="min-w-0 overflow-hidden">
@@ -201,7 +210,19 @@ export function DashboardRow({
               </p>
             </Link>
           </div>
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {showRegion ? (
+              <Badge
+                className="max-w-full"
+                title={
+                  row.region === "inherit"
+                    ? t("monitor_region_inherited")
+                    : t("monitor_region_override")
+                }
+              >
+                <span className="max-w-40 truncate">{regionText}</span>
+              </Badge>
+            ) : null}
             <span
               className="min-w-0 truncate text-sm tabular-nums"
               title={uptime}
@@ -238,7 +259,7 @@ export function DashboardRow({
               }
               className="overflow-hidden"
             >
-              {open ? <SparkPanel id={row.id} /> : null}
+              {open ? <SparkPanel id={row.id} type={row.type} /> : null}
             </motion.div>
           </CollapsibleContent>
         </CardContent>

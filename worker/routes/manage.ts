@@ -25,8 +25,10 @@ import {
   isRole,
   scopesForRole,
 } from "../../shared/permissions";
+import { CHECK_REGION_KEY } from "../../shared/regions";
 import {
   accountPatchSchema,
+  checkRegionSchema,
   inviteSchema,
   mailSettingsSchema,
   passwordChangeSchema,
@@ -36,6 +38,7 @@ import {
   tokenCreateSchema,
   totpConfirmSchema,
 } from "../../shared/schemas";
+import { readCheckRegion } from "../check-region";
 import {
   b64ToBytes,
   base32Encode,
@@ -86,6 +89,7 @@ import {
 import { inviteMail, resetMail, testMail } from "../notify/copy";
 import { deliverChannel, sampleChannelText } from "../notify/dispatch";
 import { historyRetentionDays } from "../retention";
+import { settlePlacement } from "../scheduler/placement";
 import { instanceName, readSetting, writeSetting } from "../settings-store";
 import { createStatusPage, replaceStatusPage } from "../status/persist";
 import { loadPublicStatus, loadRootPublicStatus } from "../status/public";
@@ -110,6 +114,7 @@ const settingsSchema = z.object({
   turnstileSecret: z.string().max(200).optional(),
   clearTurnstileSecret: z.boolean().optional(),
   subscribeAllowHttp: z.boolean().optional(),
+  checkRegion: checkRegionSchema.optional(),
 });
 
 function legacyLocaleColumns() {
@@ -1046,6 +1051,7 @@ export function registerManage(app: Hono<AppEnv>): void {
         source: turnstile?.source ?? "none",
       },
       subscribeAllowHttp: await allowHttpWebhooks(c.env),
+      checkRegion: await readCheckRegion(c.env),
     });
   });
 
@@ -1103,6 +1109,12 @@ export function registerManage(app: Hono<AppEnv>): void {
     if (body.subscribeAllowHttp !== undefined) {
       await writeSetting(c.env, ALLOW_HTTP_KEY, body.subscribeAllowHttp);
     }
+    let placementRemaining = 0;
+    if (body.checkRegion) {
+      await writeSetting(c.env, CHECK_REGION_KEY, body.checkRegion);
+      const placed = await settlePlacement(c.env);
+      placementRemaining = placed.remaining;
+    }
     const audited = {
       ...body,
       turnstileSecret: body.turnstileSecret ? "[redacted]" : undefined,
@@ -1116,7 +1128,7 @@ export function registerManage(app: Hono<AppEnv>): void {
       audited,
       clientIp(c),
     );
-    return c.json({ ok: true });
+    return c.json({ ok: true, placementRemaining });
   });
 
   app.get("/api/settings/mail", async (c) => {

@@ -165,12 +165,50 @@ export class SchedulerShard extends DurableObject<Env> {
   async remove(id: string): Promise<void> {
     await this.enqueue(async () => {
       const store = await this.load();
-      delete store.monitors[id];
-      delete store.recent[id];
-      delete store.rollups[id];
-      delete store.slots[id];
-      delete store.dirtyDays[id];
+      this.forget(store, id);
       await this.persist(store);
+      await this.finishAlarm(store, Date.now());
+    });
+  }
+
+  /**
+   * Drop a monitor that is moving to another shard. Flushes the open hour
+   * and slot so D1 history stays, then deletes the in-memory recent buffer.
+   * That chart starts over on the destination. An empty shard deletes its
+   * alarm so it stops scheduling.
+   */
+  async detach(id: string): Promise<{
+    state: RuntimeState;
+    nextCheckAt: number;
+    lastPushAt: number | null;
+    paused: boolean;
+  } | null> {
+    return this.enqueue(async () => {
+      const store = await this.load();
+      const monitor = store.monitors[id];
+      if (!monitor) {
+        await this.finishAlarm(store, Date.now());
+        return null;
+      }
+      const rollup = normalizeRollup(store.rollups[id] ?? undefined);
+      if (rollup && rollup.ok + rollup.fail + rollup.maint > 0) {
+        await mergeHourly(this.env.DB, id, rollup);
+      }
+      const slot = normalizeSlot(store.slots[id] ?? undefined);
+      if (slot && slot.ok + slot.fail + slot.maint > 0) {
+        await mergeSlot(this.env.DB, id, slot);
+      }
+      await saveRuntime(this.env.DB, id, monitor.state);
+      const detached = {
+        state: monitor.state,
+        nextCheckAt: monitor.nextCheckAt,
+        lastPushAt: monitor.lastPushAt,
+        paused: monitor.paused,
+      };
+      this.forget(store, id);
+      await this.persist(store);
+      await this.finishAlarm(store, Date.now());
+      return detached;
     });
   }
 
@@ -256,9 +294,13 @@ export class SchedulerShard extends DurableObject<Env> {
 
   async ensureAlarm(): Promise<void> {
     await this.enqueue(async () => {
+      const store = await this.load();
+      if (Object.keys(store.monitors).length === 0) {
+        await this.ctx.storage.deleteAlarm();
+        return;
+      }
       const current = await this.ctx.storage.getAlarm();
       if (current !== null) return;
-      const store = await this.load();
       await this.arm(store, Date.now());
     });
   }
@@ -311,8 +353,9 @@ export class SchedulerShard extends DurableObject<Env> {
     const preview = await this.load();
     const monitor = preview.monitors[id];
     if (!monitor || monitor.paused || monitor.nextCheckAt > now) return;
-    // v1 runs one region. `regions` is stored so a later shard-per-region hint can reuse this snapshot.
-    const region = monitor.regions[0] ?? "default";
+    // The snapshot stores the resolved check region for analytics.
+    // Placement already chose this shard for that region.
+    const region = monitor.regions[0] ?? "auto";
     const outcome = await runCheck({
       type: monitor.type,
       config: monitor.config,
@@ -600,7 +643,27 @@ export class SchedulerShard extends DurableObject<Env> {
     });
   }
 
+  private forget(store: Store, id: string): void {
+    delete store.monitors[id];
+    delete store.recent[id];
+    delete store.rollups[id];
+    delete store.slots[id];
+    delete store.dirtyDays[id];
+  }
+
+  private async finishAlarm(store: Store, now: number): Promise<void> {
+    if (Object.keys(store.monitors).length === 0) {
+      await this.ctx.storage.deleteAlarm();
+      return;
+    }
+    await this.arm(store, now);
+  }
+
   private async arm(store: Store, now: number): Promise<void> {
+    if (Object.keys(store.monitors).length === 0) {
+      await this.ctx.storage.deleteAlarm();
+      return;
+    }
     const upcoming = Object.values(store.monitors)
       .filter((monitor) => !monitor.paused)
       .map((monitor) => monitor.nextCheckAt)

@@ -56,10 +56,12 @@ function defaultLabel(
   kind: BadgeKind,
   window: BadgeWindow,
   custom: string | null,
+  type: string,
 ) {
   if (custom) return custom;
   if (kind === "status") return t("badge_label_status");
   if (kind === "uptime") return t("badge_label_uptime", { window });
+  if (type === "http") return t("badge_label_response_ttfb", { window });
   return t("badge_label_response", { window });
 }
 
@@ -269,6 +271,11 @@ export function MonitorBadges({ monitor }: { monitor: MonitorDetail }) {
           </div>
         </div>
 
+        {monitor.type === "http" ? (
+          <p className="mb-3 text-xs text-muted-foreground">
+            {t("badge_response_ttfb")}
+          </p>
+        ) : null}
         <p className="mb-3 text-xs text-muted-foreground">
           {t("badge_cache_note")}
         </p>
@@ -285,7 +292,7 @@ export function MonitorBadges({ monitor }: { monitor: MonitorDetail }) {
             const imageUrl = `${origin}${path}`;
             const pageUrl = badgePageUrl(origin, monitor.statusPages, imageUrl);
             const alt = t("badge_alt", {
-              label: defaultLabel(kind, windowRange, custom),
+              label: defaultLabel(kind, windowRange, custom, monitor.type),
             });
             const snippets = badgeSnippets({ imageUrl, pageUrl, alt });
             const preview = new URLSearchParams({

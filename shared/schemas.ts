@@ -4,7 +4,11 @@ import { z } from "zod";
 import { IMPACTS, INCIDENT_STATUSES } from "./impact";
 import { ROLES, SCOPES } from "./permissions";
 import { MAX_WINDOW_MS } from "./recurrence";
+import { CHECK_REGION_IDS, MONITOR_REGION_CHOICES } from "./regions";
 import { statusSlugPattern } from "./status-layout";
+
+export const checkRegionSchema = z.enum(CHECK_REGION_IDS);
+export const monitorRegionSchema = z.enum(MONITOR_REGION_CHOICES);
 
 const privateHost =
   /^(localhost|.*\.local|.*\.internal|metadata\.google\.internal|0\.0\.0\.0|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+|\[?::1\]?|\[?f[cd][0-9a-f:]*\]?|\[?fe80:)/i;
@@ -102,6 +106,7 @@ export const monitorWriteSchema = z
     recoveryThreshold: z.number().int().min(1).max(5).default(1),
     channelIds: z.array(z.string().uuid()).max(20).default([]),
     paused: z.boolean().default(false),
+    region: monitorRegionSchema.default("inherit"),
   })
   .superRefine((value, ctx) => {
     const parsed = parseMonitorConfig(value.type, value.config);

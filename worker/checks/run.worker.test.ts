@@ -145,6 +145,98 @@ describe("runCheck", () => {
     expect(unknown.internal).toBe(true);
   });
 
+  it("times HTTP at the first byte and reads the body only for an assertion", async () => {
+    let now = 50_000;
+    const original = Date.now;
+    Date.now = () => now;
+    let pulls = 0;
+    const stream = () =>
+      new ReadableStream({
+        pull(controller) {
+          pulls += 1;
+          now += 5_000;
+          controller.enqueue(
+            new TextEncoder().encode('{"status":"keyword-hit"}'),
+          );
+          controller.close();
+        },
+      });
+    try {
+      scripted(() => {
+        now += 30;
+        return new Response(stream(), { status: 200 });
+      });
+      const statusOnly = await runCheck({
+        ...base,
+        type: "http",
+        config: {
+          url: "https://example.com/health",
+          method: "GET",
+          followRedirects: true,
+          expectedStatuses: [200],
+        },
+      });
+      expect(statusOnly.ok).toBe(true);
+      expect(statusOnly.responseMs).toBeLessThan(1_000);
+      expect(pulls).toBe(0);
+
+      pulls = 0;
+      now = 50_000;
+      const keyword = await runCheck({
+        ...base,
+        type: "http",
+        config: {
+          url: "https://example.com/health",
+          method: "GET",
+          followRedirects: true,
+          expectedStatuses: [200],
+          keyword: "keyword-hit",
+          jsonPath: "$.status",
+          jsonExpect: "keyword-hit",
+        },
+      });
+      expect(keyword.ok).toBe(true);
+      expect(keyword.httpStatus).toBe(200);
+      expect(keyword.responseMs).toBeLessThan(1_000);
+      expect(pulls).toBeGreaterThan(0);
+
+      pulls = 0;
+      now = 50_000;
+      const wrongStatus = await runCheck({
+        ...base,
+        type: "http",
+        config: {
+          url: "https://example.com/health",
+          method: "GET",
+          followRedirects: false,
+          expectedStatuses: [204],
+          keyword: "keyword-hit",
+        },
+      });
+      expect(wrongStatus.ok).toBe(false);
+      expect(wrongStatus.errorKind).toBe("status");
+      expect(pulls).toBe(0);
+
+      scripted(() => {
+        throw new Error("The operation was aborted due to timeout");
+      });
+      const timedOut = await runCheck({
+        ...base,
+        type: "http",
+        config: {
+          url: "https://example.com/health",
+          method: "GET",
+          followRedirects: false,
+          expectedStatuses: [200],
+        },
+      });
+      expect(timedOut.ok).toBe(false);
+      expect(timedOut.errorKind).toBe("timeout");
+    } finally {
+      Date.now = original;
+    }
+  });
+
   it("rejects blocked TCP targets and reports a missed heartbeat", async () => {
     const blocked = await runCheck({
       ...base,

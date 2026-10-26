@@ -13,6 +13,7 @@ import {
   monitorMethods,
   monitorPayload,
 } from "@shared/monitor-draft";
+import { isMonitorRegionChoice } from "@shared/regions";
 import { monitorTypeSchema } from "@shared/schemas";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -42,6 +43,7 @@ import { Textarea } from "../ui/textarea";
 import { ChannelAttachList } from "./channels";
 import { controlClass, Field } from "./fields";
 import { monitorTypeLabel } from "./monitor-labels";
+import { RegionSelect } from "./region-select";
 
 const types = monitorTypeSchema.options;
 
@@ -283,6 +285,20 @@ function MonitorForm({
                 <p className="text-xs text-muted-foreground">
                   {t("monitor_schedule")}
                 </p>
+                <Field
+                  label={t("monitor_region")}
+                  hint={t("monitor_region_hint")}
+                >
+                  <RegionSelect
+                    value={draft.region}
+                    includeInherit
+                    disabled={submit.pending}
+                    onChange={(value) => {
+                      if (!isMonitorRegionChoice(value)) return;
+                      setDraft({ ...draft, region: value });
+                    }}
+                  />
+                </Field>
                 <div className="grid min-w-0 gap-3 sm:grid-cols-2">
                   <Field
                     label={t("monitor_interval")}

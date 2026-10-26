@@ -15,11 +15,11 @@ If the monitor is missing, private, or the id is not a monitor id, the response 
 
 ## URLs
 
-| Badge         | Path                               |
-| ------------- | ---------------------------------- |
-| Status        | `/badge/<monitor-id>/status.svg`   |
-| Uptime        | `/badge/<monitor-id>/uptime.svg`   |
-| Response time | `/badge/<monitor-id>/response.svg` |
+| Badge                | Path                               |
+| -------------------- | ---------------------------------- |
+| Status               | `/badge/<monitor-id>/status.svg`   |
+| Uptime               | `/badge/<monitor-id>/uptime.svg`   |
+| Response time (TTFB) | `/badge/<monitor-id>/response.svg` |
 
 `<monitor-id>` is the monitor's id from the console URL (`/console/monitors/<monitor-id>`).
 
@@ -27,11 +27,11 @@ The console monitor page has a Badges panel with a live preview and copy buttons
 
 ### Query
 
-| Name     | Values                                 | Default                                   |
-| -------- | -------------------------------------- | ----------------------------------------- |
-| `style`  | `flat`, `flat-square`, `for-the-badge` | `flat`                                    |
-| `window` | `24h`, `7d`, `30d`, `90d`              | `24h`                                     |
-| `label`  | Up to 48 characters                    | `status`, `uptime 24h`, or `response 24h` |
+| Name     | Values                                 | Default                                                                                   |
+| -------- | -------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `style`  | `flat`, `flat-square`, `for-the-badge` | `flat`                                                                                    |
+| `window` | `24h`, `7d`, `30d`, `90d`              | `24h`                                                                                     |
+| `label`  | Up to 48 characters                    | `status`, `uptime 24h`, `response 24h`, or `response time (TTFB) 24h` for an HTTP monitor |
 
 `window` applies to uptime and response time. Unknown `style` and `window` values fall back to the defaults. Any other query parameter is ignored, so a random parameter cannot bypass the cache.
 
@@ -49,7 +49,7 @@ The console monitor page has a Badges panel with a live preview and copy buttons
 
 Pending is the console's "Checking" state. The badge uses **degraded** so a public monitor is never drawn with the same word as a private one. A fork can change the words in `brand/locale.json` (`badge_value_up`, `badge_value_down`, `badge_value_paused`, `badge_value_degraded`, `badge_value_unknown`).
 
-Uptime is green at 99.9% and above, then yellow-green, yellow, and red as it falls. Response time is green under 100 ms and moves through yellow and orange to red at 500 ms and above. A public monitor with no samples in the window shows `n/a`, which is different from `unknown`.
+Uptime is green at 99.9% and above, then yellow-green, yellow, and red as it falls. Response time is green under 100 ms and moves through yellow and orange to red at 500 ms and above. For an HTTP monitor that number is response time (TTFB): time until the response headers, including DNS, TCP, TLS, and redirects. The default label is `response time (TTFB) 24h`. TCP and the other check types keep the same badge path and the shorter `response 24h` label, because their measurement did not change. A public monitor with no samples in the window shows `n/a`, which is different from `unknown`.
 
 ### Window and history
 

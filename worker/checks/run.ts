@@ -67,6 +67,37 @@ type HttpConfig = {
   jsonExpect?: string;
 };
 
+function httpNeedsBody(config: HttpConfig, status: number): boolean {
+  if (!config.expectedStatuses.includes(status)) return false;
+  if (config.keyword) return true;
+  if (config.jsonPath) return true;
+  if (config.jsonExpect) return true;
+  return false;
+}
+
+async function readCappedBody(response: Response): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) return "";
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (size < BODY_LIMIT) {
+      const step = await reader.read();
+      if (step.done) break;
+      size += step.value.byteLength;
+      chunks.push(step.value);
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  return new TextDecoder().decode(concat(chunks).slice(0, BODY_LIMIT));
+}
+
+async function releaseBody(response: Response): Promise<void> {
+  if (!response.body) return;
+  await response.body.cancel().catch(() => undefined);
+}
+
 async function runHttp(
   config: HttpConfig,
   timeoutMs: number,
@@ -86,23 +117,16 @@ async function runHttp(
       redirect: config.followRedirects ? "follow" : "manual",
       signal: AbortSignal.timeout(timeoutMs),
     });
-    const reader = response.body?.getReader();
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    if (reader) {
-      while (size < BODY_LIMIT) {
-        const step = await reader.read();
-        if (step.done) break;
-        size += step.value.byteLength;
-        chunks.push(step.value);
-      }
-      await reader.cancel();
-    }
-    const body = new TextDecoder().decode(concat(chunks).slice(0, BODY_LIMIT));
+    // Headers are in. This is time to first byte, including DNS, TCP, TLS,
+    // and any redirects. Reading the body must not extend the measurement.
+    const responseMs = Date.now() - started;
+    const body = httpNeedsBody(config, response.status)
+      ? await readCappedBody(response)
+      : await releaseBody(response).then(() => "");
     return evaluateHttp({
       status: response.status,
       body,
-      responseMs: Date.now() - started,
+      responseMs,
       expectedStatuses: config.expectedStatuses,
       keyword: config.keyword,
       keywordMode: config.keywordMode,

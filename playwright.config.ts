@@ -27,8 +27,14 @@ export default defineConfig({
       name: "chromium",
       dependencies: ["setup"],
       testIgnore: brandPreview
-        ? /auth\.setup\.ts/
-        : [/auth\.setup\.ts/, /preview\.spec\.ts/],
+        ? [/auth\.setup\.ts/, /regions\.spec\.ts/]
+        : [/auth\.setup\.ts/, /preview\.spec\.ts/, /regions\.spec\.ts/],
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "regions",
+      dependencies: ["chromium"],
+      testMatch: /regions\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
     },
   ],

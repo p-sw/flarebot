@@ -285,7 +285,11 @@ export function MonitorDetailPage() {
       <Card className="mb-4">
         <CardContent className="p-4">
           <p className="mb-2 text-sm text-muted-foreground">
-            {t("chart_response")} ·{" "}
+            {row.type === "http"
+              ? t("chart_response_ttfb")
+              : t("chart_response")}
+            {row.type === "http" ? ` · ${t("chart_response_ttfb_hint")}` : null}
+            {" · "}
             {t("chart_p95", { value: stats.data?.p95 ?? 0 })}
           </p>
           {recent.length === 0 ? (

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+import { isMonitorRegionChoice, type MonitorRegionChoice } from "./regions";
 import {
   type MonitorType,
   monitorTypeSchema,
@@ -48,6 +49,7 @@ export type MonitorDraft = {
   graceSeconds: string;
   channelIds: string[];
   paused: boolean;
+  region: MonitorRegionChoice;
 };
 
 export type MonitorErrorCode =
@@ -133,6 +135,7 @@ export function blankMonitorDraft(): MonitorDraft {
     graceSeconds: "30",
     channelIds: [],
     paused: false,
+    region: "inherit",
   };
 }
 
@@ -146,6 +149,7 @@ export function draftFromMonitor(monitor: {
   recoveryThreshold: number;
   channelIds: string[];
   paused: boolean;
+  region?: string;
 }): MonitorDraft {
   const base = blankMonitorDraft();
   const config = record(monitor.config);
@@ -160,6 +164,10 @@ export function draftFromMonitor(monitor: {
     recoveryThreshold: String(monitor.recoveryThreshold),
     channelIds: [...monitor.channelIds],
     paused: monitor.paused,
+    region:
+      monitor.region && isMonitorRegionChoice(monitor.region)
+        ? monitor.region
+        : "inherit",
     url: text(config.url) || base.url,
     method: isMethod(config.method) ? config.method : "GET",
     headers: headersFrom(config.headers),
@@ -199,6 +207,7 @@ export function monitorPayload(draft: MonitorDraft) {
     recoveryThreshold: integer(draft.recoveryThreshold),
     channelIds: draft.channelIds,
     paused: draft.paused,
+    region: draft.region,
   };
 }
 
@@ -282,6 +291,7 @@ function fieldFor(draft: MonitorDraft, path: string): keyof MonitorDraft {
     "config.resolver": "resolver",
     "config.warnDays": "warnDays",
     "config.graceSeconds": "graceSeconds",
+    region: "region",
   };
   return known[path] ?? "name";
 }
