@@ -8,7 +8,12 @@ import {
   startRegistration,
 } from "@simplewebauthn/browser";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearch,
+} from "@tanstack/react-router";
 import { useState } from "react";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
@@ -317,13 +322,55 @@ export function SetupPage() {
   );
 }
 
+type PublicSso = {
+  hideLocalLogin: boolean;
+  accessEnabled: boolean;
+  providers: { id: string; displayName: string; buttonLabel: string }[];
+};
+
+function ssoErrorText(code: string | undefined): string {
+  switch (code) {
+    case "denied":
+    case "role":
+      return t("sso_error_denied");
+    case "email":
+      return t("sso_error_email");
+    case "domain":
+      return t("sso_error_domain");
+    case "state":
+      return t("sso_error_state");
+    case "token":
+      return t("sso_error_token");
+    case "config":
+      return t("sso_error_config");
+    case "disabled":
+      return t("sso_error_disabled");
+    case "link":
+      return t("sso_error_link");
+    case "jit":
+      return t("sso_error_jit");
+    default:
+      return "";
+  }
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
   const client = useQueryClient();
+  const search = useSearch({ from: "/login" });
+  const sso = useQuery({
+    queryKey: ["sso-public"],
+    queryFn: () => api<PublicSso>("/api/auth/sso"),
+  });
   const [form, setForm] = useState({ email: "", password: "", totp: "" });
   const [needTotp, setNeedTotp] = useState(false);
   const [error, setError] = useState("");
   const submit = useSubmitGuard();
+  const breakGlass = search["break-glass"] === 1;
+  const hideLocal = sso.data?.hideLocalLogin === true && !breakGlass;
+  const showLocal = !hideLocal;
+  const hasSso =
+    (sso.data?.providers.length ?? 0) > 0 || sso.data?.accessEnabled === true;
   const login = useMutation({
     mutationFn: () =>
       api<{ user: SessionUser }>("/api/auth/login", {
@@ -340,102 +387,176 @@ export function LoginPage() {
       setError(errorText(cause));
     },
   });
+  const access = useMutation({
+    mutationFn: () =>
+      api<{ user: SessionUser }>("/api/auth/access", { method: "POST" }),
+    onSuccess: async (data) => {
+      client.setQueryData(["session"], data);
+      await enterApp(navigate);
+    },
+    onError: (cause) => setError(errorText(cause)),
+  });
+  const banner = ssoErrorText(search.sso_error);
   return (
     <LoginBackdrop>
       <Card className="w-full min-w-0 max-w-md">
         <CardHeader>
           <CardTitle>{t("login_title")}</CardTitle>
         </CardHeader>
-        <CardContent>
-          <form
-            className="grid gap-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setError("");
-              void submit.run(async () => {
-                try {
-                  await login.mutateAsync();
-                } catch {
-                  // onError records the message.
-                }
-              });
-            }}
-          >
-            <Field label={t("login_email")}>
-              <Input
-                name="email"
-                type="email"
-                value={form.email}
-                onChange={(event) =>
-                  setForm({ ...form, email: event.target.value })
-                }
-                required
-              />
-            </Field>
-            <Field label={t("login_password")}>
-              <Input
-                name="password"
-                type="password"
-                value={form.password}
-                onChange={(event) =>
-                  setForm({ ...form, password: event.target.value })
-                }
-                required
-              />
-            </Field>
-            {needTotp ? (
-              <Field label={t("login_totp")}>
-                <Input
-                  name="totp"
-                  inputMode="numeric"
-                  value={form.totp}
-                  onChange={(event) =>
-                    setForm({ ...form, totp: event.target.value })
-                  }
-                />
-              </Field>
-            ) : null}
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            <PendingButton type="submit" pending={submit.pending}>
-              {t("action_sign_in")}
-            </PendingButton>
-            <PendingButton
-              type="button"
-              variant="outline"
-              pending={submit.pending}
-              onClick={() => {
+        <CardContent className="grid gap-4">
+          {banner ? (
+            <p className="text-sm break-words text-destructive" role="alert">
+              {banner}
+            </p>
+          ) : null}
+          {hasSso ? (
+            <div className="grid gap-2">
+              {sso.data?.providers.map((provider) => (
+                <Button key={provider.id} asChild className="w-full">
+                  <a href={`/api/auth/oidc/${provider.id}/start`}>
+                    {provider.buttonLabel}
+                  </a>
+                </Button>
+              ))}
+              {sso.data?.accessEnabled ? (
+                <PendingButton
+                  type="button"
+                  className="w-full"
+                  pending={access.isPending}
+                  onClick={() => {
+                    setError("");
+                    access.mutate();
+                  }}
+                >
+                  {t("login_access_button")}
+                </PendingButton>
+              ) : null}
+              {sso.data?.accessEnabled ? (
+                <p className="text-xs break-words text-muted-foreground">
+                  {t("login_access_hint")}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {hasSso && showLocal ? (
+            <p className="text-center text-xs text-muted-foreground">
+              {t("login_sso_divider")}
+            </p>
+          ) : null}
+          {hideLocal ? (
+            <div className="grid gap-3">
+              <p className="text-sm break-words text-muted-foreground">
+                {t("login_local_hidden")}
+              </p>
+              <Link
+                to="/login"
+                search={{ "break-glass": 1 }}
+                className="text-sm text-muted-foreground underline-offset-2 hover:underline"
+              >
+                {t("login_break_glass")}
+              </Link>
+            </div>
+          ) : null}
+          {showLocal ? (
+            <form
+              className="grid gap-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setError("");
                 void submit.run(async () => {
                   try {
-                    const options = await api<
-                      Parameters<typeof startAuthentication>[0]["optionsJSON"]
-                    >("/api/auth/passkey/options", { method: "POST" });
-                    const response = await startAuthentication({
-                      optionsJSON: options,
-                    });
-                    const session = await api<{ user: SessionUser }>(
-                      "/api/auth/passkey/verify",
-                      {
-                        method: "POST",
-                        body: JSON.stringify({ response }),
-                      },
-                    );
-                    client.setQueryData(["session"], session);
-                    await enterApp(navigate);
-                  } catch (cause) {
-                    setError(errorText(cause));
+                    await login.mutateAsync();
+                  } catch {
+                    // onError records the message.
                   }
                 });
               }}
             >
-              {t("login_passkey")}
-            </PendingButton>
-            <Link
-              to="/forgot"
-              className="text-sm text-muted-foreground underline-offset-2 hover:underline"
-            >
-              {t("login_forgot")}
-            </Link>
-          </form>
+              {breakGlass && sso.data?.hideLocalLogin ? (
+                <p className="text-sm break-words text-muted-foreground">
+                  {t("login_break_glass_hint")}
+                </p>
+              ) : null}
+              <Field label={t("login_email")}>
+                <Input
+                  name="email"
+                  type="email"
+                  value={form.email}
+                  onChange={(event) =>
+                    setForm({ ...form, email: event.target.value })
+                  }
+                  required
+                />
+              </Field>
+              <Field label={t("login_password")}>
+                <Input
+                  name="password"
+                  type="password"
+                  value={form.password}
+                  onChange={(event) =>
+                    setForm({ ...form, password: event.target.value })
+                  }
+                  required
+                />
+              </Field>
+              {needTotp ? (
+                <Field label={t("login_totp")}>
+                  <Input
+                    name="totp"
+                    inputMode="numeric"
+                    value={form.totp}
+                    onChange={(event) =>
+                      setForm({ ...form, totp: event.target.value })
+                    }
+                  />
+                </Field>
+              ) : null}
+              {error ? (
+                <p className="text-sm text-destructive">{error}</p>
+              ) : null}
+              <PendingButton type="submit" pending={submit.pending}>
+                {t("action_sign_in")}
+              </PendingButton>
+              <PendingButton
+                type="button"
+                variant="outline"
+                pending={submit.pending}
+                onClick={() => {
+                  void submit.run(async () => {
+                    try {
+                      const options = await api<
+                        Parameters<typeof startAuthentication>[0]["optionsJSON"]
+                      >("/api/auth/passkey/options", { method: "POST" });
+                      const response = await startAuthentication({
+                        optionsJSON: options,
+                      });
+                      const session = await api<{ user: SessionUser }>(
+                        "/api/auth/passkey/verify",
+                        {
+                          method: "POST",
+                          body: JSON.stringify({ response }),
+                        },
+                      );
+                      client.setQueryData(["session"], session);
+                      await enterApp(navigate);
+                    } catch (cause) {
+                      setError(errorText(cause));
+                    }
+                  });
+                }}
+              >
+                {t("login_passkey")}
+              </PendingButton>
+              <Link
+                to="/forgot"
+                className="text-sm text-muted-foreground underline-offset-2 hover:underline"
+              >
+                {t("login_forgot")}
+              </Link>
+            </form>
+          ) : error ? (
+            <p className="text-sm text-destructive">{error}</p>
+          ) : null}
         </CardContent>
       </Card>
     </LoginBackdrop>

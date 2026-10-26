@@ -15,6 +15,7 @@ import {
   resetSchema,
   setupSchema,
 } from "../../shared/schemas";
+import { assertLocalLoginAllowed } from "../auth/policy";
 import {
   authenticationOptions,
   registrationOptions,
@@ -194,6 +195,7 @@ export function registerAuth(app: Hono<AppEnv>): void {
       }
     }
     await db.delete(loginAttempts).where(eq(loginAttempts.email, email));
+    await assertLocalLoginAllowed(c.env, user.id);
     await createSession(
       c,
       user.id,
@@ -240,6 +242,7 @@ export function registerAuth(app: Hono<AppEnv>): void {
       .get();
     if (!user || user.disabled)
       throw new ApiError(401, "unauthorized", t("error_account_disabled"));
+    await assertLocalLoginAllowed(c.env, user.id);
     await createSession(c, user.id, "passkey");
     const actor = await actorForUser(c.env, user.id);
     if (!actor)

@@ -43,6 +43,7 @@ const minimum: Record<Action, Role> = {
   "mail.write": "owner",
   "instance.settings": "owner",
   "instance.transfer": "owner",
+  "sso.manage": "admin",
 };
 
 describe("can", () => {

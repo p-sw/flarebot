@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { safeReturnPath } from "@shared/front-door";
+import { can } from "@shared/permissions";
 import { QueryClient } from "@tanstack/react-query";
 import {
   createRootRoute,
@@ -23,6 +24,7 @@ import {
   monitorsQuery,
   outagesQuery,
   settingsQuery,
+  ssoQuery,
   statsQuery,
   statusPageQuery,
   statusPagesQuery,
@@ -133,9 +135,33 @@ const setupRoute = createRoute({
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
-  validateSearch: (search: Record<string, unknown>): { next?: string } => {
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { next?: string; "break-glass"?: 1; sso_error?: string } => {
     const next = typeof search.next === "string" ? search.next : undefined;
-    return next ? { next } : {};
+    const breakGlass =
+      search["break-glass"] === 1 || search["break-glass"] === "1"
+        ? 1
+        : undefined;
+    const allowed = new Set([
+      "denied",
+      "email",
+      "domain",
+      "state",
+      "token",
+      "config",
+      "disabled",
+      "link",
+      "jit",
+      "role",
+    ]);
+    const raw = typeof search.sso_error === "string" ? search.sso_error : "";
+    const ssoError = allowed.has(raw) ? raw : undefined;
+    return {
+      ...(next ? { next } : {}),
+      ...(breakGlass ? { "break-glass": 1 as const } : {}),
+      ...(ssoError ? { sso_error: ssoError } : {}),
+    };
   },
   beforeLoad: async () => {
     const [info, current] = await Promise.all([meta(), session()]);
@@ -403,11 +429,20 @@ const auditRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: "/settings",
-  loader: () =>
-    Promise.all([
-      loadQuery(queryClient, settingsQuery),
-      loadQuery(queryClient, mailQuery),
-    ]).catch(() => undefined),
+  loader: () => {
+    const user = queryClient.getQueryData<{ user: SessionUser | null }>(
+      sessionCacheKey(),
+    )?.user;
+    const tasks: Promise<unknown>[] = [];
+    if (user && can({ role: user.role }, "instance.settings")) {
+      tasks.push(loadQuery(queryClient, settingsQuery).catch(() => undefined));
+      tasks.push(loadQuery(queryClient, mailQuery).catch(() => undefined));
+    }
+    if (user && can({ role: user.role }, "sso.manage")) {
+      tasks.push(loadQuery(queryClient, ssoQuery).catch(() => undefined));
+    }
+    return Promise.all(tasks);
+  },
   ...pending,
   component: SettingsPage,
 });

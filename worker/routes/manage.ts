@@ -1033,7 +1033,7 @@ export function registerManage(app: Hono<AppEnv>): void {
     requireCan(actor, "instance.settings");
     const body = await parseBody(c, settingsSchema);
     if (body.authMode === "access") {
-      throw new ApiError(501, "not_implemented", t("error_access_later"));
+      throw new ApiError(400, "sso_access", t("error_access_use_sso"));
     }
     if (body.instanceName)
       await writeSetting(c.env, "instance_name", body.instanceName);

@@ -90,7 +90,7 @@ const links: {
     | "users.read"
     | "tokens.read"
     | "audit.read"
-    | "instance.settings";
+    | "sso.manage";
   icon: LucideIcon;
   match?: "prefix";
 }[] = [
@@ -154,7 +154,7 @@ const links: {
   {
     to: "/console/settings",
     label: () => t("nav_settings"),
-    action: "instance.settings",
+    action: "sso.manage",
     icon: Settings,
   },
 ];

@@ -10,6 +10,7 @@ import { registerIncidents } from "./routes/incidents";
 import { registerMaintenance } from "./routes/maintenance";
 import { registerManage } from "./routes/manage";
 import { registerMonitors } from "./routes/monitors";
+import { registerSso } from "./routes/sso";
 
 export function createApp(): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -31,6 +32,7 @@ export function createApp(): Hono<AppEnv> {
     );
   });
   registerAuth(app);
+  registerSso(app);
   registerMonitors(app);
   registerBadges(app);
   registerIncidents(app);
