@@ -45,6 +45,7 @@ import { statusTone } from "./fields";
 import { MonitorBadges } from "./monitor-badges";
 import { MonitorConfig } from "./monitor-config";
 import { monitorStatusLabel, monitorTypeLabel } from "./monitor-labels";
+import { ErrorAlert } from "./status-notice";
 
 function PauseControl({
   paused,
@@ -127,9 +128,7 @@ export function DashboardPage() {
         {t("monitors_count", { count: rows.length })}
       </p>
       {pause.error ? (
-        <p role="alert" className="mb-4 text-sm text-destructive">
-          {pause.error}
-        </p>
+        <ErrorAlert className="mb-4">{pause.error}</ErrorAlert>
       ) : null}
       {monitors.isPending ? (
         <ContentSkeleton />
@@ -229,9 +228,7 @@ export function MonitorDetailPage() {
         </p>
       ) : null}
       {pause.error ? (
-        <p role="alert" className="mb-4 text-sm text-destructive">
-          {pause.error}
-        </p>
+        <ErrorAlert className="mb-4">{pause.error}</ErrorAlert>
       ) : null}
       <div className="mb-4 flex min-w-0 flex-wrap items-center gap-3">
         <Badge tone={statusTone(row.status)}>

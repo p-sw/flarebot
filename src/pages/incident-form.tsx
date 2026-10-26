@@ -8,6 +8,7 @@ import { formatLocalInput, parseLocalInput } from "@shared/recurrence";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useState } from "react";
+import { incidentAlertVariant } from "@/ui/alert-variant";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
@@ -32,6 +33,7 @@ import {
 } from "./announcement-fields";
 import { controlClass, Field, GroupField } from "./fields";
 import { Markdown } from "./markdown";
+import { ErrorAlert, StatusNotice } from "./status-notice";
 
 const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
@@ -63,7 +65,7 @@ function IncidentEditor({ id }: { id?: string }) {
   });
   if (id && !existing.data) {
     return existing.isError ? (
-      <p className="text-sm text-destructive">{t("error_not_found")}</p>
+      <ErrorAlert>{t("error_not_found")}</ErrorAlert>
     ) : (
       <ContentSkeleton />
     );
@@ -293,11 +295,7 @@ function IncidentEditorForm({
             </CardContent>
           </Card>
         ) : null}
-        {error ? (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        ) : null}
+        {error ? <ErrorAlert>{error}</ErrorAlert> : null}
         {writable ? (
           <PendingButton type="submit" pending={save.pending}>
             {id ? t("action_save") : t("action_create")}
@@ -315,18 +313,7 @@ function IncidentEditorForm({
             </CardHeader>
             <CardContent className="grid gap-4">
               {initial.updates.map((update) => (
-                <article
-                  key={update.id}
-                  className="min-w-0 rounded-lg border border-border p-3"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-medium">
-                      {incidentStatusLabel(update.status)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDateTime(update.postedAt)}
-                    </p>
-                  </div>
+                <article key={update.id} className="min-w-0">
                   {editing === update.id ? (
                     <UpdateEditor
                       incidentId={id}
@@ -341,9 +328,21 @@ function IncidentEditorForm({
                     />
                   ) : (
                     <>
-                      <div className="mt-2">
+                      <StatusNotice
+                        variant={incidentAlertVariant(update.status)}
+                        title={
+                          <p className="text-sm font-medium leading-6">
+                            {incidentStatusLabel(update.status)}
+                          </p>
+                        }
+                        badge={
+                          <p className="text-xs whitespace-nowrap tabular-nums">
+                            {formatDateTime(update.postedAt)}
+                          </p>
+                        }
+                      >
                         <Markdown source={update.body} />
-                      </div>
+                      </StatusNotice>
                       {writable ? (
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Button

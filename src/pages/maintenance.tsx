@@ -6,12 +6,12 @@ import { can } from "@shared/permissions";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { maintenanceListQuery } from "../lib/queries";
 import { useRole } from "../lib/use-role";
 import { Stagger, StaggerItem } from "../motion/page";
 import { ContentSkeleton } from "../ui/skeleton";
+import { StatusNotice, StatusNoticeBadge } from "./status-notice";
 
 function formatRange(start: number, end: number, timeZone: string): string {
   const format = new Intl.DateTimeFormat(textLang, {
@@ -72,42 +72,56 @@ export function MaintenancePage() {
             <Link
               to="/console/maintenance/$id"
               params={{ id: window.id }}
-              className="block min-w-0 rounded-lg border border-border bg-card p-4 hover:bg-muted/40"
+              className="block min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-                <h2 className="min-w-0 break-words font-medium">
-                  {window.title}
-                </h2>
-                <Badge
-                  tone={window.state === "active" ? "maintenance" : "neutral"}
-                >
-                  {window.state === "active"
-                    ? t("maintenance_active")
-                    : window.state === "past"
-                      ? t("maintenance_past")
-                      : t("maintenance_upcoming")}
-                </Badge>
-              </div>
-              <p className="mt-1 text-sm break-words text-muted-foreground">
-                {window.next
-                  ? formatRange(
-                      window.next.start,
-                      window.next.end,
-                      window.timezone,
-                    )
-                  : formatRange(window.startAt, window.endAt, window.timezone)}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {window.timezone}
-                {" · "}
-                {window.recurrence === "daily"
-                  ? t("maintenance_daily")
-                  : window.recurrence === "weekly"
-                    ? t("maintenance_weekly")
-                    : window.recurrence === "monthly"
-                      ? t("maintenance_monthly")
-                      : t("maintenance_once")}
-              </p>
+              <StatusNotice
+                className="h-full motion-safe:transition-[filter] motion-safe:duration-150 hover:brightness-95"
+                variant="maintenance"
+                title={
+                  <h2 className="min-w-0 break-words font-medium leading-6">
+                    {window.title}
+                  </h2>
+                }
+                badge={
+                  <StatusNoticeBadge>
+                    {window.state === "active"
+                      ? t("maintenance_active")
+                      : window.state === "past"
+                        ? t("maintenance_past")
+                        : t("maintenance_upcoming")}
+                  </StatusNoticeBadge>
+                }
+              >
+                {window.description ? (
+                  <p className="line-clamp-2 break-words text-sm">
+                    {window.description}
+                  </p>
+                ) : null}
+                <p className="break-words text-sm">
+                  {window.next
+                    ? formatRange(
+                        window.next.start,
+                        window.next.end,
+                        window.timezone,
+                      )
+                    : formatRange(
+                        window.startAt,
+                        window.endAt,
+                        window.timezone,
+                      )}
+                </p>
+                <p className="break-words text-xs">
+                  {window.timezone}
+                  {" · "}
+                  {window.recurrence === "daily"
+                    ? t("maintenance_daily")
+                    : window.recurrence === "weekly"
+                      ? t("maintenance_weekly")
+                      : window.recurrence === "monthly"
+                        ? t("maintenance_monthly")
+                        : t("maintenance_once")}
+                </p>
+              </StatusNotice>
             </Link>
           </StaggerItem>
         ))}

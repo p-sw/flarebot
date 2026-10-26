@@ -6,11 +6,13 @@ import { formatDateTime, t } from "@shared/copy";
 import type { HistoryBar } from "@shared/history";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
+import { incidentAlertVariant } from "@/ui/alert-variant";
 import { Badge } from "@/ui/badge";
 import { api } from "../lib/api";
 import { incidentStatusLabel } from "./announcement-fields";
 import { responseText, statusTone } from "./fields";
 import { Markdown } from "./markdown";
+import { StatusNotice, StatusNoticeBadge } from "./status-notice";
 import { type PublicSubscriptions, SubscribeEntry } from "./subscribe-dialog";
 import { UptimeBars } from "./uptime-bars";
 
@@ -143,12 +145,15 @@ export function PublicStatusPage() {
             {t("status_incidents")}
           </h2>
           {data.incidents.map((incident) => (
-            <article
+            <StatusNotice
               key={incident.id}
-              className="min-w-0 rounded-lg border border-status-down/40 bg-card p-4"
-            >
-              <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-                <h3 className="min-w-0 break-words text-lg font-medium">
+              variant={incidentAlertVariant(
+                incident.status,
+                incident.impact,
+                incident.monitors,
+              )}
+              title={
+                <h3 className="min-w-0 break-words text-lg font-medium leading-6">
                   <Link
                     to="/s/$slug/incidents/$incidentId"
                     params={{ slug: data.slug, incidentId: incident.id }}
@@ -158,15 +163,16 @@ export function PublicStatusPage() {
                     {incident.title}
                   </Link>
                 </h3>
-                <Badge tone={statusTone(incident.status)}>
+              }
+              badge={
+                <StatusNoticeBadge>
                   {statusLabel(incident.status)}
-                </Badge>
-              </div>
-              <div className="mt-2">
-                <Markdown source={incident.message} />
-              </div>
+                </StatusNoticeBadge>
+              }
+            >
+              <Markdown source={incident.message} />
               {incident.monitors.length > 0 ? (
-                <p className="mt-2 text-xs break-words text-muted-foreground">
+                <p className="break-words text-xs">
                   {incident.monitors
                     .map(
                       (monitor) =>
@@ -175,7 +181,7 @@ export function PublicStatusPage() {
                     .join(", ")}
                 </p>
               ) : null}
-            </article>
+            </StatusNotice>
           ))}
         </section>
       ) : null}
@@ -189,37 +195,37 @@ export function PublicStatusPage() {
             {t("status_maintenance_section")}
           </h2>
           {data.maintenance.map((window) => (
-            <article
+            <StatusNotice
               key={window.id}
-              className="min-w-0 rounded-lg border border-primary/30 bg-card p-4"
-            >
-              <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+              variant="maintenance"
+              title={
                 <h3
-                  className="min-w-0 break-words font-medium"
+                  className="min-w-0 break-words font-medium leading-6"
                   title={window.title}
                 >
                   {window.title}
                 </h3>
-                <Badge tone="maintenance">
+              }
+              badge={
+                <StatusNoticeBadge>
                   {window.state === "active"
                     ? t("public_maintenance_active")
                     : t("public_maintenance_upcoming")}
-                </Badge>
-              </div>
+                </StatusNoticeBadge>
+              }
+            >
               {window.description ? (
-                <p className="mt-2 text-sm break-words text-muted-foreground">
-                  {window.description}
-                </p>
+                <p className="break-words text-sm">{window.description}</p>
               ) : null}
-              <p className="mt-2 min-w-0 break-words text-xs tabular-nums text-muted-foreground">
+              <p className="min-w-0 break-words text-xs tabular-nums">
                 {formatDateTime(window.start)} – {formatDateTime(window.end)}
               </p>
               {window.monitors.length > 0 ? (
-                <p className="mt-1 text-xs break-words text-muted-foreground">
+                <p className="break-words text-xs">
                   {window.monitors.join(", ")}
                 </p>
               ) : null}
-            </article>
+            </StatusNotice>
           ))}
         </section>
       ) : null}

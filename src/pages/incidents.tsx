@@ -6,14 +6,14 @@ import { can } from "@shared/permissions";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Badge } from "@/ui/badge";
+import { incidentAlertVariant } from "@/ui/alert-variant";
 import { Button } from "@/ui/button";
 import { incidentsQuery } from "../lib/queries";
 import { useRole } from "../lib/use-role";
 import { Stagger, StaggerItem } from "../motion/page";
 import { ContentSkeleton } from "../ui/skeleton";
 import { incidentStatusLabel } from "./announcement-fields";
-import { statusTone } from "./fields";
+import { StatusNotice, StatusNoticeBadge } from "./status-notice";
 
 export function IncidentsPage() {
   const role = useRole();
@@ -62,22 +62,29 @@ export function IncidentsPage() {
             <Link
               to="/console/incidents/$id"
               params={{ id: incident.id }}
-              className="block min-w-0 rounded-lg border border-border bg-card p-4 hover:bg-muted/40"
+              className="block min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-                <h2 className="min-w-0 break-words font-medium">
-                  {incident.title}
-                </h2>
-                <Badge tone={statusTone(incident.status)}>
-                  {incidentStatusLabel(incident.status)}
-                </Badge>
-              </div>
-              <p className="mt-1 line-clamp-2 text-sm break-words text-muted-foreground">
-                {incident.message}
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {formatDateTime(incident.updatedAt)}
-              </p>
+              <StatusNotice
+                className="h-full motion-safe:transition-[filter] motion-safe:duration-150 hover:brightness-95"
+                variant={incidentAlertVariant(incident.status)}
+                title={
+                  <h2 className="min-w-0 break-words font-medium leading-6">
+                    {incident.title}
+                  </h2>
+                }
+                badge={
+                  <StatusNoticeBadge>
+                    {incidentStatusLabel(incident.status)}
+                  </StatusNoticeBadge>
+                }
+              >
+                <p className="line-clamp-2 break-words text-sm">
+                  {incident.message}
+                </p>
+                <p className="text-xs tabular-nums">
+                  {formatDateTime(incident.updatedAt)}
+                </p>
+              </StatusNotice>
             </Link>
           </StaggerItem>
         ))}

@@ -32,6 +32,11 @@
   --color-status-pending-foreground: var(--status-pending-foreground);
   --color-status-unknown: var(--status-unknown);
   --color-status-unknown-foreground: var(--status-unknown-foreground);
+  --color-alert-foreground: var(--alert-foreground);
+  --color-alert-default: var(--alert-default);
+  --color-alert-destructive: var(--alert-destructive);
+  --color-alert-warning: var(--alert-warning);
+  --color-alert-maintenance: var(--alert-maintenance);
   --radius-lg: var(--radius);
 }
 
@@ -50,4 +55,21 @@ body {
 
 * {
   box-sizing: border-box;
+}
+
+/* Filled alert surfaces. Text stays black in light mode and white in dark mode. */
+:root {
+  --alert-foreground: #000000;
+  --alert-default: oklch(0.86 0.015 95);
+  --alert-destructive: oklch(0.86 0.07 28);
+  --alert-warning: oklch(0.88 0.09 85);
+  --alert-maintenance: oklch(0.88 0.055 195);
+}
+
+.dark {
+  --alert-foreground: #ffffff;
+  --alert-default: oklch(0.38 0.02 220);
+  --alert-destructive: oklch(0.42 0.11 28);
+  --alert-warning: oklch(0.42 0.08 90);
+  --alert-maintenance: oklch(0.4 0.06 200);
 }

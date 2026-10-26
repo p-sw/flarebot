@@ -34,6 +34,7 @@ import { ConfirmDialog } from "../ui/confirm-dialog";
 import { ContentSkeleton } from "../ui/skeleton";
 import { CheckList, NotifyFields } from "./announcement-fields";
 import { controlClass, Field, GroupField } from "./fields";
+import { ErrorAlert } from "./status-notice";
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 0] as const;
 
@@ -63,7 +64,7 @@ export function MaintenanceEditPage() {
   const existing = useQuery(maintenanceQuery(id));
   if (!existing.data) {
     return existing.isError ? (
-      <p className="text-sm text-destructive">{t("error_not_found")}</p>
+      <ErrorAlert>{t("error_not_found")}</ErrorAlert>
     ) : (
       <ContentSkeleton />
     );
@@ -444,11 +445,7 @@ function MaintenanceEditor({
             />
           </CardContent>
         </Card>
-        {error ? (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        ) : null}
+        {error ? <ErrorAlert>{error}</ErrorAlert> : null}
         {writable && !initial?.cancelledAt ? (
           <PendingButton type="submit" pending={save.pending}>
             {id ? t("action_save") : t("action_create")}
