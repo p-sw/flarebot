@@ -39,6 +39,12 @@ export type MonitorDraft = {
   keywordMode: "present" | "absent";
   jsonPath: string;
   jsonExpect: string;
+  degradedKeyword: string;
+  degradedKeywordMode: "present" | "absent";
+  degradedJsonPath: string;
+  degradedJsonExpect: string;
+  degradedMaxMs: string;
+  degradedNotify: boolean;
   host: string;
   port: string;
   dnsName: string;
@@ -73,6 +79,7 @@ export type MonitorErrorCode =
   | "statuses"
   | "keyword"
   | "json"
+  | "degraded_ms"
   | "body"
   | "channels"
   | "generic";
@@ -125,6 +132,12 @@ export function blankMonitorDraft(): MonitorDraft {
     keywordMode: "present",
     jsonPath: "",
     jsonExpect: "",
+    degradedKeyword: "",
+    degradedKeywordMode: "present",
+    degradedJsonPath: "",
+    degradedJsonExpect: "",
+    degradedMaxMs: "",
+    degradedNotify: true,
     host: "1.1.1.1",
     port: "443",
     dnsName: "example.com",
@@ -153,6 +166,7 @@ export function draftFromMonitor(monitor: {
 }): MonitorDraft {
   const base = blankMonitorDraft();
   const config = record(monitor.config);
+  const degraded = record(config.degraded);
   const parsedType = monitorTypeSchema.safeParse(monitor.type);
   return {
     ...base,
@@ -180,6 +194,13 @@ export function draftFromMonitor(monitor: {
     keywordMode: config.keywordMode === "absent" ? "absent" : "present",
     jsonPath: text(config.jsonPath),
     jsonExpect: text(config.jsonExpect),
+    degradedKeyword: text(degraded.keyword),
+    degradedKeywordMode:
+      degraded.keywordMode === "absent" ? "absent" : "present",
+    degradedJsonPath: text(degraded.jsonPath),
+    degradedJsonExpect: text(degraded.jsonExpect),
+    degradedMaxMs: text(degraded.maxResponseMs),
+    degradedNotify: degraded.notify !== false,
     host: text(config.host) || base.host,
     port: config.port == null ? base.port : String(config.port),
     dnsName: text(config.name) || base.dnsName,
@@ -247,6 +268,8 @@ function configFromDraft(draft: MonitorDraft): unknown {
       if (draft.keyword.trim()) config.keyword = draft.keyword.trim();
       if (draft.jsonPath.trim()) config.jsonPath = draft.jsonPath.trim();
       if (draft.jsonExpect.trim()) config.jsonExpect = draft.jsonExpect.trim();
+      const degraded = degradedFromDraft(draft);
+      if (degraded) config.degraded = degraded;
       return config;
     }
     case "tcp":
@@ -267,6 +290,34 @@ function configFromDraft(draft: MonitorDraft): unknown {
   }
 }
 
+/** No condition means no degraded block, so the notify switch alone is not stored. */
+function degradedFromDraft(
+  draft: MonitorDraft,
+): Record<string, unknown> | null {
+  const degraded: Record<string, unknown> = {
+    keywordMode: draft.degradedKeywordMode,
+    notify: draft.degradedNotify,
+  };
+  let any = false;
+  if (draft.degradedKeyword.trim()) {
+    degraded.keyword = draft.degradedKeyword.trim();
+    any = true;
+  }
+  if (draft.degradedJsonPath.trim()) {
+    degraded.jsonPath = draft.degradedJsonPath.trim();
+    any = true;
+  }
+  if (draft.degradedJsonExpect.trim()) {
+    degraded.jsonExpect = draft.degradedJsonExpect.trim();
+    any = true;
+  }
+  if (draft.degradedMaxMs.trim()) {
+    degraded.maxResponseMs = integer(draft.degradedMaxMs);
+    any = true;
+  }
+  return any ? degraded : null;
+}
+
 function fieldFor(draft: MonitorDraft, path: string): keyof MonitorDraft {
   if (path === "config.name") return draft.type === "dns" ? "dnsName" : "host";
   if (path === "config.type") return "dnsType";
@@ -285,6 +336,10 @@ function fieldFor(draft: MonitorDraft, path: string): keyof MonitorDraft {
     "config.keyword": "keyword",
     "config.jsonPath": "jsonPath",
     "config.jsonExpect": "jsonExpect",
+    "config.degraded.keyword": "degradedKeyword",
+    "config.degraded.jsonPath": "degradedJsonPath",
+    "config.degraded.jsonExpect": "degradedJsonExpect",
+    "config.degraded.maxResponseMs": "degradedMaxMs",
     "config.host": "host",
     "config.port": "port",
     "config.expected": "expected",
@@ -337,10 +392,15 @@ function codeFor(field: keyof MonitorDraft, message: string): MonitorErrorCode {
     case "expectedStatuses":
       return "statuses";
     case "keyword":
+    case "degradedKeyword":
       return "keyword";
     case "jsonPath":
     case "jsonExpect":
+    case "degradedJsonPath":
+    case "degradedJsonExpect":
       return "json";
+    case "degradedMaxMs":
+      return "degraded_ms";
     case "body":
       return "body";
     case "channelIds":

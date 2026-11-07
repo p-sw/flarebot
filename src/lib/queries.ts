@@ -80,7 +80,13 @@ export function statsQuery(id: string) {
     queryKey: ["stats", id],
     queryFn: () =>
       api<{
-        recent: { t: number; ok: boolean; ms: number; maint?: boolean }[];
+        recent: {
+          t: number;
+          ok: boolean;
+          ms: number;
+          maint?: boolean;
+          deg?: boolean;
+        }[];
         uptime: {
           h24: number | null;
           d7: number | null;

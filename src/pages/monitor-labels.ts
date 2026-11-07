@@ -12,6 +12,7 @@ export function monitorTypeLabel(type: string): string {
 
 export function monitorStatusLabel(status: string): string {
   if (status === "up") return t("status_up");
+  if (status === "degraded") return t("status_degraded");
   if (status === "down") return t("status_down");
   if (status === "pending") return t("status_pending");
   if (status === "paused") return t("status_paused");

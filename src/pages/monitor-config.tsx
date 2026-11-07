@@ -94,6 +94,9 @@ export function MonitorConfig({ monitor }: { monitor: MonitorDetail }) {
               <Row label={t("monitor_json_expect")}>
                 {text(config.jsonExpect)}
               </Row>
+              <Row label={t("monitor_degraded")}>
+                {degradedSummary(config.degraded)}
+              </Row>
               <Row label={t("monitor_follow")}>
                 {config.followRedirects === false
                   ? t("monitor_no")
@@ -266,6 +269,38 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
       <dd className="min-w-0 text-sm">{children}</dd>
     </div>
   );
+}
+
+function degradedSummary(value: unknown): string {
+  if (!value || typeof value !== "object") return t("monitor_not_set");
+  const degraded = value as Record<string, unknown>;
+  const parts: string[] = [];
+  const keyword = text(degraded.keyword);
+  if (keyword) {
+    parts.push(
+      degraded.keywordMode === "absent"
+        ? t("monitor_degraded_summary_keyword_absent", { keyword })
+        : t("monitor_degraded_summary_keyword_present", { keyword }),
+    );
+  }
+  const path = text(degraded.jsonPath);
+  if (path) {
+    parts.push(
+      t("monitor_degraded_summary_json", {
+        path,
+        value: text(degraded.jsonExpect),
+      }),
+    );
+  }
+  const limit = text(degraded.maxResponseMs);
+  if (limit) parts.push(t("monitor_degraded_summary_ms", { value: limit }));
+  if (parts.length === 0) return t("monitor_not_set");
+  parts.push(
+    degraded.notify === false
+      ? t("monitor_degraded_summary_silent")
+      : t("monitor_degraded_summary_notify"),
+  );
+  return parts.join(" · ");
 }
 
 function text(value: unknown, fallback = ""): string {

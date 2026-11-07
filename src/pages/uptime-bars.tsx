@@ -31,10 +31,12 @@ function spanText(bar: HistoryBar): string {
 function detailText(bar: HistoryBar): string {
   if (bar.state === "maintenance") return t("status_bar_maintenance");
   if (bar.uptime === null) return t("chart_empty");
-  return t("status_bar_title", {
+  const title = t("status_bar_title", {
     uptime: t("uptime_percent", { value: bar.uptime }),
     response: responseText(bar.responseMs),
   });
+  if ((bar.degraded ?? 0) > 0) return `${title}. ${t("status_bar_degraded")}`;
+  return title;
 }
 
 function barLabel(bar: HistoryBar): string {

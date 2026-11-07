@@ -326,7 +326,7 @@ export function MonitorDetailPage() {
             {recent.slice(-60).map((point) => (
               <div
                 key={point.t}
-                className={`min-w-0 flex-1 ${point.maint ? "bg-primary" : point.ok ? "bg-status-up" : "bg-status-down"}`}
+                className={`min-w-0 flex-1 ${point.maint ? "bg-primary" : !point.ok ? "bg-status-down" : point.deg ? "bg-status-pending" : "bg-status-up"}`}
                 style={{
                   height: Math.max(4, Math.min(32, point.ms / 30)),
                 }}

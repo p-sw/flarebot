@@ -614,6 +614,112 @@ function HttpFields({
           aria-label={t("monitor_follow")}
         />
       </div>
+      <div className="grid min-w-0 gap-3 rounded-md border border-border p-3">
+        <div>
+          <p className="text-sm font-medium">{t("monitor_degraded")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("monitor_degraded_hint")}
+          </p>
+        </div>
+        <Field
+          label={t("monitor_degraded_keyword")}
+          error={fieldErrorText(errors.degradedKeyword)}
+        >
+          <Input
+            name="degradedKeyword"
+            value={draft.degradedKeyword}
+            aria-invalid={Boolean(errors.degradedKeyword)}
+            onChange={(event) =>
+              onChange({ ...draft, degradedKeyword: event.target.value })
+            }
+          />
+        </Field>
+        <Field label={t("monitor_degraded_keyword_mode")}>
+          <select
+            className={controlClass}
+            name="degradedKeywordMode"
+            value={draft.degradedKeywordMode}
+            onChange={(event) =>
+              onChange({
+                ...draft,
+                degradedKeywordMode:
+                  event.target.value === "absent" ? "absent" : "present",
+              })
+            }
+          >
+            <option value="present">
+              {t("monitor_degraded_keyword_present")}
+            </option>
+            <option value="absent">
+              {t("monitor_degraded_keyword_absent")}
+            </option>
+          </select>
+        </Field>
+        <Field
+          label={t("monitor_degraded_json_path")}
+          hint={t("monitor_json_hint")}
+          error={
+            fieldErrorText(errors.degradedJsonPath) ??
+            fieldErrorText(errors.degradedJsonExpect)
+          }
+        >
+          <Input
+            name="degradedJsonPath"
+            value={draft.degradedJsonPath}
+            aria-invalid={Boolean(
+              errors.degradedJsonPath || errors.degradedJsonExpect,
+            )}
+            onChange={(event) =>
+              onChange({ ...draft, degradedJsonPath: event.target.value })
+            }
+          />
+        </Field>
+        <Field
+          label={t("monitor_degraded_json_expect")}
+          error={fieldErrorText(errors.degradedJsonExpect)}
+        >
+          <Input
+            name="degradedJsonExpect"
+            value={draft.degradedJsonExpect}
+            aria-invalid={Boolean(errors.degradedJsonExpect)}
+            onChange={(event) =>
+              onChange({ ...draft, degradedJsonExpect: event.target.value })
+            }
+          />
+        </Field>
+        <Field
+          label={t("monitor_degraded_max_ms")}
+          hint={t("monitor_degraded_max_ms_hint")}
+          error={fieldErrorText(errors.degradedMaxMs)}
+        >
+          <Input
+            name="degradedMaxMs"
+            inputMode="numeric"
+            value={draft.degradedMaxMs}
+            aria-invalid={Boolean(errors.degradedMaxMs)}
+            onChange={(event) =>
+              onChange({ ...draft, degradedMaxMs: event.target.value })
+            }
+          />
+        </Field>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">
+              {t("monitor_degraded_notify")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t("monitor_degraded_notify_hint")}
+            </p>
+          </div>
+          <Switch
+            checked={draft.degradedNotify}
+            onCheckedChange={(checked) =>
+              onChange({ ...draft, degradedNotify: checked })
+            }
+            aria-label={t("monitor_degraded_notify")}
+          />
+        </div>
+      </div>
       <div className="grid min-w-0 gap-2">
         <div>
           <p className="text-sm font-medium">{t("monitor_headers")}</p>
@@ -930,6 +1036,8 @@ function fieldErrorText(
       return t("monitor_keyword_invalid");
     case "json":
       return t("monitor_json_invalid");
+    case "degraded_ms":
+      return t("monitor_degraded_max_ms_invalid");
     case "body":
       return t("monitor_body_invalid");
     case "channels":
