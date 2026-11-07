@@ -15,6 +15,7 @@ import {
   utcDayStart,
 } from "../../shared/history";
 import {
+  announcedStatus,
   type Impact,
   type IncidentStatus,
   pageOverall,
@@ -59,6 +60,8 @@ export type PublicStatus = {
     | "empty"
     | "paused"
     | "maintenance";
+  /** Monitors whose live check is down or degraded, shown as automatic notices. */
+  liveAlerts: { down: string[]; degraded: string[] };
   incidents: {
     id: string;
     title: string;
@@ -251,6 +254,9 @@ export async function loadPublicStatus(
     { name: string; items: PublicStatus["groups"][number]["items"] }
   >();
   const components: { id: string; name: string }[] = [];
+  const announced: string[] = [];
+  const liveDown = new Map<string, string>();
+  const liveDegraded = new Map<string, string>();
   for (const item of items) {
     const name =
       statusItemLabel(item.displayName, nameById.get(item.monitorId) ?? "") ||
@@ -306,15 +312,26 @@ export async function loadPublicStatus(
     });
     const bucket = groups.get(groupKey) ?? { name: groupName, items: [] };
     if (!bucket.name && groupName) bucket.name = groupName;
+    const paused = pausedById.get(item.monitorId) ?? false;
+    const impact = announcements.impactByMonitor.get(item.monitorId) ?? null;
+    const maintenance = announcements.maintenanceMonitors.has(item.monitorId);
+    const status = presentStatus({
+      paused,
+      runtime: stateById.get(item.monitorId),
+      impact,
+      maintenance,
+    });
+    announced.push(announcedStatus({ paused, impact, maintenance }));
+    const firstName =
+      components.find((entry) => entry.id === item.monitorId)?.name ?? name;
+    if (status === "down" && !impact) liveDown.set(item.monitorId, firstName);
+    if (status === "degraded" && !impact) {
+      liveDegraded.set(item.monitorId, firstName);
+    }
     bucket.items.push({
       id: item.id,
       name,
-      status: presentStatus({
-        paused: pausedById.get(item.monitorId) ?? false,
-        runtime: stateById.get(item.monitorId),
-        impact: announcements.impactByMonitor.get(item.monitorId) ?? null,
-        maintenance: announcements.maintenanceMonitors.has(item.monitorId),
-      }),
+      status,
       uptime: summary.uptime,
       responseMs: summary.responseMs,
       maint: summary.maint,
@@ -323,8 +340,7 @@ export async function loadPublicStatus(
     });
     groups.set(groupKey, bucket);
   }
-  const flat = [...groups.values()].flatMap((group) => group.items);
-  const overall = pageOverall(flat.map((item) => item.status));
+  const overall = pageOverall(announced);
   const subscriptions = await publicSubscriptionState(env, page, components);
   return {
     slug: page.slug,
@@ -342,6 +358,10 @@ export async function loadPublicStatus(
     clamped: window.clamped,
     retentionDays: window.retentionDays,
     overall,
+    liveAlerts: {
+      down: [...liveDown.values()],
+      degraded: [...liveDegraded.values()],
+    },
     incidents: announcements.incidents,
     history: announcements.history,
     maintenance: announcements.maintenance,

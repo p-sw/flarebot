@@ -37,6 +37,7 @@ type PublicPage = {
     | "empty"
     | "paused"
     | "maintenance";
+  liveAlerts?: { down: string[]; degraded: string[] };
   incidents: {
     id: string;
     title: string;
@@ -101,6 +102,49 @@ function statusLabel(status: string) {
     return incidentStatusLabel(status);
   }
   return t("status_unknown");
+}
+
+function LiveAlerts({ alerts }: { alerts?: PublicPage["liveAlerts"] }) {
+  const down = alerts?.down ?? [];
+  const degraded = alerts?.degraded ?? [];
+  if (down.length === 0 && degraded.length === 0) return null;
+  return (
+    <section className="mt-8 grid gap-3" aria-label={t("status_live_section")}>
+      <h2 className="text-sm font-medium text-muted-foreground">
+        {t("status_live_section")}
+      </h2>
+      {down.length > 0 ? (
+        <StatusNotice
+          variant="destructive"
+          title={
+            <h3 className="min-w-0 break-words font-medium leading-6">
+              {t("status_live_down_title")}
+            </h3>
+          }
+          badge={<StatusNoticeBadge>{statusLabel("down")}</StatusNoticeBadge>}
+        >
+          <p className="break-words text-sm">{t("status_live_hint")}</p>
+          <p className="break-words text-xs">{down.join(", ")}</p>
+        </StatusNotice>
+      ) : null}
+      {degraded.length > 0 ? (
+        <StatusNotice
+          variant="warning"
+          title={
+            <h3 className="min-w-0 break-words font-medium leading-6">
+              {t("status_live_degraded_title")}
+            </h3>
+          }
+          badge={
+            <StatusNoticeBadge>{statusLabel("degraded")}</StatusNoticeBadge>
+          }
+        >
+          <p className="break-words text-sm">{t("status_live_hint")}</p>
+          <p className="break-words text-xs">{degraded.join(", ")}</p>
+        </StatusNotice>
+      ) : null}
+    </section>
+  );
 }
 
 export function PublicStatusPage() {
@@ -230,6 +274,7 @@ export function PublicStatusPage() {
           ))}
         </section>
       ) : null}
+      <LiveAlerts alerts={data.liveAlerts} />
       {data.clamped ? (
         <p className="mt-4 max-w-full text-sm break-words text-muted-foreground">
           {t("status_range_clamped", {

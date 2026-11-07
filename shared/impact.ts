@@ -50,6 +50,22 @@ export function presentStatus(input: {
   return visibleStatus(input.paused, input.runtime);
 }
 
+/**
+ * What the page overall reads for one monitor: incident impact, then
+ * maintenance, then paused. The live check is left out on purpose; down and
+ * degraded checks show in the automatic notices instead (decision 56).
+ */
+export function announcedStatus(input: {
+  paused: boolean;
+  impact: Impact | null;
+  maintenance: boolean;
+}): string {
+  if (input.impact) return input.impact;
+  if (input.maintenance) return "maintenance";
+  if (input.paused) return "paused";
+  return "up";
+}
+
 export type PageOverall =
   | "operational"
   | "degraded"
