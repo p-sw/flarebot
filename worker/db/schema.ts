@@ -236,6 +236,7 @@ export const uptimeHourly = sqliteTable(
     latencyMax: integer("latency_max").notNull(),
     samplesJson: text("samples_json").notNull(),
     maintCount: integer("maint_count").notNull().default(0),
+    degradedCount: integer("degraded_count").notNull().default(0),
   },
   (table) => [primaryKey({ columns: [table.monitorId, table.hourStart] })],
 );
@@ -250,6 +251,7 @@ export const uptimeSlots = sqliteTable(
     latencySum: integer("latency_sum").notNull(),
     latencyMax: integer("latency_max").notNull(),
     maintCount: integer("maint_count").notNull().default(0),
+    degradedCount: integer("degraded_count").notNull().default(0),
   },
   (table) => [
     primaryKey({ columns: [table.monitorId, table.slotStart] }),
@@ -267,6 +269,7 @@ export const uptimeDaily = sqliteTable(
     latencySum: integer("latency_sum").notNull(),
     latencyMax: integer("latency_max").notNull(),
     maintCount: integer("maint_count").notNull().default(0),
+    degradedCount: integer("degraded_count").notNull().default(0),
   },
   (table) => [primaryKey({ columns: [table.monitorId, table.dayStart] })],
 );

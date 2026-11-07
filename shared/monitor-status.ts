@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-const known = new Set(["up", "down", "pending", "unknown"]);
+const known = new Set(["up", "degraded", "down", "pending", "unknown"]);
 
 export function visibleStatus(
   paused: boolean,

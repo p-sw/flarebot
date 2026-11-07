@@ -46,7 +46,37 @@ export const httpConfigSchema = z.object({
   keywordMode: z.enum(["present", "absent"]).default("present"),
   jsonPath: z.string().max(200).optional(),
   jsonExpect: z.string().max(500).optional(),
+  degraded: z
+    .object({
+      keyword: z.string().max(500).optional(),
+      keywordMode: z.enum(["present", "absent"]).default("present"),
+      jsonPath: z.string().max(200).optional(),
+      jsonExpect: z.string().max(500).optional(),
+      maxResponseMs: z.number().int().min(1).max(30_000).optional(),
+      notify: z.boolean().default(true),
+    })
+    .superRefine((value, ctx) => {
+      if (value.jsonPath && value.jsonExpect === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: "A degraded JSON path needs an expected value.",
+          path: ["jsonExpect"],
+        });
+      }
+      if (value.jsonExpect !== undefined && !value.jsonPath) {
+        ctx.addIssue({
+          code: "custom",
+          message: "A degraded JSON value needs a path.",
+          path: ["jsonPath"],
+        });
+      }
+    })
+    .optional(),
 });
+
+export type HttpDegradedConfig = NonNullable<
+  z.infer<typeof httpConfigSchema>["degraded"]
+>;
 
 export const tcpConfigSchema = z
   .object({

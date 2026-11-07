@@ -2,6 +2,8 @@
 
 Flarebot sends a message when a monitor is confirmed down, when it recovers, and once when it flaps. The same copy is used for every channel: `notify_down_subject`, `notify_up_subject`, `notify_unstable_subject`, and the matching body strings in `brand/locale.json`. A down message includes the check reason. Recovery and flapping messages name the monitor.
 
+An HTTP monitor with degraded conditions also sends one message when it becomes degraded (`notify_degraded_subject`, with the matched condition as the reason) and one when it clears (`notify_degraded_resolved_subject`). Each monitor can turn those two off. Transports treat degraded like flapping and the clear like recovery for priority, tags, and colors.
+
 Channels are rows in `notification_channels`. The config is a JSON object encrypted with `ENCRYPTION_KEY` before it is stored. The list API decrypts it for someone who can edit channels, then blanks secret fields and returns a `secrets` array so the form can say a value is already saved. A blank secret on update keeps the stored value. `clearSecrets` removes an optional secret (the ntfy access token, or webhook header values). Viewers see the name, type, and a non-secret destination such as a hostname or room id.
 
 Creating or editing a channel checks the config with `shared/channels.ts`. URLs must be public `http` or `https`. Private and local hosts use the same rules as HTTP monitors. Send test and a real alert both refuse those addresses, so a saved row cannot be aimed at loopback later.
@@ -39,7 +41,7 @@ A generic webhook receives:
 }
 ```
 
-`event` is `down`, `up`, or `unstable`.
+`event` is `down`, `up`, `unstable`, `degraded`, or `degraded_resolved`.
 
 ## Send test
 

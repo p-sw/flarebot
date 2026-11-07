@@ -202,12 +202,14 @@ export async function loadPublicStatus(
             fail: 0,
             sum: 0,
             maint: 0,
+            degraded: 0,
           };
           if (current.start === row.rollup.hourStart) {
             current.ok += row.rollup.ok;
             current.fail += row.rollup.fail;
             current.sum += row.rollup.sum;
             current.maint = (current.maint ?? 0) + (row.rollup.maint ?? 0);
+            current.degraded = (current.degraded ?? 0) + (row.rollup.deg ?? 0);
             live.set(row.id, current);
           }
         }
@@ -218,12 +220,14 @@ export async function loadPublicStatus(
             fail: 0,
             sum: 0,
             maint: 0,
+            degraded: 0,
           };
           if (current.start === row.slot.slotStart) {
             current.ok += row.slot.ok;
             current.fail += row.slot.fail;
             current.sum += row.slot.sum;
             current.maint = (current.maint ?? 0) + (row.slot.maint ?? 0);
+            current.degraded = (current.degraded ?? 0) + (row.slot.deg ?? 0);
             liveSlots.set(row.id, current);
           }
         }
@@ -267,6 +271,7 @@ export async function loadPublicStatus(
           fail: row.failCount,
           sum: row.latencySum,
           maint: row.maintCount,
+          degraded: row.degradedCount,
         })),
       hourly: hourly
         .filter((row) => row.monitorId === item.monitorId)
@@ -276,6 +281,7 @@ export async function loadPublicStatus(
           fail: row.failCount,
           sum: row.latencySum,
           maint: row.maintCount,
+          degraded: row.degradedCount,
         })),
       slots: slots
         .filter((row) => row.monitorId === item.monitorId)
@@ -285,6 +291,7 @@ export async function loadPublicStatus(
           fail: row.failCount,
           sum: row.latencySum,
           maint: row.maintCount,
+          degraded: row.degradedCount,
         })),
       live: live.get(item.monitorId) ?? null,
       liveSlot: liveSlots.get(item.monitorId) ?? null,

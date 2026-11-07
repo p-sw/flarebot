@@ -16,6 +16,7 @@ type HourlyRollup = {
   max: number;
   samples: number[];
   maint?: number;
+  deg?: number;
 };
 
 type HourlyRow = {
@@ -25,21 +26,25 @@ type HourlyRow = {
   latency_max: number;
   samples_json: string;
   maint_count: number | null;
+  degraded_count: number | null;
 };
 
-const SELECT_HOURLY = `SELECT ok_count, fail_count, latency_sum, latency_max, samples_json, maint_count
+const SELECT_HOURLY = `SELECT ok_count, fail_count, latency_sum, latency_max, samples_json, maint_count,
+  degraded_count
   FROM uptime_hourly WHERE monitor_id = ? AND hour_start = ?`;
 
 const UPSERT_HOURLY = `INSERT INTO uptime_hourly (
-  monitor_id, hour_start, ok_count, fail_count, latency_sum, latency_max, samples_json, maint_count
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  monitor_id, hour_start, ok_count, fail_count, latency_sum, latency_max, samples_json, maint_count,
+  degraded_count
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (monitor_id, hour_start) DO UPDATE SET
   ok_count = excluded.ok_count,
   fail_count = excluded.fail_count,
   latency_sum = excluded.latency_sum,
   latency_max = excluded.latency_max,
   samples_json = excluded.samples_json,
-  maint_count = excluded.maint_count`;
+  maint_count = excluded.maint_count,
+  degraded_count = excluded.degraded_count`;
 
 const MARK_DIRTY = `INSERT INTO rollup_dirty (monitor_id, day_start) VALUES (?, ?)
 ON CONFLICT (monitor_id, day_start) DO NOTHING`;
@@ -147,6 +152,7 @@ export async function mergeHourly(
         merged.max,
         merged.samples,
         merged.maint,
+        merged.deg,
       ),
     database.prepare(MARK_DIRTY).bind(monitorId, utcDayStart(rollup.hourStart)),
   ]);
@@ -187,6 +193,7 @@ export async function flushMonitorRollups(
           merged.max,
           merged.samples,
           merged.maint,
+          merged.deg,
         ),
     );
     if (entry.markDirty) {
@@ -213,6 +220,7 @@ function mergeHour(existing: HourlyRow | null, rollup: HourlyRollup) {
     sum: (existing?.latency_sum ?? 0) + rollup.sum,
     max: Math.max(existing?.latency_max ?? 0, rollup.max),
     maint: (existing?.maint_count ?? 0) + (rollup.maint ?? 0),
+    deg: (existing?.degraded_count ?? 0) + (rollup.deg ?? 0),
     samples: JSON.stringify(prior.concat(rollup.samples).slice(-120)),
   };
 }
@@ -247,11 +255,12 @@ export async function mergeSlot(
     sum: number;
     max: number;
     maint?: number;
+    deg?: number;
   },
 ): Promise<void> {
   const existing = await database
     .prepare(
-      "SELECT ok_count, fail_count, latency_sum, latency_max, maint_count FROM uptime_slots WHERE monitor_id = ? AND slot_start = ?",
+      "SELECT ok_count, fail_count, latency_sum, latency_max, maint_count, degraded_count FROM uptime_slots WHERE monitor_id = ? AND slot_start = ?",
     )
     .bind(monitorId, slot.slotStart)
     .first<{
@@ -260,17 +269,19 @@ export async function mergeSlot(
       latency_sum: number;
       latency_max: number;
       maint_count: number;
+      degraded_count: number | null;
     }>();
   await database
     .prepare(
-      `INSERT INTO uptime_slots (monitor_id, slot_start, ok_count, fail_count, latency_sum, latency_max, maint_count)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO uptime_slots (monitor_id, slot_start, ok_count, fail_count, latency_sum, latency_max, maint_count, degraded_count)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (monitor_id, slot_start) DO UPDATE SET
          ok_count = excluded.ok_count,
          fail_count = excluded.fail_count,
          latency_sum = excluded.latency_sum,
          latency_max = excluded.latency_max,
-         maint_count = excluded.maint_count`,
+         maint_count = excluded.maint_count,
+         degraded_count = excluded.degraded_count`,
     )
     .bind(
       monitorId,
@@ -280,6 +291,7 @@ export async function mergeSlot(
       (existing?.latency_sum ?? 0) + slot.sum,
       Math.max(existing?.latency_max ?? 0, slot.max),
       (existing?.maint_count ?? 0) + (slot.maint ?? 0),
+      (existing?.degraded_count ?? 0) + (slot.deg ?? 0),
     )
     .run();
 }
@@ -291,7 +303,7 @@ export async function addHourly(
 ): Promise<void> {
   const existing = await database
     .prepare(
-      "SELECT ok_count, fail_count, latency_sum, latency_max, samples_json, maint_count FROM uptime_hourly WHERE monitor_id = ? AND hour_start = ?",
+      "SELECT ok_count, fail_count, latency_sum, latency_max, samples_json, maint_count, degraded_count FROM uptime_hourly WHERE monitor_id = ? AND hour_start = ?",
     )
     .bind(monitorId, sample.hourStart)
     .first<{
@@ -301,6 +313,7 @@ export async function addHourly(
       latency_max: number;
       samples_json: string;
       maint_count: number;
+      degraded_count: number | null;
     }>();
   const samples = existing
     ? (JSON.parse(existing.samples_json) as number[])
@@ -330,6 +343,7 @@ export async function addHourly(
         latencyMax,
         JSON.stringify(trimmed),
         maintCount,
+        existing?.degraded_count ?? 0,
       ),
     database.prepare(MARK_DIRTY).bind(monitorId, utcDayStart(sample.hourStart)),
   ]);

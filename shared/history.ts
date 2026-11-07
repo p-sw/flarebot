@@ -217,6 +217,8 @@ export type CountRow = {
   sum: number;
   /** Checks that ran inside a maintenance window. Left out of uptime. */
   maint?: number;
+  /** Successful checks that matched a degraded condition. Already in ok. */
+  degraded?: number;
 };
 
 export type BarState = "empty" | "up" | "degraded" | "down" | "maintenance";
@@ -233,6 +235,8 @@ export type HistoryBar = {
   responseMs: number | null;
   state: BarState;
   maint: number;
+  /** Optional so bars built before degraded checks existed still type-check. */
+  degraded?: number;
   incidents: number;
   ok: number;
   fail: number;
@@ -252,11 +256,19 @@ export function uptimePercent(ok: number, fail: number): number | null {
   return Math.round((ok / total) * 1000) / 10;
 }
 
-/** Maintenance samples do not move the percentage. A bucket of only those is maintenance. */
-export function barState(ok: number, fail: number, maint: number): BarState {
+/**
+ * Maintenance samples do not move the percentage. A bucket of only those is maintenance.
+ * A bucket that would be up but holds a degraded check is degraded.
+ */
+export function barState(
+  ok: number,
+  fail: number,
+  maint: number,
+  degraded = 0,
+): BarState {
   if (ok + fail === 0) return maint > 0 ? "maintenance" : "empty";
   const uptime = uptimePercent(ok, fail) ?? 0;
-  if (uptime >= 99) return "up";
+  if (uptime >= 99) return degraded > 0 ? "degraded" : "up";
   if (uptime >= 90) return "degraded";
   return "down";
 }
@@ -272,7 +284,7 @@ export function responseAverage(
 }
 
 function emptyCount(start: number): CountRow {
-  return { start, ok: 0, fail: 0, sum: 0, maint: 0 };
+  return { start, ok: 0, fail: 0, sum: 0, maint: 0, degraded: 0 };
 }
 
 function addCount(base: CountRow, extra: CountRow): CountRow {
@@ -282,18 +294,21 @@ function addCount(base: CountRow, extra: CountRow): CountRow {
     fail: base.fail + extra.fail,
     sum: base.sum + extra.sum,
     maint: (base.maint ?? 0) + (extra.maint ?? 0),
+    degraded: (base.degraded ?? 0) + (extra.degraded ?? 0),
   };
 }
 
 function barFrom(count: CountRow, end: number, incidents: number): HistoryBar {
   const maint = count.maint ?? 0;
+  const degraded = count.degraded ?? 0;
   return {
     start: count.start,
     end,
     uptime: uptimePercent(count.ok, count.fail),
     responseMs: responseAverage(count.sum, count.ok, count.fail),
-    state: barState(count.ok, count.fail, maint),
+    state: barState(count.ok, count.fail, maint, degraded),
     maint,
+    degraded,
     incidents,
     ok: count.ok,
     fail: count.fail,
@@ -325,6 +340,7 @@ function scaleCount(
     fail: count.fail * fraction,
     sum: count.sum * fraction,
     maint: (count.maint ?? 0) * fraction,
+    degraded: (count.degraded ?? 0) * fraction,
   };
 }
 
@@ -356,6 +372,7 @@ export function fitBars(bars: HistoryBar[], max: number): HistoryBar[] {
       count.fail += bar.fail;
       count.sum += bar.sum;
       count.maint = (count.maint ?? 0) + bar.maint;
+      count.degraded = (count.degraded ?? 0) + (bar.degraded ?? 0);
       incidents += bar.incidents;
     }
     grouped.push(barFrom(count, last.end, incidents));
@@ -371,6 +388,7 @@ function sumRows(rows: CountRow[], from: number, until: number): CountRow {
       total.fail += row.fail;
       total.sum += row.sum;
       total.maint = (total.maint ?? 0) + (row.maint ?? 0);
+      total.degraded = (total.degraded ?? 0) + (row.degraded ?? 0);
     }
   }
   return total;
@@ -603,6 +621,7 @@ function summarizeDays(
             fail: daily.fail,
             sum: daily.sum,
             maint: daily.maint ?? 0,
+            degraded: daily.degraded ?? 0,
           }
         : addCount(count, sumRows(input.hourly, start, start + DAY_MS));
     }

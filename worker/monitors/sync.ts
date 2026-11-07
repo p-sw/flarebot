@@ -39,7 +39,13 @@ export type SchedulerApi = {
     {
       id: string;
       state: RuntimeState;
-      recent: { t: number; ok: boolean; ms: number; maint?: boolean }[];
+      recent: {
+        t: number;
+        ok: boolean;
+        ms: number;
+        maint?: boolean;
+        deg?: boolean;
+      }[];
       nextCheckAt: number;
       lastPushAt: number | null;
       rollup: {
@@ -47,6 +53,7 @@ export type SchedulerApi = {
         ok: number;
         fail: number;
         maint: number;
+        deg: number;
         sum: number;
         max: number;
         samples: number[];
@@ -58,12 +65,19 @@ export type SchedulerApi = {
         sum: number;
         max: number;
         maint: number;
+        deg: number;
       } | null;
     }[]
   >;
   getOne(id: string): Promise<{
     state: RuntimeState;
-    recent: { t: number; ok: boolean; ms: number; maint?: boolean }[];
+    recent: {
+      t: number;
+      ok: boolean;
+      ms: number;
+      maint?: boolean;
+      deg?: boolean;
+    }[];
     nextCheckAt: number;
     lastPushAt: number | null;
     rollup: {
@@ -71,6 +85,7 @@ export type SchedulerApi = {
       ok: number;
       fail: number;
       maint: number;
+      deg: number;
       sum: number;
       max: number;
       samples: number[];
@@ -82,6 +97,7 @@ export type SchedulerApi = {
       sum: number;
       max: number;
       maint: number;
+      deg: number;
     } | null;
   } | null>;
   ensureAlarm(): Promise<void>;
@@ -96,7 +112,13 @@ export type SchedulerApi = {
   } | null>;
   noteSample(
     id: string,
-    sample: { t: number; ok: boolean; ms: number; internal: boolean },
+    sample: {
+      t: number;
+      ok: boolean;
+      ms: number;
+      internal: boolean;
+      degraded?: boolean;
+    },
   ): Promise<void>;
   detach(id: string): Promise<{
     state: RuntimeState;
@@ -227,6 +249,7 @@ export async function runInitialCheck(
     ok: outcome.ok,
     ms: outcome.responseMs,
     internal: Boolean(outcome.internal),
+    degraded: Boolean(outcome.degraded),
   });
   return transition.state;
 }

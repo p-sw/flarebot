@@ -801,6 +801,9 @@ function runtimeFrom(
           statusSince: stored.since,
           lastCheckAt: stored.lastCheckAt,
           lastError: stored.lastError,
+          // D1 does not keep the flag. Assume a stored degraded state was
+          // already announced so a reload does not page again.
+          degradedNotified: stored.status === "degraded",
         }
       : initialState(Date.now());
   return base;

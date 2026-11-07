@@ -10,6 +10,7 @@ import { getDb } from "../db/client";
 import { monitorChannels, notificationChannels } from "../db/schema";
 import { enqueueMail } from "../mail/mailer";
 import { isInMaintenance, loadActiveMaintenanceIds } from "../maintenance";
+import type { AlertKind } from "../notify/copy";
 import { type ChannelDelivery, deliverChannel } from "../notify/dispatch";
 import { CHECK_CONCURRENCY, CHECKS_PER_ALARM } from "./capacity";
 import {
@@ -39,12 +40,21 @@ export type Snapshot = {
   regions: string[];
 };
 
-type Point = { t: number; ok: boolean; ms: number; maint?: boolean };
+type Point = {
+  t: number;
+  ok: boolean;
+  ms: number;
+  maint?: boolean;
+  /** A successful check that matched a degraded condition. */
+  deg?: boolean;
+};
 type Rollup = {
   hourStart: number;
   ok: number;
   fail: number;
   maint: number;
+  /** Degraded checks. Each one is also counted in ok. */
+  deg: number;
   sum: number;
   max: number;
   samples: number[];
@@ -56,16 +66,17 @@ type SlotRollup = {
   sum: number;
   max: number;
   maint: number;
+  deg: number;
 };
 
 function normalizeRollup(rollup: Rollup | undefined): Rollup | null {
   if (!rollup) return null;
-  return { ...rollup, maint: rollup.maint ?? 0 };
+  return { ...rollup, maint: rollup.maint ?? 0, deg: rollup.deg ?? 0 };
 }
 
 function normalizeSlot(slot: SlotRollup | undefined): SlotRollup | null {
   if (!slot) return null;
-  return { ...slot, maint: slot.maint ?? 0 };
+  return { ...slot, maint: slot.maint ?? 0, deg: slot.deg ?? 0 };
 }
 type Store = {
   monitors: Record<string, Snapshot>;
@@ -76,6 +87,14 @@ type Store = {
   /** UTC day already recorded in rollup_dirty for this monitor. */
   dirtyDays: Record<string, number>;
 };
+
+/** Degraded alerts are on unless the monitor turned them off. */
+export function degradedNotifyEnabled(config: unknown): boolean {
+  if (!config || typeof config !== "object") return false;
+  const degraded = (config as { degraded?: unknown }).degraded;
+  if (!degraded || typeof degraded !== "object") return false;
+  return (degraded as { notify?: unknown }).notify !== false;
+}
 
 export class SchedulerShard extends DurableObject<Env> {
   // Probe I/O yields the isolate, so a pause can land while a check is in flight.
@@ -102,7 +121,13 @@ export class SchedulerShard extends DurableObject<Env> {
 
   async noteSample(
     id: string,
-    sample: { t: number; ok: boolean; ms: number; internal: boolean },
+    sample: {
+      t: number;
+      ok: boolean;
+      ms: number;
+      internal: boolean;
+      degraded?: boolean;
+    },
   ): Promise<void> {
     await this.enqueue(async () => {
       const store = await this.load();
@@ -368,6 +393,7 @@ export class SchedulerShard extends DurableObject<Env> {
       const store = await this.load();
       const current = store.monitors[id];
       if (!current || current.paused) return null;
+      const previousStatus = current.state.status;
       const transition = applyOutcome(current.state, outcome, {
         retries: current.retries,
         recoveryThreshold: current.recoveryThreshold,
@@ -383,6 +409,7 @@ export class SchedulerShard extends DurableObject<Env> {
         ms: outcome.responseMs,
         internal: outcome.internal,
         maintenance: inMaintenance,
+        degraded: Boolean(outcome.degraded),
       });
       await this.persist(store);
       if (transition.openedOutage) {
@@ -394,17 +421,30 @@ export class SchedulerShard extends DurableObject<Env> {
         );
       }
       if (transition.closedOutage) await closeOutage(this.env.DB, id, now);
+      // Up and degraded swap without an alert when degraded alerts are off.
+      // Save the swap so the status page color follows it. Pending still
+      // waits for the flush, as it does for up.
+      const next = current.state.status;
+      const degradedMoved =
+        previousStatus !== next &&
+        (next === "degraded" ||
+          (previousStatus === "degraded" && next === "up"));
       if (
         transition.openedOutage ||
         transition.closedOutage ||
-        transition.alert
+        transition.alert ||
+        transition.degradedAlert ||
+        degradedMoved
       ) {
         await saveRuntime(this.env.DB, id, current.state);
       }
       return {
         name: current.name,
         alert: transition.alert,
+        degradedAlert: transition.degradedAlert,
+        degradedNotify: degradedNotifyEnabled(current.config),
         reason: outcome.error ?? outcome.errorKind ?? "",
+        degradedReason: outcome.degraded ?? "",
       };
     });
     if (!committed) return;
@@ -440,6 +480,17 @@ export class SchedulerShard extends DurableObject<Env> {
         committed.reason,
       );
     }
+    if (
+      committed.degradedAlert &&
+      committed.degradedNotify &&
+      !isInMaintenance(id, activeMaintenance)
+    ) {
+      await this.notify(
+        { ...monitor, name: committed.name },
+        committed.degradedAlert,
+        committed.degradedReason,
+      );
+    }
   }
 
   private async recordSample(
@@ -451,25 +502,29 @@ export class SchedulerShard extends DurableObject<Env> {
       ms: number;
       internal: boolean;
       maintenance?: boolean;
+      degraded?: boolean;
     },
   ): Promise<void> {
+    const degraded = sample.ok && !sample.internal && sample.degraded === true;
     const points = store.recent[id] ?? [];
     points.push({
       t: sample.t,
       ok: sample.ok && !sample.internal,
       ms: sample.ms,
       maint: sample.maintenance || undefined,
+      deg: degraded || undefined,
     });
     store.recent[id] = points.slice(-60);
     const hourStart = Math.floor(sample.t / 3_600_000) * 3_600_000;
     const existing = store.rollups[id];
     const rollup: Rollup = existing
-      ? { ...existing, maint: existing.maint ?? 0 }
+      ? { ...existing, maint: existing.maint ?? 0, deg: existing.deg ?? 0 }
       : {
           hourStart,
           ok: 0,
           fail: 0,
           maint: 0,
+          deg: 0,
           sum: 0,
           max: 0,
           samples: [],
@@ -484,6 +539,7 @@ export class SchedulerShard extends DurableObject<Env> {
         ok: 0,
         fail: 0,
         maint: 0,
+        deg: 0,
         sum: 0,
         max: 0,
         samples: [],
@@ -491,12 +547,14 @@ export class SchedulerShard extends DurableObject<Env> {
     }
     const current = store.rollups[id] ?? rollup;
     current.maint = current.maint ?? 0;
+    current.deg = current.deg ?? 0;
     if (!sample.internal) {
       if (sample.maintenance) {
         current.maint += 1;
       } else {
         if (sample.ok) current.ok += 1;
         else current.fail += 1;
+        if (degraded) current.deg += 1;
         current.sum += sample.ms;
         current.max = Math.max(current.max, sample.ms);
         current.samples.push(sample.ms);
@@ -514,18 +572,20 @@ export class SchedulerShard extends DurableObject<Env> {
       await mergeSlot(this.env.DB, id, {
         ...previous,
         maint: previous.maint ?? 0,
+        deg: previous.deg ?? 0,
       }).catch(() => undefined);
     }
     const slot: SlotRollup =
       !previous || previous.slotStart !== slotStart
-        ? { slotStart, ok: 0, fail: 0, sum: 0, max: 0, maint: 0 }
-        : { ...previous, maint: previous.maint ?? 0 };
+        ? { slotStart, ok: 0, fail: 0, sum: 0, max: 0, maint: 0, deg: 0 }
+        : { ...previous, maint: previous.maint ?? 0, deg: previous.deg ?? 0 };
     if (!sample.internal) {
       if (sample.maintenance) {
         slot.maint += 1;
       } else {
         if (sample.ok) slot.ok += 1;
         else slot.fail += 1;
+        if (degraded) slot.deg += 1;
         slot.sum += sample.ms;
         slot.max = Math.max(slot.max, sample.ms);
       }
@@ -542,7 +602,11 @@ export class SchedulerShard extends DurableObject<Env> {
       day: number;
     }[] = [];
     for (const [id, stored] of Object.entries(store.rollups)) {
-      const rollup = { ...stored, maint: stored.maint ?? 0 };
+      const rollup = {
+        ...stored,
+        maint: stored.maint ?? 0,
+        deg: stored.deg ?? 0,
+      };
       if (rollup.ok + rollup.fail + rollup.maint === 0) continue;
       const day = utcDayStart(rollup.hourStart);
       entries.push({
@@ -561,6 +625,7 @@ export class SchedulerShard extends DurableObject<Env> {
           ok: 0,
           fail: 0,
           maint: 0,
+          deg: 0,
           sum: 0,
           max: 0,
           samples: [],
@@ -573,7 +638,7 @@ export class SchedulerShard extends DurableObject<Env> {
 
   private async notify(
     monitor: Snapshot,
-    kind: "down" | "up" | "unstable",
+    kind: AlertKind,
     reason: string,
   ): Promise<void> {
     const db = getDb(this.env.DB);

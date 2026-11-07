@@ -5,14 +5,38 @@ import type { MailConfigReason } from "../../shared/mail-test";
 
 export type NoticeKind = "down" | "up" | "unstable";
 
+/** Monitor alert events. Degraded events reuse a notice severity for transports. */
+export type AlertKind = NoticeKind | "degraded" | "degraded_resolved";
+
+export function alertSeverity(kind: AlertKind): NoticeKind {
+  if (kind === "degraded") return "unstable";
+  if (kind === "degraded_resolved") return "up";
+  return kind;
+}
+
 export type CopyFn = typeof t;
 
 export function notificationText(
-  kind: NoticeKind,
+  kind: AlertKind,
   name: string,
   reason: string,
   copy: CopyFn = t,
 ) {
+  if (kind === "degraded") {
+    return {
+      subject: copy("notify_degraded_subject", { name }),
+      body: copy("notify_degraded_body", {
+        name,
+        reason: reason || copy("notify_reason_unknown"),
+      }),
+    };
+  }
+  if (kind === "degraded_resolved") {
+    return {
+      subject: copy("notify_degraded_resolved_subject", { name }),
+      body: copy("notify_degraded_resolved_body", { name }),
+    };
+  }
   if (kind === "up") {
     return {
       subject: copy("notify_up_subject", { name }),

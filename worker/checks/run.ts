@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT
 
 import { connect } from "cloudflare:sockets";
-import { isBlockedHost, type MonitorType } from "../../shared/schemas";
+import {
+  type HttpDegradedConfig,
+  isBlockedHost,
+  type MonitorType,
+} from "../../shared/schemas";
 import type { CheckOutcome } from "../scheduler/state-machine";
 import {
   classifyFetchError,
@@ -65,6 +69,7 @@ type HttpConfig = {
   keywordMode?: "present" | "absent";
   jsonPath?: string;
   jsonExpect?: string;
+  degraded?: HttpDegradedConfig;
 };
 
 function httpNeedsBody(config: HttpConfig, status: number): boolean {
@@ -72,6 +77,8 @@ function httpNeedsBody(config: HttpConfig, status: number): boolean {
   if (config.keyword) return true;
   if (config.jsonPath) return true;
   if (config.jsonExpect) return true;
+  if (config.degraded?.keyword) return true;
+  if (config.degraded?.jsonPath) return true;
   return false;
 }
 
@@ -132,6 +139,7 @@ async function runHttp(
       keywordMode: config.keywordMode,
       jsonPath: config.jsonPath,
       jsonExpect: config.jsonExpect,
+      degraded: config.degraded,
     });
   } catch (error) {
     return classifyFetchError(error);

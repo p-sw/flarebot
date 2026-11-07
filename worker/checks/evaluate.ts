@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+import type { HttpDegradedConfig } from "../../shared/schemas";
 import type { CheckOutcome } from "../scheduler/state-machine";
 import { jsonValuesEqual, readJsonPath } from "./json-path";
 
@@ -45,6 +46,57 @@ export function internalFailure(error: string): CheckOutcome {
 }
 
 export function evaluateHttp(input: {
+  status: number;
+  body: string;
+  responseMs: number;
+  expectedStatuses: number[];
+  keyword?: string;
+  keywordMode?: "present" | "absent";
+  jsonPath?: string;
+  jsonExpect?: string;
+  degraded?: HttpDegradedConfig;
+}): CheckOutcome {
+  const outcome = evaluateHttpHealth(input);
+  if (!outcome.ok || !input.degraded) return outcome;
+  outcome.degraded = degradedReason(
+    input.degraded,
+    input.body,
+    input.responseMs,
+  );
+  return outcome;
+}
+
+/**
+ * Degraded conditions run only after the check passed. Any one match marks
+ * the check degraded. A body that is not JSON, or a path that does not
+ * resolve, does not match the JSON condition.
+ */
+export function degradedReason(
+  config: HttpDegradedConfig,
+  body: string,
+  responseMs: number,
+): string | null {
+  if (config.keyword) {
+    const present = body.includes(config.keyword);
+    const mode = config.keywordMode ?? "present";
+    if (mode === "present" && present) return "Degraded keyword was found";
+    if (mode === "absent" && !present) return "Degraded keyword was not found";
+  }
+  if (config.jsonPath && config.jsonExpect !== undefined) {
+    try {
+      const read = readJsonPath(JSON.parse(body), config.jsonPath);
+      if (read.ok && jsonValuesEqual(read.value, config.jsonExpect))
+        return "Degraded JSON value matched";
+    } catch {
+      // Not JSON. The JSON condition does not match.
+    }
+  }
+  if (config.maxResponseMs !== undefined && responseMs > config.maxResponseMs)
+    return "Response time was over the degraded limit";
+  return null;
+}
+
+function evaluateHttpHealth(input: {
   status: number;
   body: string;
   responseMs: number;

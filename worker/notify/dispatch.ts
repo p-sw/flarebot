@@ -6,7 +6,13 @@ import {
   publicUrlProblem,
 } from "../../shared/channels";
 import { t } from "../../shared/copy";
-import { channelTestText, type NoticeKind, notificationText } from "./copy";
+import {
+  type AlertKind,
+  alertSeverity,
+  channelTestText,
+  type NoticeKind,
+  notificationText,
+} from "./copy";
 
 export type ChannelDelivery = {
   type: ChannelType;
@@ -38,7 +44,7 @@ type DeliveryDeps = {
 
 export async function deliverChannel(
   channel: ChannelDelivery,
-  message: { kind: NoticeKind; monitorName: string; reason: string },
+  message: { kind: AlertKind; monitorName: string; reason: string },
   deps: DeliveryDeps,
 ): Promise<{ ok: boolean; error?: string }> {
   const text = notificationText(
@@ -51,7 +57,7 @@ export async function deliverChannel(
     {
       subject: text.subject,
       body: text.body,
-      severity: message.kind,
+      severity: alertSeverity(message.kind),
       subtitle: message.monitorName,
       webhook: {
         event: message.kind,

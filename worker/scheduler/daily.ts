@@ -61,7 +61,8 @@ export function aggregateClosedDays(
 }
 
 const UPSERT_DAILY = `INSERT INTO uptime_daily (
-  monitor_id, day_start, ok_count, fail_count, latency_sum, latency_max, maint_count
+  monitor_id, day_start, ok_count, fail_count, latency_sum, latency_max, maint_count,
+  degraded_count
 )
 SELECT
   monitor_id,
@@ -70,7 +71,8 @@ SELECT
   SUM(fail_count),
   SUM(latency_sum),
   MAX(latency_max),
-  SUM(COALESCE(maint_count, 0))
+  SUM(COALESCE(maint_count, 0)),
+  SUM(COALESCE(degraded_count, 0))
 FROM uptime_hourly
 WHERE hour_start >= ? AND hour_start < ?
 GROUP BY monitor_id, (hour_start / ${DAY}) * ${DAY}
@@ -79,7 +81,8 @@ ON CONFLICT (monitor_id, day_start) DO UPDATE SET
   fail_count = excluded.fail_count,
   latency_sum = excluded.latency_sum,
   latency_max = excluded.latency_max,
-  maint_count = excluded.maint_count`;
+  maint_count = excluded.maint_count,
+  degraded_count = excluded.degraded_count`;
 
 export async function rollDaily(
   database: D1Database,
@@ -173,7 +176,8 @@ async function recomputeDirtyDays(
   await database
     .prepare(
       `INSERT INTO uptime_daily (
-         monitor_id, day_start, ok_count, fail_count, latency_sum, latency_max, maint_count
+         monitor_id, day_start, ok_count, fail_count, latency_sum, latency_max, maint_count,
+         degraded_count
        )
        SELECT
          h.monitor_id,
@@ -182,7 +186,8 @@ async function recomputeDirtyDays(
          SUM(h.fail_count),
          SUM(h.latency_sum),
          MAX(h.latency_max),
-         SUM(COALESCE(h.maint_count, 0))
+         SUM(COALESCE(h.maint_count, 0)),
+         SUM(COALESCE(h.degraded_count, 0))
        FROM rollup_dirty d
        INNER JOIN uptime_hourly h
          ON h.monitor_id = d.monitor_id
@@ -195,7 +200,8 @@ async function recomputeDirtyDays(
          fail_count = excluded.fail_count,
          latency_sum = excluded.latency_sum,
          latency_max = excluded.latency_max,
-         maint_count = excluded.maint_count`,
+         maint_count = excluded.maint_count,
+         degraded_count = excluded.degraded_count`,
     )
     .bind(...days)
     .run();

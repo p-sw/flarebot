@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: MIT
 
-export type MonitorStatus = "up" | "pending" | "down" | "unknown" | "paused";
+export type MonitorStatus =
+  | "up"
+  | "degraded"
+  | "pending"
+  | "down"
+  | "unknown"
+  | "paused";
 
 export type RuntimeState = {
   status: MonitorStatus;
@@ -12,6 +18,12 @@ export type RuntimeState = {
   statusSince: number;
   lastCheckAt: number | null;
   lastError: string | null;
+  /**
+   * Channels were told the monitor is degraded and have not been told it
+   * cleared. A failed check in between does not reset it, so a degraded
+   * monitor that blips through pending is not announced twice.
+   */
+  degradedNotified?: boolean;
 };
 
 export type CheckOutcome = {
@@ -22,6 +34,8 @@ export type CheckOutcome = {
   error: string | null;
   httpStatus: number | null;
   certNotAfter?: number | null;
+  /** Set on a successful check that matched a degraded condition. */
+  degraded?: string | null;
 };
 
 export type Policy = {
@@ -35,6 +49,8 @@ export type TransitionResult = {
   openedOutage: boolean;
   closedOutage: boolean;
   alert: "down" | "up" | "unstable" | null;
+  /** Separate from alert so a recovery straight into degraded can send both. */
+  degradedAlert: "degraded" | "degraded_resolved" | null;
   nextDelayMs: number | null;
 };
 
@@ -96,11 +112,43 @@ function noteFlip(
   return kind;
 }
 
+/**
+ * Up and degraded share the same failure and recovery rules. A successful
+ * check that matched a degraded condition lands on degraded instead of up.
+ * Degraded counts as a success for retries, outages, and flapping.
+ */
 export function applyOutcome(
   state: RuntimeState,
   outcome: CheckOutcome,
   policy: Policy,
 ): TransitionResult {
+  const base = applyHealth(state, outcome, policy);
+  const next = base.state;
+  if (next.status === "up" && outcome.ok && outcome.degraded) {
+    next.status = "degraded";
+    if (state.status === "degraded") next.statusSince = state.statusSince;
+    else if (state.status === "up") next.statusSince = policy.now;
+  }
+  let degradedAlert: TransitionResult["degradedAlert"] = null;
+  const notified = state.degradedNotified === true;
+  if (next.status === "degraded" && !notified) {
+    next.degradedNotified = true;
+    degradedAlert = "degraded";
+  } else if (next.status === "up" && notified) {
+    next.degradedNotified = false;
+    degradedAlert = "degraded_resolved";
+  } else if (next.status === "down" && notified) {
+    // The down alert replaces the degraded one. Recovery sends up, not a clear.
+    next.degradedNotified = false;
+  }
+  return { ...base, state: next, degradedAlert };
+}
+
+function applyHealth(
+  state: RuntimeState,
+  outcome: CheckOutcome,
+  policy: Policy,
+): Omit<TransitionResult, "degradedAlert"> {
   const next: RuntimeState = {
     ...state,
     transitions: [...state.transitions],
