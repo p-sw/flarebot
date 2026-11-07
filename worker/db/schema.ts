@@ -136,6 +136,9 @@ export const monitorState = sqliteTable("monitor_state", {
   consecutiveSuccesses: integer("consecutive_successes").notNull().default(0),
   lastError: text("last_error"),
   flapping: integer("flapping", { mode: "boolean" }).notNull().default(false),
+  degradedNotified: integer("degraded_notified", { mode: "boolean" })
+    .notNull()
+    .default(false),
 });
 
 export const outages = sqliteTable("outages", {

@@ -629,7 +629,7 @@ async function scheduleMonitor(
     .get();
   const now = Date.now();
   const normalized = runtimeForPause(
-    runtimeFrom(live?.state, stored, row.configJson),
+    runtimeFrom(live?.state, stored),
     row.paused,
     now,
   );
@@ -666,7 +666,7 @@ async function rescheduleAfterEdit(
   const now = Date.now();
   const globalRegion = await readCheckRegion(env);
   const normalized = runtimeForPause(
-    runtimeFrom(live?.state, stored, row.configJson),
+    runtimeFrom(live?.state, stored),
     row.paused,
     now,
   );
@@ -787,11 +787,10 @@ function targetOf(type: string, configJson: string): string {
 function runtimeFrom(
   live: RuntimeState | undefined,
   stored: typeof monitorState.$inferSelect | undefined,
-  configJson: string,
 ): RuntimeState {
   return live
     ? { ...live, transitions: [...live.transitions] }
-    : runtimeFromRow(stored, configJson, Date.now());
+    : runtimeFromRow(stored, Date.now());
 }
 
 export async function ownedMonitor(

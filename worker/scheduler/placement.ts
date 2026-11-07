@@ -187,5 +187,5 @@ async function loadRuntime(
     .from(monitorState)
     .where(eq(monitorState.monitorId, row.id))
     .get();
-  return runtimeFromRow(stored, row.configJson, Date.now());
+  return runtimeFromRow(stored, Date.now());
 }
