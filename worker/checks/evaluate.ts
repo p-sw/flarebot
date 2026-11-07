@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 
+import { jsonValuesEqual, readJsonPath } from "../../shared/json-path";
 import type { HttpDegradedConfig } from "../../shared/schemas";
 import type { CheckOutcome } from "../scheduler/state-machine";
-import { jsonValuesEqual, readJsonPath } from "./json-path";
 
 export function failure(
   errorKind: string,

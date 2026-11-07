@@ -12,8 +12,8 @@ import { getDb } from "../db/client";
 import { monitorState, monitors } from "../db/schema";
 import { assignShard, schedulerStub, snapshotFromRow } from "../monitors/sync";
 import { canSpend, markDeferred } from "./budget";
-import { saveRuntime } from "./persist";
-import { initialState, type RuntimeState } from "./state-machine";
+import { runtimeFromRow, saveRuntime } from "./persist";
+import type { RuntimeState } from "./state-machine";
 
 /**
  * One settings read plus the monitor list. Each move then spends one
@@ -102,7 +102,7 @@ export async function relocateMonitor(
   const detached = await schedulerStub(env, row.shardId)
     .detach(row.id)
     .catch(() => null);
-  const state = detached?.state ?? (await loadRuntime(env, row.id));
+  const state = detached?.state ?? (await loadRuntime(env, row));
   const now = Date.now();
   const nextCheckAt =
     detached?.nextCheckAt ??
@@ -178,22 +178,14 @@ export async function placeEditedMonitor(
   return shardId;
 }
 
-async function loadRuntime(env: Env, id: string): Promise<RuntimeState> {
+async function loadRuntime(
+  env: Env,
+  row: typeof monitors.$inferSelect,
+): Promise<RuntimeState> {
   const stored = await getDb(env.DB)
     .select()
     .from(monitorState)
-    .where(eq(monitorState.monitorId, id))
+    .where(eq(monitorState.monitorId, row.id))
     .get();
-  if (!stored) return initialState(Date.now());
-  return {
-    status: stored.status as RuntimeState["status"],
-    consecutiveFailures: stored.consecutiveFailures,
-    consecutiveSuccesses: stored.consecutiveSuccesses,
-    transitions: [],
-    flappingNotified: stored.flapping,
-    lastResponseMs: stored.lastResponseMs,
-    statusSince: stored.since,
-    lastCheckAt: stored.lastCheckAt,
-    lastError: stored.lastError,
-  };
+  return runtimeFromRow(stored, row.configJson, Date.now());
 }

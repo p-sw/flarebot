@@ -2,6 +2,7 @@
 
 import { isMonitorRegionChoice, type MonitorRegionChoice } from "./regions";
 import {
+  JSON_PATH_SYNTAX_ISSUE,
   type MonitorType,
   monitorTypeSchema,
   monitorWriteSchema,
@@ -79,6 +80,7 @@ export type MonitorErrorCode =
   | "statuses"
   | "keyword"
   | "json"
+  | "json_path"
   | "degraded_ms"
   | "body"
   | "channels"
@@ -352,6 +354,7 @@ function fieldFor(draft: MonitorDraft, path: string): keyof MonitorDraft {
 }
 
 function codeFor(field: keyof MonitorDraft, message: string): MonitorErrorCode {
+  if (message === JSON_PATH_SYNTAX_ISSUE) return "json_path";
   if (message.includes("Port 25")) return "port_blocked";
   if (
     message.includes("Private") ||

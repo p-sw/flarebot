@@ -42,7 +42,20 @@ export type Policy = {
   retries: number;
   recoveryThreshold: number;
   now: number;
+  /**
+   * Degraded entry alerts are on for this monitor. Off means entering
+   * degraded is not announced. A clear is sent whenever the entry was.
+   */
+  degradedNotify?: boolean;
 };
+
+/** Degraded alerts are on unless the monitor turned them off. */
+export function degradedNotifyEnabled(config: unknown): boolean {
+  if (!config || typeof config !== "object") return false;
+  const degraded = (config as { degraded?: unknown }).degraded;
+  if (!degraded || typeof degraded !== "object") return false;
+  return (degraded as { notify?: unknown }).notify !== false;
+}
 
 export type TransitionResult = {
   state: RuntimeState;
@@ -132,9 +145,13 @@ export function applyOutcome(
   let degradedAlert: TransitionResult["degradedAlert"] = null;
   const notified = state.degradedNotified === true;
   if (next.status === "degraded" && !notified) {
-    next.degradedNotified = true;
-    degradedAlert = "degraded";
+    if (policy.degradedNotify !== false) {
+      next.degradedNotified = true;
+      degradedAlert = "degraded";
+    }
   } else if (next.status === "up" && notified) {
+    // Sent even if the conditions were removed or alerts were turned off
+    // since, so channels are not left with an open degraded alert.
     next.degradedNotified = false;
     degradedAlert = "degraded_resolved";
   } else if (next.status === "down" && notified) {

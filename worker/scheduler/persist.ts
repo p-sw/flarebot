@@ -4,7 +4,11 @@ import { and, eq, isNull } from "drizzle-orm";
 import { utcDayStart } from "../../shared/history";
 import { getDb } from "../db/client";
 import { certInfo, monitorState, outages } from "../db/schema";
-import type { RuntimeState } from "./state-machine";
+import {
+  degradedNotifyEnabled,
+  initialState,
+  type RuntimeState,
+} from "./state-machine";
 
 export { rollDaily } from "./daily";
 
@@ -62,6 +66,38 @@ ON CONFLICT (monitor_id) DO UPDATE SET
   consecutive_successes = excluded.consecutive_successes,
   last_error = excluded.last_error,
   flapping = excluded.flapping`;
+
+/**
+ * The inverse of `saveRuntime`. D1 does not keep `degradedNotified`, so a
+ * stored degraded row counts as announced when degraded alerts are on.
+ * A reload then neither pages again nor sends a clear that had no entry.
+ */
+export function runtimeFromRow(
+  stored: typeof monitorState.$inferSelect | undefined,
+  configJson: string,
+  now: number,
+): RuntimeState {
+  if (!stored) return initialState(now);
+  let config: unknown = null;
+  try {
+    config = JSON.parse(configJson);
+  } catch {
+    // A broken config has no degraded alerts.
+  }
+  return {
+    status: stored.status as RuntimeState["status"],
+    consecutiveFailures: stored.consecutiveFailures,
+    consecutiveSuccesses: stored.consecutiveSuccesses,
+    transitions: [],
+    flappingNotified: stored.flapping,
+    lastResponseMs: stored.lastResponseMs,
+    statusSince: stored.since,
+    lastCheckAt: stored.lastCheckAt,
+    lastError: stored.lastError,
+    degradedNotified:
+      stored.status === "degraded" && degradedNotifyEnabled(config),
+  };
+}
 
 export async function saveRuntime(
   database: D1Database,

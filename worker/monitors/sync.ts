@@ -27,6 +27,7 @@ import { openOutage, saveRuntime } from "../scheduler/persist";
 import type { Snapshot } from "../scheduler/shard";
 import {
   applyOutcome,
+  degradedNotifyEnabled,
   initialState,
   type RuntimeState,
 } from "../scheduler/state-machine";
@@ -224,6 +225,7 @@ export async function runInitialCheck(
     retries: row.retries,
     recoveryThreshold: row.recoveryThreshold,
     now,
+    degradedNotify: degradedNotifyEnabled(config.success ? config.data : {}),
   });
   await saveRuntime(env.DB, row.id, transition.state);
   if (transition.openedOutage) {

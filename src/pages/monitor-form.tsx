@@ -1036,6 +1036,8 @@ function fieldErrorText(
       return t("monitor_keyword_invalid");
     case "json":
       return t("monitor_json_invalid");
+    case "json_path":
+      return t("monitor_json_path_invalid");
     case "degraded_ms":
       return t("monitor_degraded_max_ms_invalid");
     case "body":

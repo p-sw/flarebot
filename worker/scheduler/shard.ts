@@ -22,7 +22,11 @@ import {
   saveCert,
   saveRuntime,
 } from "./persist";
-import { applyOutcome, type RuntimeState } from "./state-machine";
+import {
+  applyOutcome,
+  degradedNotifyEnabled,
+  type RuntimeState,
+} from "./state-machine";
 
 export type Snapshot = {
   id: string;
@@ -87,14 +91,6 @@ type Store = {
   /** UTC day already recorded in rollup_dirty for this monitor. */
   dirtyDays: Record<string, number>;
 };
-
-/** Degraded alerts are on unless the monitor turned them off. */
-export function degradedNotifyEnabled(config: unknown): boolean {
-  if (!config || typeof config !== "object") return false;
-  const degraded = (config as { degraded?: unknown }).degraded;
-  if (!degraded || typeof degraded !== "object") return false;
-  return (degraded as { notify?: unknown }).notify !== false;
-}
 
 export class SchedulerShard extends DurableObject<Env> {
   // Probe I/O yields the isolate, so a pause can land while a check is in flight.
@@ -398,6 +394,7 @@ export class SchedulerShard extends DurableObject<Env> {
         retries: current.retries,
         recoveryThreshold: current.recoveryThreshold,
         now,
+        degradedNotify: degradedNotifyEnabled(current.config),
       });
       current.state = transition.state;
       current.nextCheckAt =
@@ -442,7 +439,6 @@ export class SchedulerShard extends DurableObject<Env> {
         name: current.name,
         alert: transition.alert,
         degradedAlert: transition.degradedAlert,
-        degradedNotify: degradedNotifyEnabled(current.config),
         reason: outcome.error ?? outcome.errorKind ?? "",
         degradedReason: outcome.degraded ?? "",
       };
@@ -480,11 +476,7 @@ export class SchedulerShard extends DurableObject<Env> {
         committed.reason,
       );
     }
-    if (
-      committed.degradedAlert &&
-      committed.degradedNotify &&
-      !isInMaintenance(id, activeMaintenance)
-    ) {
+    if (committed.degradedAlert && !isInMaintenance(id, activeMaintenance)) {
       await this.notify(
         { ...monitor, name: committed.name },
         committed.degradedAlert,

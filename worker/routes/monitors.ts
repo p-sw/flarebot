@@ -57,7 +57,7 @@ import {
   snapshotFromRow,
 } from "../monitors/sync";
 import { historyRetentionDays } from "../retention";
-import { percentile, saveRuntime } from "../scheduler/persist";
+import { percentile, runtimeFromRow, saveRuntime } from "../scheduler/persist";
 import { placeEditedMonitor } from "../scheduler/placement";
 import {
   initialState,
@@ -629,7 +629,7 @@ async function scheduleMonitor(
     .get();
   const now = Date.now();
   const normalized = runtimeForPause(
-    runtimeFrom(live?.state, stored),
+    runtimeFrom(live?.state, stored, row.configJson),
     row.paused,
     now,
   );
@@ -666,7 +666,7 @@ async function rescheduleAfterEdit(
   const now = Date.now();
   const globalRegion = await readCheckRegion(env);
   const normalized = runtimeForPause(
-    runtimeFrom(live?.state, stored),
+    runtimeFrom(live?.state, stored, row.configJson),
     row.paused,
     now,
   );
@@ -787,26 +787,11 @@ function targetOf(type: string, configJson: string): string {
 function runtimeFrom(
   live: RuntimeState | undefined,
   stored: typeof monitorState.$inferSelect | undefined,
+  configJson: string,
 ): RuntimeState {
-  const base: RuntimeState = live
+  return live
     ? { ...live, transitions: [...live.transitions] }
-    : stored
-      ? {
-          status: stored.status as RuntimeState["status"],
-          consecutiveFailures: stored.consecutiveFailures,
-          consecutiveSuccesses: stored.consecutiveSuccesses,
-          transitions: [],
-          flappingNotified: stored.flapping,
-          lastResponseMs: stored.lastResponseMs,
-          statusSince: stored.since,
-          lastCheckAt: stored.lastCheckAt,
-          lastError: stored.lastError,
-          // D1 does not keep the flag. Assume a stored degraded state was
-          // already announced so a reload does not page again.
-          degradedNotified: stored.status === "degraded",
-        }
-      : initialState(Date.now());
-  return base;
+    : runtimeFromRow(stored, configJson, Date.now());
 }
 
 export async function ownedMonitor(

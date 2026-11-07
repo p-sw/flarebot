@@ -254,6 +254,7 @@
     "monitor_statuses_invalid": "Enter one or more status codes from 100 to 599.",
     "monitor_keyword_invalid": "Keyword must be 500 characters or fewer.",
     "monitor_json_invalid": "Check the JSON path and expected value.",
+    "monitor_json_path_invalid": "Use a supported JSON path, such as $.status or $.items[0].ok.",
     "monitor_body_invalid": "Request body must be 8000 characters or fewer.",
     "monitor_generic_invalid": "Check the highlighted fields and try again.",
     "page_monitor_source": "Monitor: {name}",

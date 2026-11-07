@@ -2,10 +2,14 @@
 
 import { z } from "zod";
 import { IMPACTS, INCIDENT_STATUSES } from "./impact";
+import { jsonPathSyntaxError } from "./json-path";
 import { ROLES, SCOPES } from "./permissions";
 import { MAX_WINDOW_MS } from "./recurrence";
 import { CHECK_REGION_IDS, MONITOR_REGION_CHOICES } from "./regions";
 import { statusSlugPattern } from "./status-layout";
+
+/** Issue message for a degraded JSON path the check could not read. */
+export const JSON_PATH_SYNTAX_ISSUE = "Unsupported JSON path syntax.";
 
 export const checkRegionSchema = z.enum(CHECK_REGION_IDS);
 export const monitorRegionSchema = z.enum(MONITOR_REGION_CHOICES);
@@ -56,6 +60,13 @@ export const httpConfigSchema = z.object({
       notify: z.boolean().default(true),
     })
     .superRefine((value, ctx) => {
+      if (value.jsonPath && jsonPathSyntaxError(value.jsonPath)) {
+        ctx.addIssue({
+          code: "custom",
+          message: JSON_PATH_SYNTAX_ISSUE,
+          path: ["jsonPath"],
+        });
+      }
       if (value.jsonPath && value.jsonExpect === undefined) {
         ctx.addIssue({
           code: "custom",
