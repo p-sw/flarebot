@@ -209,6 +209,7 @@ describe("scheduler shard", () => {
       sum: 40,
       max: 40,
       maint: 0,
+      deg: 0,
     });
   });
 
@@ -284,6 +285,7 @@ describe("scheduler shard", () => {
       sum: 10,
       max: 10,
       maint: 0,
+      deg: 0,
     });
   });
 });
