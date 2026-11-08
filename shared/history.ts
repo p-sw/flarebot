@@ -500,6 +500,8 @@ function summarizeSpans(
   const today = utcDayStart(input.now);
   const windowEnd = input.window.start + input.window.bars * input.window.step;
   const dailyByDay = new Map(input.daily.map((row) => [row.start, row]));
+  // Hourly rows of a closed day say which bar held a degraded check.
+  const hourlyDays = new Set(input.hourly.map((row) => utcDayStart(row.start)));
   let ok = 0;
   let fail = 0;
   let sum = 0;
@@ -569,7 +571,17 @@ function summarizeSpans(
       const overlapStart = Math.max(start, day);
       const overlapEnd = Math.min(end, day + DAY_MS);
       const fraction = (overlapEnd - overlapStart) / DAY_MS;
-      count = addCount(count, scaleCount(daily, start, fraction));
+      const share = scaleCount(daily, start, fraction);
+      // Uptime and latency still come from the daily row. Without hourly
+      // rows the daily degraded count is spread over every bar of the day.
+      if (hourlyDays.has(day)) {
+        share.degraded = sumRows(
+          input.hourly,
+          overlapStart,
+          overlapEnd,
+        ).degraded;
+      }
+      count = addCount(count, share);
     }
     bars.push(barFrom(count, end, incidentCount(incidents, start, end)));
   }

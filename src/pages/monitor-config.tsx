@@ -275,7 +275,7 @@ function degradedSummary(value: unknown): string {
   if (!value || typeof value !== "object") return t("monitor_not_set");
   const degraded = value as Record<string, unknown>;
   const parts: string[] = [];
-  const keyword = text(degraded.keyword);
+  const keyword = setValue(degraded.keyword);
   if (keyword) {
     parts.push(
       degraded.keywordMode === "absent"
@@ -283,7 +283,7 @@ function degradedSummary(value: unknown): string {
         : t("monitor_degraded_summary_keyword_present", { keyword }),
     );
   }
-  const path = text(degraded.jsonPath);
+  const path = setValue(degraded.jsonPath);
   if (path) {
     parts.push(
       t("monitor_degraded_summary_json", {
@@ -292,7 +292,7 @@ function degradedSummary(value: unknown): string {
       }),
     );
   }
-  const limit = text(degraded.maxResponseMs);
+  const limit = setValue(degraded.maxResponseMs);
   if (limit) parts.push(t("monitor_degraded_summary_ms", { value: limit }));
   if (parts.length === 0) return t("monitor_not_set");
   parts.push(
@@ -304,10 +304,14 @@ function degradedSummary(value: unknown): string {
 }
 
 function text(value: unknown, fallback = ""): string {
+  return setValue(value) || fallback || t("monitor_not_set");
+}
+
+/** The value as text, or an empty string when it is not set. */
+function setValue(value: unknown): string {
   if (typeof value === "string" && value.trim()) return value;
   if (typeof value === "number") return String(value);
-  if (fallback) return fallback;
-  return t("monitor_not_set");
+  return "";
 }
 
 function list(value: unknown): string {

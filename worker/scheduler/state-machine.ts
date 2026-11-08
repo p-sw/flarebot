@@ -126,6 +126,17 @@ function noteFlip(
 }
 
 /**
+ * After the unstable alert, alerts stay paused while the monitor still has
+ * FLAP_THRESHOLD flips inside the flap window.
+ */
+function alertsPaused(state: RuntimeState, now: number): boolean {
+  if (!state.flappingNotified) return false;
+  const windowStart = now - FLAP_WINDOW_MS;
+  const recent = state.transitions.filter((stamp) => stamp >= windowStart);
+  return recent.length >= FLAP_THRESHOLD;
+}
+
+/**
  * Up and degraded share the same failure and recovery rules. A successful
  * check that matched a degraded condition lands on degraded instead of up.
  * Degraded counts as a success for retries, outages, and flapping.
@@ -145,7 +156,9 @@ export function applyOutcome(
   let degradedAlert: TransitionResult["degradedAlert"] = null;
   const notified = state.degradedNotified === true;
   if (next.status === "degraded" && !notified) {
-    if (policy.degradedNotify !== false) {
+    // While flapping the entry is neither sent nor recorded, so no clear can
+    // follow it. A monitor still degraded once it settles sends the entry.
+    if (policy.degradedNotify !== false && !alertsPaused(next, policy.now)) {
       next.degradedNotified = true;
       degradedAlert = "degraded";
     }
