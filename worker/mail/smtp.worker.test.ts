@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { env, runInDurableObject } from "cloudflare:test";
+import { beforeEach, describe, expect, it } from "vitest";
 import { SMTP_PORTS } from "../../test/smtp-ports";
 import { encryptString } from "../crypto/secret";
 import { enqueueMail } from "./mailer";
@@ -90,6 +90,19 @@ describe("sendSmtp", () => {
 });
 
 describe("mail outbox", () => {
+  // These tests pump the outbox themselves. A mailer alarm, armed by a kick
+  // or by a pump that leaves a row pending, can claim a row first and leave
+  // it "sending" when the test reads it. Start each test with no alarm and
+  // enqueue without a kick.
+  beforeEach(async () => {
+    await runInDurableObject(
+      env.MAILER.get(env.MAILER.idFromName("mailer")),
+      async (_instance, state) => {
+        await state.storage.deleteAlarm();
+      },
+    );
+  });
+
   async function saveMailPort(port: number) {
     const key = env.ENCRYPTION_KEY;
     if (!key) throw new Error("ENCRYPTION_KEY is not set");
@@ -110,12 +123,16 @@ describe("mail outbox", () => {
 
   it("stops on a permanent SMTP failure and retries a 4xx once", async () => {
     await saveMailPort(SMTP_PORTS.authFail);
-    const failedId = await enqueueMail(env, {
-      kind: "alert",
-      to: "ops@example.com",
-      subject: "permanent",
-      text: "no",
-    });
+    const failedId = await enqueueMail(
+      env,
+      {
+        kind: "alert",
+        to: "ops@example.com",
+        subject: "permanent",
+        text: "no",
+      },
+      { kick: false },
+    );
     const mailer = env.MAILER.get(env.MAILER.idFromName("mailer"));
     await mailer.pump();
     await mailer.pump();
@@ -127,12 +144,16 @@ describe("mail outbox", () => {
     expect(failed).toEqual({ status: "failed", attempts: 1 });
 
     await saveMailPort(SMTP_PORTS.transient);
-    const retryId = await enqueueMail(env, {
-      kind: "alert",
-      to: "ops@example.com",
-      subject: "transient",
-      text: "later",
-    });
+    const retryId = await enqueueMail(
+      env,
+      {
+        kind: "alert",
+        to: "ops@example.com",
+        subject: "transient",
+        text: "later",
+      },
+      { kick: false },
+    );
     await mailer.pump();
     const retry = await env.DB.prepare(
       "SELECT status, attempts, next_attempt_at FROM mail_outbox WHERE id = ?",
@@ -146,12 +167,16 @@ describe("mail outbox", () => {
 
   it("claims a row once when the outbox is pumped twice", async () => {
     await saveMailPort(SMTP_PORTS.ok);
-    const id = await enqueueMail(env, {
-      kind: "alert",
-      to: "ops@example.com",
-      subject: "once",
-      text: "sent",
-    });
+    const id = await enqueueMail(
+      env,
+      {
+        kind: "alert",
+        to: "ops@example.com",
+        subject: "once",
+        text: "sent",
+      },
+      { kick: false },
+    );
     const mailer = env.MAILER.get(env.MAILER.idFromName("mailer"));
     await Promise.all([mailer.pump(), mailer.pump()]);
     const row = await env.DB.prepare(
