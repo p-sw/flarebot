@@ -60,6 +60,13 @@ export const httpConfigSchema = z.object({
       notify: z.boolean().default(true),
     })
     .superRefine((value, ctx) => {
+      if (value.keyword && !value.keyword.trim()) {
+        ctx.addIssue({
+          code: "custom",
+          message: "A degraded keyword cannot be only whitespace.",
+          path: ["keyword"],
+        });
+      }
       if (value.jsonPath && jsonPathSyntaxError(value.jsonPath)) {
         ctx.addIssue({
           code: "custom",

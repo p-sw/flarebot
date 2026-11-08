@@ -288,7 +288,7 @@ function degradedSummary(value: unknown): string {
     parts.push(
       t("monitor_degraded_summary_json", {
         path,
-        value: text(degraded.jsonExpect),
+        value: expectedJsonValue(degraded.jsonExpect),
       }),
     );
   }
@@ -301,6 +301,12 @@ function degradedSummary(value: unknown): string {
       : t("monitor_degraded_summary_notify"),
   );
   return parts.join(" · ");
+}
+
+/** A blank expected value matches a blank string, so it shows quoted instead of as not set. */
+function expectedJsonValue(value: unknown): string {
+  if (typeof value === "string" && !value.trim()) return JSON.stringify(value);
+  return text(value);
 }
 
 function text(value: unknown, fallback = ""): string {
