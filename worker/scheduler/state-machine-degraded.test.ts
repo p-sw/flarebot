@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: MIT
 
 import { describe, expect, it } from "vitest";
+import { runtimeFromRow } from "./persist";
 import {
   applyOutcome,
   type CheckOutcome,
   degradedNotifyEnabled,
+  FLAP_WINDOW_MS,
   initialState,
   type Policy,
   type RuntimeState,
   runtimeForPause,
   type TransitionResult,
 } from "./state-machine";
+
+const MINUTE = 60_000;
 
 const up: CheckOutcome = {
   ok: true,
@@ -331,11 +335,9 @@ describe("degraded alerts", () => {
 });
 
 describe("degraded alerts while flapping", () => {
-  // Known gap, reported with this test. The unstable notice says further
-  // alerts are paused until the monitor settles. Down and up alerts pause,
-  // but a monitor flapping between down and degraded still sends a degraded
-  // entry on every recovery, because down clears degradedNotified.
-  it.fails("pauses degraded entry alerts after the unstable notice", () => {
+  // The unstable notice says further alerts pause until the monitor settles.
+  // All six checks fit in one flap window, so the entry stays paused too.
+  it("pauses degraded entry alerts after the unstable notice", () => {
     const results = run(upState(), [down, slow, down, slow, down, slow]);
     expect(results.map((result) => result.alert)).toEqual([
       "down",
@@ -347,6 +349,183 @@ describe("degraded alerts while flapping", () => {
     ]);
     const afterNotice = results.slice(3).map((result) => result.degradedAlert);
     expect(afterNotice).toEqual([null, null, null]);
+    for (const result of results.slice(2))
+      expect(result.state.degradedNotified ?? false).toBe(false);
+  });
+
+  /**
+   * Checks once a minute from minute 0 through `until`. Each check returns
+   * the outcome of the latest change at or before that minute. The monitor
+   * is up before minute 0.
+   */
+  function minutes(
+    changes: Record<number, CheckOutcome>,
+    until: number,
+  ): Map<number, TransitionResult> {
+    const results = new Map<number, TransitionResult>();
+    let state = upState();
+    let outcome = up;
+    for (let minute = 0; minute <= until; minute += 1) {
+      outcome = changes[minute] ?? outcome;
+      const result = applyOutcome(state, outcome, {
+        retries: 0,
+        recoveryThreshold: 1,
+        now: minute * MINUTE,
+        degradedNotify: true,
+      });
+      results.set(minute, result);
+      state = result.state;
+    }
+    return results;
+  }
+
+  /** Every alert that went out, with its minute. */
+  function sent(results: Map<number, TransitionResult>) {
+    return [...results].flatMap(([minute, result]) =>
+      [result.alert, result.degradedAlert]
+        .filter((alert) => alert !== null)
+        .map((alert) => [minute, alert]),
+    );
+  }
+
+  function flagAt(results: Map<number, TransitionResult>, minute: number) {
+    return results.get(minute)?.state.degradedNotified ?? false;
+  }
+
+  // Down at 0, degraded at 5, down at 10 (unstable), degraded at 15.
+  const flapping = { 0: down, 5: slow, 10: down, 15: slow };
+  const beforePause = [
+    [0, "down"],
+    [5, "up"],
+    [5, "degraded"],
+    [10, "unstable"],
+  ];
+
+  it("sends nothing from the unstable notice until the flips leave the window", () => {
+    const results = minutes({ ...flapping, 37: down, 39: up }, 39);
+    expect(sent(results)).toEqual(beforePause);
+    expect(results.get(15)?.state.status).toBe("degraded");
+    expect(results.get(36)?.state.status).toBe("degraded");
+    expect(results.get(37)?.state.status).toBe("down");
+    expect(results.get(37)?.openedOutage).toBe(true);
+    expect(results.get(39)?.state.status).toBe("up");
+    expect(results.get(39)?.closedOutage).toBe(true);
+    for (let minute = 10; minute <= 39; minute += 1)
+      expect(flagAt(results, minute), `minute ${minute}`).toBe(false);
+  });
+
+  it("sends the entry once when one flip is left in the window, then the clear", () => {
+    const results = minutes({ ...flapping, 37: down, 38: slow, 70: up }, 72);
+    expect(sent(results)).toEqual([
+      ...beforePause,
+      [68, "degraded"],
+      [70, "degraded_resolved"],
+    ]);
+    expect(flagAt(results, 67)).toBe(false);
+    expect(flagAt(results, 68)).toBe(true);
+    expect(flagAt(results, 69)).toBe(true);
+    expect(flagAt(results, 70)).toBe(false);
+  });
+
+  it("resumes while still degraded, then down replaces the entry and up follows", () => {
+    const results = minutes({ ...flapping, 45: down, 47: up }, 50);
+    expect(sent(results)).toEqual([
+      ...beforePause,
+      [41, "degraded"],
+      [45, "down"],
+      [47, "up"],
+    ]);
+    expect(flagAt(results, 40)).toBe(false);
+    expect(flagAt(results, 41)).toBe(true);
+    expect(flagAt(results, 45)).toBe(false);
+    expect(results.get(45)?.state.flappingNotified).toBe(false);
+    expect(results.get(47)?.state.status).toBe("up");
+  });
+
+  const now = 100 * MINUTE;
+
+  function settledDegraded(
+    transitions: number[],
+    flappingNotified: boolean,
+  ): RuntimeState {
+    return {
+      ...upState(),
+      status: "degraded",
+      transitions,
+      flappingNotified,
+      degradedNotified: false,
+    };
+  }
+
+  it.each([
+    ["two flips in the window", null, [now - 20 * MINUTE, now - MINUTE]],
+    [
+      "a flip exactly on the window start",
+      null,
+      [now - FLAP_WINDOW_MS, now - MINUTE],
+    ],
+    [
+      "one flip in the window",
+      "degraded",
+      [now - FLAP_WINDOW_MS - 1, now - MINUTE],
+    ],
+    [
+      "one flip in the window after older ones",
+      "degraded",
+      [now - 50 * MINUTE, now - 40 * MINUTE, now - MINUTE],
+    ],
+    ["no flips in the window", "degraded", [now - 40 * MINUTE]],
+    ["no flips recorded", "degraded", []],
+  ] as const)(
+    "after the unstable notice, %s gives entry %s",
+    (_label, entry, transitions) => {
+      const result = applyOutcome(
+        settledDegraded([...transitions], true),
+        slow,
+        { retries: 0, recoveryThreshold: 1, now, degradedNotify: true },
+      );
+      expect(result.state.status).toBe("degraded");
+      expect(result.degradedAlert).toBe(entry);
+      expect(result.state.degradedNotified ?? false).toBe(entry !== null);
+    },
+  );
+
+  it("does not pause the entry before the unstable notice", () => {
+    const result = applyOutcome(
+      settledDegraded([now - 2 * MINUTE, now - MINUTE], false),
+      slow,
+      { retries: 0, recoveryThreshold: 1, now, degradedNotify: true },
+    );
+    expect(result.degradedAlert).toBe("degraded");
+  });
+
+  it("sends the entry on the first degraded check after a D1 reload", () => {
+    // runtimeFromRow keeps the stored flapping flag but not the flip stamps.
+    const reloaded = runtimeFromRow(
+      {
+        monitorId: "m",
+        status: "degraded",
+        since: now - 10 * MINUTE,
+        lastResponseMs: 900,
+        lastCheckAt: now - MINUTE,
+        consecutiveFailures: 0,
+        consecutiveSuccesses: 3,
+        lastError: null,
+        flapping: true,
+        degradedNotified: false,
+      },
+      now,
+    );
+    expect(reloaded.transitions).toEqual([]);
+    expect(reloaded.flappingNotified).toBe(true);
+    const result = applyOutcome(reloaded, slow, {
+      retries: 0,
+      recoveryThreshold: 1,
+      now,
+      degradedNotify: true,
+    });
+    expect(result.degradedAlert).toBe("degraded");
+    expect(result.state.degradedNotified).toBe(true);
   });
 });
 

@@ -251,14 +251,10 @@ test("explains an unsupported degraded JSON path and saves a supported one", asy
   }
 });
 
-// Known gap, reported with this test. The detail page summary uses a helper
-// that turns a missing value into "Not set", so every degraded config lists
-// all three conditions: body includes "Not set" · $.status = degraded ·
-// slower than Not set ms · alerts on.
+// Only the keyword is set, so the summary leaves the other conditions out.
 test("summarizes only the degraded conditions that are set", async ({
   page,
 }) => {
-  test.fail();
   await signIn(page);
   const stamp = Date.now().toString(36);
   const created = await page.request.post("/api/monitors", {
@@ -290,5 +286,80 @@ test("summarizes only the degraded conditions that are set", async ({
     ).toBeVisible({ timeout: 4_000 });
   } finally {
     await removeMonitor(page, id);
+  }
+});
+
+// The "Degraded when" row lists only the conditions that are set. Other
+// detail rows keep "Not set" for an empty value.
+test.describe("degraded summary on the monitor detail page", () => {
+  const cases: [string, Record<string, unknown> | null, string][] = [
+    [
+      "keyword absent",
+      { keyword: "ready", keywordMode: "absent" },
+      'body lacks "ready" · alerts on',
+    ],
+    [
+      "JSON value",
+      { jsonPath: "$.status", jsonExpect: "degraded" },
+      "$.status = degraded · alerts on",
+    ],
+    [
+      "response time",
+      { maxResponseMs: 1500 },
+      "slower than 1500 ms · alerts on",
+    ],
+    [
+      "all three",
+      {
+        keyword: "slow",
+        jsonPath: "$.status",
+        jsonExpect: "degraded",
+        maxResponseMs: 1500,
+        notify: false,
+      },
+      'body includes "slow" · $.status = degraded · slower than 1500 ms · alerts off',
+    ],
+    ["no conditions", null, "Not set"],
+  ];
+
+  for (const [label, degraded, summary] of cases) {
+    test(`summarizes ${label}`, async ({ page }) => {
+      await signIn(page);
+      const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+      const created = await page.request.post("/api/monitors", {
+        headers,
+        data: {
+          name: `Summary ${stamp}`,
+          type: "http",
+          config: {
+            url: `https://summary-${stamp}.invalid/health`,
+            ...(degraded ? { degraded } : {}),
+          },
+          intervalSeconds: 60,
+          timeoutSeconds: 5,
+          retries: 1,
+          recoveryThreshold: 1,
+          channelIds: [],
+          paused: true,
+        },
+      });
+      expect(created.ok(), await created.text()).toBeTruthy();
+      const id = ((await created.json()) as { id: string }).id;
+      try {
+        await page.goto(`/console/monitors/${id}`);
+        await expect(
+          page.getByRole("heading", { name: `Summary ${stamp}` }),
+        ).toBeVisible();
+        const row = (label: string) =>
+          page.locator(`dt:text-is("${label}") + dd`);
+        await expect(row("Degraded when")).toHaveText(summary);
+        // The health checks are not set on these monitors.
+        await expect(row("Keyword")).toHaveText("Not set");
+        await expect(row("JSON path")).toHaveText("Not set");
+        await expect(row("Expected JSON value")).toHaveText("Not set");
+      } finally {
+        await removeMonitor(page, id);
+      }
+    });
   }
 });

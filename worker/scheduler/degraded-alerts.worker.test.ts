@@ -287,6 +287,76 @@ describe("degraded alerts on the shard", () => {
   });
 });
 
+describe("degraded alerts while flapping on the shard", () => {
+  /**
+   * One check a minute from minute 0 through `until`. The service switches
+   * answers at the given minutes. Returns the webhook events with their
+   * minute and the stored flag after each check.
+   */
+  async function minutes(
+    changes: Record<number, Answer>,
+    until: number,
+  ): Promise<{
+    id: string;
+    sent: [number, string][];
+    flags: Map<number, boolean>;
+  }> {
+    const service = upstream("ok");
+    const monitor = await shardMonitor({});
+    const sent: [number, string][] = [];
+    const flags = new Map<number, boolean>();
+    for (let minute = 0; minute <= until; minute += 1) {
+      const change = changes[minute];
+      if (change) service.answer(change);
+      const before = service.alerts.length;
+      const state = await monitor.check();
+      flags.set(minute, state?.degradedNotified === true);
+      for (const alert of service.alerts.slice(before))
+        sent.push([minute, alert.event]);
+    }
+    return { id: monitor.id, sent, flags };
+  }
+
+  // Down at 0, degraded at 5, down at 10 (unstable), degraded at 15.
+  const flapping: Record<number, Answer> = {
+    0: "down",
+    5: "degraded",
+    10: "down",
+    15: "degraded",
+  };
+  const beforePause = [
+    [0, "down"],
+    [5, "up"],
+    [5, "degraded"],
+    [10, "unstable"],
+  ];
+
+  it("sends no entry, down, up, or clear while two flips stay in the window", async () => {
+    const run = await minutes({ ...flapping, 37: "down", 39: "ok" }, 39);
+    expect(run.sent).toEqual(beforePause);
+    for (let minute = 10; minute <= 39; minute += 1)
+      expect(run.flags.get(minute), `minute ${minute}`).toBe(false);
+    expect(await storedFlag(run.id)).toEqual({
+      status: "up",
+      degraded_notified: 0,
+    });
+  });
+
+  it("sends the entry once at the first check with one flip left, then the clear", async () => {
+    const run = await minutes(
+      { ...flapping, 37: "down", 38: "degraded", 70: "ok" },
+      70,
+    );
+    expect(run.sent).toEqual([
+      ...beforePause,
+      [68, "degraded"],
+      [70, "degraded_resolved"],
+    ]);
+    expect(run.flags.get(67)).toBe(false);
+    expect(run.flags.get(68)).toBe(true);
+  });
+});
+
 describe("degraded alerts during maintenance", () => {
   async function maintain(monitorId: string, from: number, until: number) {
     const windowId = crypto.randomUUID();
@@ -586,6 +656,52 @@ describe("degraded alerts through the API", () => {
       service.answer("ok");
       await monitor.check();
       expect(service.events()).toEqual(["degraded", "degraded_resolved"]);
+    } finally {
+      await monitor.cleanup();
+    }
+  });
+
+  it("sends the entry on the first degraded check after a D1 reload while flapping", async () => {
+    const owner = await ownerSession();
+    const service = upstream("ok");
+    const monitor = await apiMonitor(owner, statusDegraded);
+    try {
+      for (const answer of ["down", "degraded", "down", "degraded"] as const) {
+        service.answer(answer);
+        await monitor.check();
+      }
+      // Paused after the unstable notice: the last recovery sent nothing.
+      expect(service.events()).toEqual(["down", "up", "degraded", "unstable"]);
+      const stored = await env.DB.prepare(
+        "SELECT status, flapping, degraded_notified FROM monitor_state WHERE monitor_id = ?",
+      )
+        .bind(monitor.id)
+        .first<{
+          status: string;
+          flapping: number;
+          degraded_notified: number;
+        }>();
+      expect(stored).toEqual({
+        status: "degraded",
+        flapping: 1,
+        degraded_notified: 0,
+      });
+      // D1 keeps the flapping flag but not the flip times, so the reloaded
+      // state has no flips in the window and the entry goes out.
+      await monitor.forgetOnShard();
+      await monitor.edit(statusDegraded);
+      await monitor.check();
+      expect(service.events()).toEqual([
+        "down",
+        "up",
+        "degraded",
+        "unstable",
+        "degraded",
+      ]);
+      service.answer("ok");
+      await monitor.check();
+      expect(service.events().at(-1)).toBe("degraded_resolved");
+      expect(service.events()).toHaveLength(6);
     } finally {
       await monitor.cleanup();
     }

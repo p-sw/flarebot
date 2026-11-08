@@ -390,11 +390,9 @@ describe("degraded history bars", () => {
     },
   );
 
-  // Known gap, reported with this test. Decision 55 paints a bar yellow when
-  // it holds a degraded check. For a closed day the 7d and 30d views spread
-  // the daily row over every bar of that day, so one degraded check paints
-  // the whole day, even though hourly rows say which bar held it.
-  it.fails("paints only the 7d bar that held a degraded check on a closed day", () => {
+  // Decision 55 paints a bar yellow when it holds a degraded check. Hourly
+  // rows of a closed day say which bar that was.
+  it("paints only the 7d bar that held a degraded check on a closed day", () => {
     const window = resolveWindow("7d", 90, now);
     const yesterday = utcDayStart(now) - DAY_MS;
     const hourly = Array.from({ length: 24 }, (_, hour) => ({
@@ -417,6 +415,193 @@ describe("degraded history bars", () => {
       (bar) => bar.start >= yesterday && bar.start < yesterday + DAY_MS,
     );
     expect(day.filter((bar) => bar.state === "degraded")).toHaveLength(1);
+  });
+
+  describe("closed days in the 7d and 30d ranges", () => {
+    const today = utcDayStart(now);
+    const yesterday = today - DAY_MS;
+    const earlier = yesterday - DAY_MS;
+    const barsPerDay = { "7d": 12, "30d": 3 } as const;
+
+    /** Hourly rows for one day, healthy, with degraded checks at the given hours. */
+    function hoursOf(
+      day: number,
+      degraded: Record<number, number>,
+      row = { ok: 60, fail: 0, sum: 600 },
+    ) {
+      return Array.from({ length: 24 }, (_, hour) => ({
+        start: day + hour * HOUR_MS,
+        ...row,
+        degraded: degraded[hour] ?? 0,
+      }));
+    }
+
+    function dayBars<Bar extends { start: number }>(
+      bars: Bar[],
+      day: number,
+    ): Bar[] {
+      return bars.filter((bar) => bar.start >= day && bar.start < day + DAY_MS);
+    }
+
+    it.each(
+      (["7d", "30d"] as const).flatMap((range) =>
+        [0, 7, 8, 23].map((hour) => [range, hour] as const),
+      ),
+    )(
+      "%s: a degraded check at %i:00 paints only the bar holding that hour",
+      (range, hour) => {
+        const summary = summarizeHistory({
+          window: resolveWindow(range, 90, now),
+          now,
+          daily: [
+            { start: yesterday, ok: 1440, fail: 0, sum: 14_400, degraded: 2 },
+          ],
+          hourly: hoursOf(yesterday, { [hour]: 2 }),
+          live: null,
+        });
+        const bars = dayBars(summary.bars, yesterday);
+        expect(bars).toHaveLength(barsPerDay[range]);
+        const at = yesterday + hour * HOUR_MS;
+        for (const bar of bars) {
+          const holds = bar.start <= at && at < bar.end;
+          expect(bar).toMatchObject(
+            holds
+              ? { state: "degraded", degraded: 2 }
+              : { state: "up", degraded: 0 },
+          );
+        }
+      },
+    );
+
+    it.each(["7d", "30d"] as const)(
+      "%s: a closed day without hourly rows still paints every bar of that day",
+      (range) => {
+        const summary = summarizeHistory({
+          window: resolveWindow(range, 90, now),
+          now,
+          daily: [
+            { start: yesterday, ok: 1440, fail: 0, sum: 14_400, degraded: 1 },
+            { start: earlier, ok: 1440, fail: 0, sum: 14_400, degraded: 3 },
+          ],
+          // Only yesterday has hourly rows; the day before has none.
+          hourly: hoursOf(yesterday, { 5: 1 }),
+          live: null,
+        });
+        const before = dayBars(summary.bars, earlier);
+        expect(before).toHaveLength(barsPerDay[range]);
+        for (const bar of before) {
+          expect(bar.state).toBe("degraded");
+          expect(bar.degraded).toBeCloseTo(3 / barsPerDay[range]);
+        }
+        const marked = dayBars(summary.bars, yesterday).filter(
+          (bar) => bar.state === "degraded",
+        );
+        expect(marked).toHaveLength(1);
+      },
+    );
+
+    it.each(["7d", "30d"] as const)(
+      "%s: uptime and latency still come from the daily row",
+      (range) => {
+        const window = resolveWindow(range, 90, now);
+        // The daily row and the hourly rows disagree on purpose, so the test
+        // shows which one each number is read from.
+        const daily = [
+          { start: yesterday, ok: 1430, fail: 10, sum: 36_000, degraded: 1 },
+          { start: earlier, ok: 1440, fail: 0, sum: 14_400, degraded: 0 },
+        ];
+        const withHours = summarizeHistory({
+          window,
+          now,
+          daily,
+          hourly: hoursOf(yesterday, { 3: 1 }),
+          live: null,
+        });
+        const withoutHours = summarizeHistory({
+          window,
+          now,
+          daily,
+          hourly: [],
+          live: null,
+        });
+        const numbers = (bar: (typeof withHours.bars)[number]) => ({
+          start: bar.start,
+          uptime: bar.uptime,
+          responseMs: bar.responseMs,
+          ok: bar.ok,
+          fail: bar.fail,
+          sum: bar.sum,
+          maint: bar.maint,
+        });
+        expect(withHours.bars.map(numbers)).toEqual(
+          withoutHours.bars.map(numbers),
+        );
+        expect(withHours.uptime).toBe(withoutHours.uptime);
+        expect(withHours.responseMs).toBe(withoutHours.responseMs);
+        for (const bar of dayBars(withHours.bars, yesterday)) {
+          expect(bar.uptime).toBe(99.3);
+          expect(bar.responseMs).toBe(25);
+          expect(bar.ok).toBeCloseTo(1430 / barsPerDay[range]);
+        }
+      },
+    );
+
+    it.each(["7d", "30d"] as const)(
+      "%s: today's bars still come from today's hours and the open hour",
+      (range) => {
+        const window = resolveWindow(range, 90, now);
+        const liveStart = Math.floor(now / HOUR_MS) * HOUR_MS;
+        const summary = summarizeHistory({
+          window,
+          now,
+          daily: [
+            { start: yesterday, ok: 1440, fail: 0, sum: 14_400, degraded: 4 },
+            // A daily row for the open day is ignored.
+            { start: today, ok: 500, fail: 0, sum: 500, degraded: 50 },
+          ],
+          hourly: [
+            ...hoursOf(yesterday, { 23: 4 }),
+            { start: today + HOUR_MS, ok: 60, fail: 0, sum: 600, degraded: 2 },
+          ],
+          live: { start: liveStart, ok: 30, fail: 0, sum: 300, degraded: 1 },
+        });
+        const bars = dayBars(summary.bars, today);
+        const holding = (at: number) =>
+          bars.find((bar) => bar.start <= at && at < bar.end);
+        const early = holding(today + HOUR_MS);
+        const open = holding(liveStart);
+        // 7d bars are two hours wide and 30d bars eight, so 01:00 and the
+        // open hour land in different bars either way.
+        expect(early).toMatchObject({ state: "degraded", degraded: 2, ok: 60 });
+        expect(open).toMatchObject({ state: "degraded", degraded: 1, ok: 30 });
+        expect(early).not.toBe(open);
+        const others = bars.filter((bar) => bar !== early && bar !== open);
+        for (const bar of others) expect(bar.state).toBe("empty");
+        expect(
+          bars.reduce((total, bar) => total + (bar.degraded ?? 0), 0),
+        ).toBe(3);
+      },
+    );
+
+    it("7d: a degraded check before the window on its first day paints no bar", () => {
+      const window = resolveWindow("7d", 90, now);
+      const first = utcDayStart(window.start);
+      expect(window.start).toBeGreaterThan(first);
+      // public.ts reads hourly rows from one hour before the window start.
+      const hourly = hoursOf(first, {}).filter(
+        (row) => row.start >= window.start - HOUR_MS,
+      );
+      const summary = summarizeHistory({
+        window,
+        now,
+        daily: [{ start: first, ok: 1440, fail: 0, sum: 14_400, degraded: 1 }],
+        hourly,
+        live: null,
+      });
+      const bars = dayBars(summary.bars, first);
+      expect(bars.length).toBeGreaterThan(0);
+      for (const bar of bars) expect(bar.state).toBe("up");
+    });
   });
 
   it("paints the 90d day bars from daily rows and today's hours", () => {
