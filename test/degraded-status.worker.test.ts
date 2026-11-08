@@ -2,6 +2,8 @@
 
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import type { HttpDegradedConfig } from "../shared/schemas";
+import { degradedReason } from "../worker/checks/evaluate";
 import { api, ownerSession } from "./helpers";
 
 const SECRET_URL = "https://internal-gallery.example/api/status/proxy";
@@ -376,6 +378,105 @@ describe("degraded condition validation on save", () => {
   ])("rejects %s", async (_label, degraded) => {
     const owner = await ownerSession();
     expect((await create(owner, degraded)).status).toBe(400);
+  });
+
+  async function savedDegraded(
+    owner: string,
+    id: string,
+  ): Promise<HttpDegradedConfig> {
+    const detail = (await (
+      await api(`/api/monitors/${id}`, {}, owner)
+    ).json()) as { config: { degraded?: HttpDegradedConfig } };
+    if (!detail.config.degraded) throw new Error("no degraded block saved");
+    return detail.config.degraded;
+  }
+
+  async function edit(
+    owner: string,
+    id: string,
+    degraded: Record<string, unknown>,
+  ) {
+    return api(
+      `/api/monitors/${id}`,
+      { method: "PATCH", body: monitorBody("Edited", httpConfig(degraded)) },
+      owner,
+    );
+  }
+
+  async function monitorCount(): Promise<number> {
+    const row = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM monitors",
+    ).first<{ n: number }>();
+    return row?.n ?? 0;
+  }
+
+  it.each([
+    ["two spaces", "  "],
+    ["a tab and a newline", "\t\n"],
+  ])("rejects a degraded keyword of %s on create", async (_label, keyword) => {
+    const owner = await ownerSession();
+    const before = await monitorCount();
+    const response = await create(owner, { keyword, maxResponseMs: 500 });
+    expect(response.status).toBe(400);
+    expect(
+      ((await response.json()) as { error: { code: string } }).error.code,
+    ).toBe("validation");
+    expect(await monitorCount()).toBe(before);
+  });
+
+  it.each([
+    ["two spaces", "  "],
+    ["a tab and a newline", "\t\n"],
+  ])(
+    "rejects a degraded keyword of %s on edit and keeps the saved one",
+    async (_label, keyword) => {
+      const owner = await ownerSession();
+      const created = await create(owner, { keyword: "slow" });
+      expect(created.status).toBe(201);
+      const id = ((await created.json()) as { id: string }).id;
+      const edited = await edit(owner, id, { keyword });
+      expect(edited.status).toBe(400);
+      expect(
+        ((await edited.json()) as { error: { code: string } }).error.code,
+      ).toBe("validation");
+      expect((await savedDegraded(owner, id)).keyword).toBe("slow");
+    },
+  );
+
+  it("saves an empty degraded keyword as no condition", async () => {
+    const owner = await ownerSession();
+    const response = await create(owner, { keyword: "" });
+    expect(response.status, await response.clone().text()).toBe(201);
+    const id = ((await response.json()) as { id: string }).id;
+    const saved = await savedDegraded(owner, id);
+    expect(saved.keyword).toBe("");
+    for (const mode of ["present", "absent"] as const) {
+      expect(
+        degradedReason({ ...saved, keywordMode: mode }, "slow body", 1),
+      ).toBeNull();
+    }
+  });
+
+  it("saves and checks a degraded keyword with its spaces on create and edit", async () => {
+    const owner = await ownerSession();
+    const created = await create(owner, { keyword: "slow " });
+    expect(created.status, await created.clone().text()).toBe(201);
+    const id = ((await created.json()) as { id: string }).id;
+    const saved = await savedDegraded(owner, id);
+    expect(saved.keyword).toBe("slow ");
+    expect(degradedReason(saved, "too slow now", 1)).toBe(
+      "Degraded keyword was found",
+    );
+    expect(degradedReason(saved, "too slow.", 1)).toBeNull();
+
+    const edited = await edit(owner, id, { keyword: " slow" });
+    expect(edited.status, await edited.clone().text()).toBe(200);
+    const resaved = await savedDegraded(owner, id);
+    expect(resaved.keyword).toBe(" slow");
+    expect(degradedReason(resaved, "too slow", 1)).toBe(
+      "Degraded keyword was found",
+    );
+    expect(degradedReason(resaved, "slow first", 1)).toBeNull();
   });
 
   it("rejects an invalid degraded path on edit and keeps the saved config", async () => {

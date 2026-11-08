@@ -31,6 +31,33 @@ describe("degraded keyword condition", () => {
     ).toBe(reason);
   });
 
+  it.each([
+    ["present", "too slow now", "Degraded keyword was found"],
+    ["present", "too slow.", null],
+    ["absent", "too slow.", "Degraded keyword was not found"],
+    ["absent", "too slow now", null],
+  ] as const)(
+    "matches the keyword %s with its trailing space in %j",
+    (mode, body, reason) => {
+      expect(
+        degradedReason(
+          degraded({ keyword: "slow ", keywordMode: mode }),
+          body,
+          1,
+        ),
+      ).toBe(reason);
+    },
+  );
+
+  it.each(["present", "absent"] as const)(
+    "treats an empty %s keyword as no condition",
+    (mode) => {
+      expect(
+        degradedReason(degraded({ keyword: "", keywordMode: mode }), "any", 1),
+      ).toBeNull();
+    },
+  );
+
   it("treats a missing keyword mode as present", () => {
     const config = { keyword: "degraded", notify: true } as HttpDegradedConfig;
     expect(degradedReason(config, passing.body, 1)).toBe(

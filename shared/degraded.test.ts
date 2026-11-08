@@ -141,6 +141,41 @@ describe("degraded config schema", () => {
     });
     expect(parsed.success).toBe(true);
   });
+
+  it.each(["  ", "\t\n", " "])(
+    "rejects the whitespace-only degraded keyword %j at the keyword",
+    (keyword) => {
+      expect(issues({ keyword })).toEqual([
+        {
+          path: "degraded.keyword",
+          message: "A degraded keyword cannot be only whitespace.",
+        },
+      ]);
+    },
+  );
+
+  it("rejects a whitespace-only degraded keyword next to a valid condition", () => {
+    expect(issues({ keyword: "  ", maxResponseMs: 500 })).toEqual([
+      {
+        path: "degraded.keyword",
+        message: "A degraded keyword cannot be only whitespace.",
+      },
+    ]);
+  });
+
+  it("lets an empty degraded keyword through as no keyword condition", () => {
+    expect(issues({ keyword: "", maxResponseMs: 500 })).toEqual([]);
+    expect(http({ keyword: "" }).success).toBe(true);
+  });
+
+  it.each(["slow ", " slow", "\tslow\n"])(
+    "keeps the whitespace around the degraded keyword %j",
+    (keyword) => {
+      const parsed = http({ keyword });
+      expect(parsed.success).toBe(true);
+      expect(parsed.data?.degraded?.keyword).toBe(keyword);
+    },
+  );
 });
 
 describe("degraded monitor draft", () => {

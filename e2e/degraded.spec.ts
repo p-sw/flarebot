@@ -363,3 +363,64 @@ test.describe("degraded summary on the monitor detail page", () => {
     });
   }
 });
+
+// A blank expected value matches a blank string, so the summary quotes it.
+// textContent keeps the spaces that toHaveText would collapse.
+test.describe("blank expected JSON value in the degraded summary", () => {
+  const cases: [string, Record<string, unknown>, string][] = [
+    [
+      "an empty value",
+      { jsonPath: "$.status", jsonExpect: "" },
+      '$.status = "" · alerts on',
+    ],
+    [
+      "a whitespace-only value",
+      { jsonPath: "$.status", jsonExpect: "  " },
+      '$.status = "  " · alerts on',
+    ],
+    [
+      "a value with letters and spaces",
+      { jsonPath: "$.status", jsonExpect: " ok " },
+      "$.status =  ok  · alerts on",
+    ],
+    ["an empty keyword", { keyword: "" }, "Not set"],
+  ];
+
+  for (const [label, degraded, summary] of cases) {
+    test(`summarizes ${label}`, async ({ page }) => {
+      await signIn(page);
+      const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+      const created = await page.request.post("/api/monitors", {
+        headers,
+        data: {
+          name: `Blank ${stamp}`,
+          type: "http",
+          config: { url: `https://blank-${stamp}.invalid/health`, degraded },
+          intervalSeconds: 60,
+          timeoutSeconds: 5,
+          retries: 1,
+          recoveryThreshold: 1,
+          channelIds: [],
+          paused: true,
+        },
+      });
+      expect(created.ok(), await created.text()).toBeTruthy();
+      const id = ((await created.json()) as { id: string }).id;
+      try {
+        await page.goto(`/console/monitors/${id}`);
+        await expect(
+          page.getByRole("heading", { name: `Blank ${stamp}` }),
+        ).toBeVisible();
+        const row = (name: string) =>
+          page.locator(`dt:text-is("${name}") + dd`);
+        await expect(row("Degraded when")).toHaveText(
+          summary.replace(/\s+/g, " "),
+        );
+        expect(await row("Degraded when").textContent()).toBe(summary);
+        await expect(row("Expected JSON value")).toHaveText("Not set");
+      } finally {
+        await removeMonitor(page, id);
+      }
+    });
+  }
+});
