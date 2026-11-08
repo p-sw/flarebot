@@ -126,14 +126,16 @@ function noteFlip(
 }
 
 /**
- * After the unstable alert, alerts stay paused while the monitor still has
- * FLAP_THRESHOLD flips inside the flap window.
+ * After the unstable alert, degraded entries stay paused while two or more
+ * flips remain inside the flap window. With at most one left, the next flip
+ * stays under FLAP_THRESHOLD, so noteFlip ends the pause and that flip goes
+ * out as a down alert instead of clearing the flag silently.
  */
 function alertsPaused(state: RuntimeState, now: number): boolean {
   if (!state.flappingNotified) return false;
   const windowStart = now - FLAP_WINDOW_MS;
   const recent = state.transitions.filter((stamp) => stamp >= windowStart);
-  return recent.length >= FLAP_THRESHOLD;
+  return recent.length + 1 >= FLAP_THRESHOLD;
 }
 
 /**
