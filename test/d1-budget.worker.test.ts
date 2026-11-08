@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-import { env } from "cloudflare:test";
+import { env, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { DAY_MS, utcDayStart } from "../shared/history";
 import { drainAnnouncements } from "../worker/announce/drain";
@@ -23,6 +23,20 @@ import { instrumentD1 } from "./d1-count";
 const HOUR = `INSERT INTO uptime_hourly (
   monitor_id, hour_start, ok_count, fail_count, latency_sum, latency_max, samples_json, maint_count
 ) VALUES (?, ?, ?, ?, ?, ?, '[]', ?)`;
+
+/**
+ * runScheduled kicks the mailer, and its alarm reads mail_outbox through
+ * this same env.DB a few hundred ms later. Drop that alarm so its reads
+ * cannot land inside a later meter.
+ */
+async function quietMailer() {
+  await runInDurableObject(
+    env.MAILER.get(env.MAILER.idFromName("mailer")),
+    async (_instance, state) => {
+      await state.storage.deleteAlarm();
+    },
+  );
+}
 
 async function setWatermark(value: number) {
   await env.DB.prepare(
@@ -251,6 +265,7 @@ describe("free-plan D1 budget", () => {
   });
 
   it("flushes 1, 10, and 36 monitors in the same number of statements", async () => {
+    await quietMailer();
     const counts: number[] = [];
     for (const monitors of [1, 10, 36]) {
       const shardId = `flush-${monitors}-${crypto.randomUUID()}`;
