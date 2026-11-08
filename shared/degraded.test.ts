@@ -419,6 +419,52 @@ describe("degraded history bars", () => {
     expect(day.filter((bar) => bar.state === "degraded")).toHaveLength(1);
   });
 
+  it("paints the 90d day bars from daily rows and today's hours", () => {
+    const window = resolveWindow("90d", 90, now);
+    const today = utcDayStart(now);
+    const yesterday = today - DAY_MS;
+    const summary = summarizeHistory({
+      window,
+      now,
+      daily: [
+        { start: yesterday, ok: 1440, fail: 0, sum: 1440, degraded: 1 },
+        {
+          start: yesterday - DAY_MS,
+          ok: 1440,
+          fail: 0,
+          sum: 1440,
+          degraded: 0,
+        },
+        // A daily row for today is ignored; today comes from hourly rows.
+        { start: today, ok: 10, fail: 0, sum: 10, degraded: 10 },
+      ],
+      hourly: [
+        { start: today + HOUR_MS, ok: 60, fail: 0, sum: 600, degraded: 0 },
+      ],
+      live: {
+        start: today + 2 * HOUR_MS,
+        ok: 5,
+        fail: 0,
+        sum: 50,
+        degraded: 2,
+      },
+    });
+    const bar = (start: number) =>
+      summary.bars.find((item) => item.start === start);
+    expect(bar(yesterday)).toMatchObject({
+      state: "degraded",
+      degraded: 1,
+      uptime: 100,
+    });
+    expect(bar(yesterday - DAY_MS)).toMatchObject({ state: "up", degraded: 0 });
+    expect(bar(today)).toMatchObject({
+      state: "degraded",
+      degraded: 2,
+      ok: 65,
+    });
+    expect(summary.uptime).toBe(100);
+  });
+
   it("keeps the degraded count when bars are merged for a narrow screen", () => {
     const window = resolveWindow("24h", 90, now);
     const slot = Math.floor(now / SLOT_MS) * SLOT_MS;
