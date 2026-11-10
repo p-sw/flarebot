@@ -32,51 +32,54 @@ describe("incidentAlertVariant", () => {
   });
 });
 
-function oklchToLinear(value: string): number[] | null {
+type Lab = [number, number, number];
+
+function oklchToLab(value: string): Lab | null {
   const match = /oklch\(\s*([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)/.exec(value);
   if (!match) return null;
-  const lightness = Number(match[1]);
-  const chroma = Number(match[2]);
   const hue = (Number(match[3]) * Math.PI) / 180;
-  const a = chroma * Math.cos(hue);
-  const b = chroma * Math.sin(hue);
+  const chroma = Number(match[2]);
+  return [Number(match[1]), chroma * Math.cos(hue), chroma * Math.sin(hue)];
+}
+
+function luminance([lightness, a, b]: Lab): number {
   const l = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3;
   const m = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3;
   const s = (lightness - 0.0894841775 * a - 1.291485548 * b) ** 3;
-  const red = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
-  const green = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
-  const blue = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s;
-  return [red, green, blue];
-}
-
-function luminance(rgb: number[]): number {
-  const [red, green, blue] = rgb.map((channel) =>
-    Math.min(1, Math.max(0, channel)),
-  );
+  const [red, green, blue] = [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ].map((channel) => Math.min(1, Math.max(0, channel)));
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
 
-function contrast(foreground: number[], background: number[]): number {
+function contrast(foreground: Lab, background: Lab): number {
   const lighter = Math.max(luminance(foreground), luminance(background));
   const darker = Math.min(luminance(foreground), luminance(background));
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-function palette(css: string, mode: ":root" | ".dark"): Record<string, string> {
-  const block =
-    mode === ":root" ? css.split(".dark")[0] : (css.split(".dark")[1] ?? "");
-  const colors: Record<string, string> = {};
-  for (const match of block.matchAll(/--(alert-[a-z0-9-]+):\s*([^;]+);/g)) {
-    colors[match[1]] = match[2].trim();
+function declarations(block: string): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const match of block.matchAll(/--([a-z0-9-]+):\s*([^;]+);/g)) {
+    values[match[1]] = match[2].replace(/\s+/g, " ").trim();
   }
-  return colors;
+  return values;
 }
 
 describe("alert surfaces", () => {
-  const css = readFileSync(
-    new URL("../styles/theme.css", import.meta.url),
+  const theme = declarations(
+    readFileSync(new URL("../styles/theme.css", import.meta.url), "utf8"),
+  );
+  const tokens = readFileSync(
+    new URL("../../brand/tokens.css", import.meta.url),
     "utf8",
   );
+  const modes = {
+    light: declarations(tokens.split(".dark")[0]),
+    dark: declarations(tokens.split(".dark")[1] ?? ""),
+  };
   const surfaces = [
     "alert-default",
     "alert-destructive",
@@ -84,35 +87,51 @@ describe("alert surfaces", () => {
     "alert-maintenance",
   ];
 
-  it("keeps alert text black on light fills and white on dark fills at WCAG AA", () => {
-    const light = palette(css, ":root");
-    const dark = palette(css, ".dark");
-    expect(light["alert-foreground"]).toBe("#000000");
-    expect(dark["alert-foreground"]).toBe("#ffffff");
-    for (const name of surfaces) {
-      const lightFill = oklchToLinear(light[name] ?? "");
-      const darkFill = oklchToLinear(dark[name] ?? "");
-      expect(lightFill, name).not.toBeNull();
-      expect(darkFill, name).not.toBeNull();
-      expect(
-        lightFill?.every((channel) => channel >= -0.001 && channel <= 1.001),
-        `${name} light is outside sRGB`,
-      ).toBe(true);
-      expect(
-        darkFill?.every((channel) => channel >= -0.001 && channel <= 1.001),
-        `${name} dark is outside sRGB`,
-      ).toBe(true);
-      expect(contrast([0, 0, 0], lightFill ?? [])).toBeGreaterThanOrEqual(4.5);
-      expect(contrast([1, 1, 1], darkFill ?? [])).toBeGreaterThanOrEqual(4.5);
+  function token(mode: Record<string, string>, name: string): Lab {
+    const lab = oklchToLab(mode[name] ?? "");
+    if (!lab) throw new Error(`${name} is not an oklch token`);
+    return lab;
+  }
+
+  // A surface is either a brand token or a light tint of one over the card.
+  function surface(mode: Record<string, string>, value: string): Lab {
+    const plain = /^var\(--([a-z0-9-]+)\)$/.exec(value);
+    if (plain) return token(mode, plain[1]);
+    const mix =
+      /^color-mix\(in oklab, var\(--([a-z0-9-]+)\) ([0-9.]+)%, var\(--card\)\)$/.exec(
+        value,
+      );
+    if (!mix) throw new Error(`Unexpected alert surface: ${value}`);
+    const share = Number(mix[2]) / 100;
+    expect(share, value).toBeLessThanOrEqual(0.15);
+    const tint = token(mode, mix[1]);
+    const card = token(mode, "card");
+    return [0, 1, 2].map(
+      (index) => tint[index] * share + card[index] * (1 - share),
+    ) as Lab;
+  }
+
+  it("keeps alert text on the page foreground over a light tint at WCAG AA", () => {
+    expect(theme["alert-foreground"]).toBe("var(--foreground)");
+    for (const [label, mode] of Object.entries(modes)) {
+      for (const name of surfaces) {
+        const fill = surface(mode, theme[name] ?? "");
+        expect(
+          contrast(token(mode, "foreground"), fill),
+          `${name} ${label}`,
+        ).toBeGreaterThanOrEqual(7);
+      }
     }
   });
 
-  it("does not paint alert copy in a coloured text tone", () => {
+  it("tints only the alert icon, never the alert copy", () => {
     const sources = ["alert.tsx", "../pages/status-notice.tsx"].map((file) =>
       readFileSync(new URL(file, import.meta.url), "utf8"),
     );
     const coloured =
       /text-(destructive|primary|muted|status-|foreground|card-foreground)/;
-    for (const source of sources) expect(source).not.toMatch(coloured);
+    for (const source of sources) {
+      expect(source.replaceAll("[&>svg]:text-", "")).not.toMatch(coloured);
+    }
   });
 });

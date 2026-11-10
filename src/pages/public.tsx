@@ -286,7 +286,7 @@ export function PublicStatusPage() {
       ) : null}
       <div className="mt-8 grid gap-6">
         {data.groups.map((group) => (
-          <section key={group.name || "default"}>
+          <section key={group.name || "default"} className="min-w-0">
             {group.name ? (
               <h2
                 className="mb-2 min-w-0 truncate text-sm font-medium text-muted-foreground"
@@ -295,12 +295,9 @@ export function PublicStatusPage() {
                 {group.name}
               </h2>
             ) : null}
-            <div className="grid gap-3">
+            <div className="grid min-w-0 divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
               {group.items.map((item) => (
-                <article
-                  key={item.id}
-                  className="min-w-0 rounded-lg border border-border bg-card p-4"
-                >
+                <article key={item.id} className="min-w-0 p-4">
                   <div className="flex min-w-0 items-center justify-between gap-3">
                     <h3
                       className="min-w-0 truncate font-medium"
@@ -337,13 +334,13 @@ export function PublicStatusPage() {
           <h2 className="mb-2 text-sm font-medium text-muted-foreground">
             {t("status_history")}
           </h2>
-          <div className="grid gap-2">
+          <div className="grid min-w-0 divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
             {data.history.map((incident) => (
               <Link
                 key={incident.id}
                 to="/s/$slug/incidents/$incidentId"
                 params={{ slug: data.slug, incidentId: incident.id }}
-                className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm"
+                className="flex min-w-0 flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm hover:bg-muted/50"
               >
                 <span className="min-w-0 break-words">{incident.title}</span>
                 <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
