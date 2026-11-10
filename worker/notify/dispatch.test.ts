@@ -93,6 +93,49 @@ describe("deliverChannel", () => {
     expect(failed.ok).toBe(false);
   });
 
+  it("resolves a Matrix room alias to its id before sending", async () => {
+    const seen: { url: string; method: string }[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      seen.push({ url: String(input), method: init?.method ?? "GET" });
+      if (String(input).includes("/directory/room/"))
+        return Response.json({ room_id: "!abc:matrix.example" });
+      return new Response("{}", { status: 200 });
+    };
+    const sent = await deliverChannel(
+      {
+        type: "matrix",
+        config: {
+          homeserver: "https://matrix.example",
+          accessToken: "syt_token",
+          roomId: "#ops:matrix.example",
+        },
+      },
+      { kind: "down", monitorName: "API", reason: "timeout" },
+      { fetch: fetchImpl },
+    );
+    expect(sent.ok).toBe(true);
+    expect(seen[0]).toEqual({
+      url: "https://matrix.example/_matrix/client/v3/directory/room/%23ops%3Amatrix.example",
+      method: "GET",
+    });
+    expect(seen[1]?.method).toBe("PUT");
+    expect(seen[1]?.url).toContain("/rooms/!abc%3Amatrix.example/send/");
+
+    const missing = await deliverChannel(
+      {
+        type: "matrix",
+        config: {
+          homeserver: "https://matrix.example",
+          accessToken: "syt_token",
+          roomId: "#gone:matrix.example",
+        },
+      },
+      { kind: "down", monitorName: "API", reason: "timeout" },
+      { fetch: async () => new Response("{}", { status: 404 }) },
+    );
+    expect(missing.ok).toBe(false);
+  });
+
   it("formats ntfy, gotify, pushover, teams, google chat, and matrix", async () => {
     const seen: {
       url: string;

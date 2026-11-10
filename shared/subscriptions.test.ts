@@ -80,6 +80,7 @@ describe("feeds", () => {
       items: [],
     });
     expect(atom).toContain("http://www.w3.org/2005/Atom");
+    expect(atom).toContain("<author><name>Status</name></author>");
   });
 });
 

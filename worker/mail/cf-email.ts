@@ -26,7 +26,7 @@ export async function sendCfEmail(
   }
   try {
     const { EmailMessage } = await import("cloudflare:email");
-    const from = `${message.fromName} <${message.fromAddress}>`;
+    const from = `${displayName(message.fromName)} <${message.fromAddress}>`;
     const mime = [
       `From: ${from}`,
       `To: ${message.to}`,
@@ -68,4 +68,16 @@ function headerLines(headers: Record<string, string> | undefined): string[] {
 function encodeSubject(value: string): string {
   if ([...value].every((char) => char.charCodeAt(0) < 128)) return value;
   return `=?UTF-8?B?${btoa(unescape(encodeURIComponent(value)))}?=`;
+}
+
+/**
+ * A bare name such as "Acme, Inc." would parse as two mailboxes, so an
+ * ASCII name is sent as a quoted string and any other name as an encoded
+ * word. Line breaks never reach the header.
+ */
+export function displayName(value: string): string {
+  const name = value.replace(/[\r\n]+/g, " ").trim();
+  const encoded = encodeSubject(name);
+  if (encoded !== name) return encoded;
+  return `"${name.replace(/(["\\])/g, "\\$1")}"`;
 }

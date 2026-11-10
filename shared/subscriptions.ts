@@ -232,6 +232,8 @@ export function renderAtom(input: {
     `<updated>${xmlEscape(new Date(updated).toISOString())}</updated>`,
     `<link rel="alternate" href="${xmlEscape(input.pageUrl)}"/>`,
     `<link rel="self" href="${xmlEscape(input.selfUrl)}"/>`,
+    // RFC 4287 requires an author on the feed when entries carry none.
+    `<author><name>${xmlEscape(input.title)}</name></author>`,
     entries,
     "</feed>",
   ].join("");
