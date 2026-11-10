@@ -16,7 +16,7 @@ import {
   incidentWriteSchema,
 } from "../../shared/schemas";
 import { publishAnnouncement } from "../announce/publish";
-import { getDb } from "../db/client";
+import { chunked, getDb, selectByIds } from "../db/client";
 import {
   incidentChannels,
   incidentMonitors,
@@ -75,15 +75,17 @@ async function assertLinks(
 ): Promise<void> {
   const db = getDb(env.DB);
   const monitorsFound = monitorIds.length
-    ? await db
-        .select({ id: monitors.id })
-        .from(monitors)
-        .where(
-          and(
-            eq(monitors.organizationId, organizationId),
-            inArray(monitors.id, monitorIds),
+    ? await selectByIds(monitorIds, (part) =>
+        db
+          .select({ id: monitors.id })
+          .from(monitors)
+          .where(
+            and(
+              eq(monitors.organizationId, organizationId),
+              inArray(monitors.id, part),
+            ),
           ),
-        )
+      )
     : [];
   const pagesFound = pageIds.length
     ? await db
@@ -124,44 +126,55 @@ async function replaceLinks(
   channelIds: string[],
 ): Promise<void> {
   const db = getDb(env.DB);
-  await db
-    .delete(incidentMonitors)
-    .where(eq(incidentMonitors.incidentId, incidentId));
-  await db
-    .delete(incidentPages)
-    .where(eq(incidentPages.incidentId, incidentId));
-  await db
-    .delete(incidentChannels)
-    .where(eq(incidentChannels.incidentId, incidentId));
-  if (monitorRows.length) {
-    await db.insert(incidentMonitors).values(
-      monitorRows.map((row) => ({
-        incidentId,
-        monitorId: row.monitorId,
-        impact: row.impact,
-      })),
-    );
-  }
-  if (pageIds.length) {
-    await db
-      .insert(incidentPages)
-      .values(pageIds.map((pageId) => ({ incidentId, pageId })));
-  }
-  if (channelIds.length) {
-    await db
-      .insert(incidentChannels)
-      .values(channelIds.map((channelId) => ({ incidentId, channelId })));
-  }
+  // One batch, so a failed insert cannot leave the incident without links.
+  // Inserts are cut to stay under the 100 bound parameters D1 allows.
+  await db.batch([
+    db
+      .delete(incidentMonitors)
+      .where(eq(incidentMonitors.incidentId, incidentId)),
+    db.delete(incidentPages).where(eq(incidentPages.incidentId, incidentId)),
+    db
+      .delete(incidentChannels)
+      .where(eq(incidentChannels.incidentId, incidentId)),
+    ...chunked(monitorRows, 30).map((rows) =>
+      db.insert(incidentMonitors).values(
+        rows.map((row) => ({
+          incidentId,
+          monitorId: row.monitorId,
+          impact: row.impact,
+        })),
+      ),
+    ),
+    ...chunked(pageIds, 45).map((ids) =>
+      db
+        .insert(incidentPages)
+        .values(ids.map((pageId) => ({ incidentId, pageId }))),
+    ),
+    ...chunked(channelIds, 45).map((ids) =>
+      db
+        .insert(incidentChannels)
+        .values(ids.map((channelId) => ({ incidentId, channelId }))),
+    ),
+  ]);
 }
 
 async function hrefFor(env: Env, pageIds: string[], incidentId: string) {
   if (pageIds.length === 0) return null;
-  const page = await getDb(env.DB)
-    .select({ slug: statusPages.slug })
-    .from(statusPages)
-    .where(eq(statusPages.id, pageIds[0] ?? ""))
-    .get();
-  return announcementHref("incident", page?.slug ?? null, incidentId);
+  // The link goes to channels and subscribers, so it must point at a page
+  // they can open. A draft page would 404 and give away its slug.
+  const pages = await selectByIds(pageIds, (part) =>
+    getDb(env.DB)
+      .select({ id: statusPages.id, slug: statusPages.slug })
+      .from(statusPages)
+      .where(
+        and(inArray(statusPages.id, part), eq(statusPages.published, true)),
+      ),
+  );
+  const slug =
+    pageIds
+      .map((id) => pages.find((page) => page.id === id)?.slug)
+      .find((value) => value != null) ?? null;
+  return announcementHref("incident", slug, incidentId);
 }
 
 async function publishIncident(
@@ -671,7 +684,11 @@ export function registerIncidents(app: Hono<AppEnv>): void {
       clientIp(c),
     );
     await publishIncident(c.env, {
-      kind: synced.wasResolved ? "incident.updated" : "incident.resolved",
+      // A later-dated update can keep the incident open after this one.
+      kind:
+        !synced.wasResolved && synced.resolvedAt
+          ? "incident.resolved"
+          : "incident.updated",
       organizationId: actor.organizationId,
       incidentId: current.id,
       title: current.title,

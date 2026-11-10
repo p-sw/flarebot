@@ -8,6 +8,7 @@ import {
   firstRetainedDay,
   HOUR_MS,
   retentionCutoff,
+  utcDayStart,
 } from "../../shared/history";
 import { monitorTargetLabel } from "../../shared/monitor-draft";
 import {
@@ -482,6 +483,13 @@ export function registerMonitors(app: Hono<AppEnv>): void {
     const extra = live?.rollup
       ? { ok: live.rollup.ok, fail: live.rollup.fail }
       : undefined;
+    // A closed day has a daily row built from its hours. Only hours of days
+    // without one (today, or a day not rolled yet) are added on top, so no
+    // sample is counted twice.
+    const rolledDays = new Set(daily.map((item) => item.dayStart));
+    const unrolled = hourly.filter(
+      (item) => !rolledDays.has(utcDayStart(item.hourStart)),
+    );
     const dayAgo = now - 86_400_000;
     const weekAgo = now - 7 * 86_400_000;
     return c.json({
@@ -495,24 +503,18 @@ export function registerMonitors(app: Hono<AppEnv>): void {
         d7: sumRange(
           [
             ...daily.filter((item) => item.dayStart >= weekAgo),
-            ...hourly.filter((item) => item.hourStart >= weekAgo),
+            ...unrolled.filter((item) => item.hourStart >= weekAgo),
           ],
           extra,
         ),
         d30: sumRange(
           [
             ...daily.filter((item) => item.dayStart >= now - 30 * 86_400_000),
-            ...hourly.filter((item) => item.hourStart >= now - 2 * 86_400_000),
+            ...unrolled,
           ],
           extra,
         ),
-        d90: sumRange(
-          [
-            ...daily,
-            ...hourly.filter((item) => item.hourStart >= now - 2 * 86_400_000),
-          ],
-          extra,
-        ),
+        d90: sumRange([...daily, ...unrolled], extra),
       },
       p95: percentile(samples, 95),
       hourly: hourly.map((item) => ({
