@@ -102,6 +102,29 @@ describe("auth", () => {
     });
     expect(locked.status).toBe(429);
 
+    // Once the lock runs out, one more wrong password must not lock again.
+    await env.DB.prepare(
+      "UPDATE login_attempts SET locked_until = ? WHERE email = ?",
+    )
+      .bind(Date.now() - 1000, "lock@example.com")
+      .run();
+    const typo = await api("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "lock@example.com",
+        password: "wrong-password",
+      }),
+    });
+    expect(typo.status).toBe(401);
+    const unlocked = await api("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "lock@example.com",
+        password: "correct-horse",
+      }),
+    });
+    expect(unlocked.status).toBe(200);
+
     const logout = await api("/api/auth/logout", { method: "POST" }, session);
     expect(logout.status).toBe(200);
     const gone = await api("/api/auth/session", {}, session);

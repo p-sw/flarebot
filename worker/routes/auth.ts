@@ -46,6 +46,7 @@ import {
   ApiError,
   type AppEnv,
   actorForUser,
+  assertMutationOrigin,
   audit,
   clearSessionCookie,
   clientIp,
@@ -54,7 +55,7 @@ import {
   parseBody,
   publicUser,
   requestOrigin,
-  requireActor,
+  requireSessionActor,
   timingSafeSecret,
   verifyTurnstile,
 } from "../http";
@@ -70,7 +71,10 @@ async function noteFailure(env: Env, email: string): Promise<void> {
     .from(loginAttempts)
     .where(eq(loginAttempts.email, email))
     .get();
-  const failures = (attempt?.failures ?? 0) + 1;
+  // A lock that has run out starts a fresh count. Without this, one typo
+  // after the first lockout would lock the account again.
+  const expired = attempt?.lockedUntil != null && attempt.lockedUntil <= now;
+  const failures = (expired ? 0 : (attempt?.failures ?? 0)) + 1;
   const lockedUntil = failures >= 5 ? now + 15 * 60_000 : null;
   await db
     .insert(loginAttempts)
@@ -251,7 +255,8 @@ export function registerAuth(app: Hono<AppEnv>): void {
   });
 
   app.post("/api/account/passkey/options", async (c) => {
-    const actor = await requireActor(c);
+    const actor = await requireSessionActor(c);
+    assertMutationOrigin(c, actor);
     return c.json(
       await registrationOptions(c, {
         id: actor.userId,
@@ -262,7 +267,8 @@ export function registerAuth(app: Hono<AppEnv>): void {
   });
 
   app.post("/api/account/passkey/verify", async (c) => {
-    const actor = await requireActor(c);
+    const actor = await requireSessionActor(c);
+    assertMutationOrigin(c, actor);
     const body = (await c.req.json()) as {
       response?: RegistrationResponseJSON;
       deviceName?: string;

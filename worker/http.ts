@@ -188,6 +188,14 @@ export async function requireActor(c: AppContext): Promise<Actor> {
   return actor;
 }
 
+// Account routes change the credentials of the signed-in person. An API token
+// carries scopes for organization data only, so it must never reach them.
+export async function requireSessionActor(c: AppContext): Promise<Actor> {
+  const actor = await requireActor(c);
+  if (actor.tokenId) throw new ApiError(403, "forbidden", t("error_forbidden"));
+  return actor;
+}
+
 export function requireCan(actor: Actor, action: Action): void {
   if (!can(actor, action))
     throw new ApiError(403, "forbidden", t("error_forbidden"));

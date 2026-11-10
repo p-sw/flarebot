@@ -111,4 +111,71 @@ describe("API tokens", () => {
     });
     expect(dead.status).toBe(401);
   });
+
+  it("keeps a token away from the account routes of the person who made it", async () => {
+    const owner = await ownerSession();
+    const minted = await api(
+      "/api/tokens",
+      {
+        method: "POST",
+        body: JSON.stringify({ name: "ro", scopes: ["read"] }),
+      },
+      owner,
+    );
+    expect(minted.status).toBe(201);
+    const { token } = (await minted.json()) as { token: string };
+    const bearer = { authorization: `Bearer ${token}` };
+    const calls: [string, string, unknown][] = [
+      ["POST", "/api/account/passkey/options", undefined],
+      ["POST", "/api/account/passkey/verify", { response: {} }],
+      ["PATCH", "/api/account", { name: "Mallory" }],
+      ["POST", "/api/account/totp/setup", undefined],
+      ["POST", "/api/account/totp/confirm", { code: "000000" }],
+      ["POST", "/api/account/totp/disable", { code: "000000" }],
+      ["DELETE", "/api/account/passkeys/none", undefined],
+    ];
+    for (const [method, path, body] of calls) {
+      const response = await api(path, {
+        method,
+        headers: bearer,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      expect(`${path} ${response.status}`).toBe(`${path} 403`);
+    }
+    const account = await api("/api/account", {}, owner);
+    expect(((await account.json()) as { name: string }).name).toBe("Ada");
+    const pending = await env.DB.prepare(
+      "SELECT totp_pending FROM users WHERE email = ?",
+    )
+      .bind("ada@example.com")
+      .first<{ totp_pending: string | null }>();
+    expect(pending?.totp_pending).toBeNull();
+  });
+
+  it("does not let an admin issue a reset link for an owner", async () => {
+    const owner = await ownerSession();
+    const admin = await accept("admin", "admin-reset@example.com", owner);
+    const editor = await accept("editor", "edit-reset@example.com", owner);
+    const session = await api("/api/auth/session", {}, owner);
+    const ownerId = ((await session.json()) as { user: { id: string } }).user
+      .id;
+    const refused = await api(
+      `/api/team/${ownerId}/reset`,
+      { method: "POST" },
+      admin.cookie,
+    );
+    expect(refused.status).toBe(403);
+    const allowed = await api(
+      `/api/team/${editor.userId}/reset`,
+      { method: "POST" },
+      admin.cookie,
+    );
+    expect(allowed.status).toBe(200);
+    const own = await api(
+      `/api/team/${ownerId}/reset`,
+      { method: "POST" },
+      owner,
+    );
+    expect(own.status).toBe(200);
+  });
 });

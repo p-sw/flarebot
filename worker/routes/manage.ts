@@ -78,6 +78,7 @@ import {
   requestOrigin,
   requireActor,
   requireCan,
+  requireSessionActor,
 } from "../http";
 import { enqueueMail } from "../mail/mailer";
 import { deliverWith, resolveMail } from "../mail/resolve";
@@ -890,6 +891,8 @@ export function registerManage(app: Hono<AppEnv>): void {
       .get();
     if (!target)
       throw new ApiError(404, "not_found", t("error_member_not_found"));
+    if (target.role === "owner" && actor.role !== "owner")
+      throw new ApiError(403, "forbidden", t("error_owner_only"));
     const user = await db
       .select()
       .from(users)
@@ -1257,7 +1260,7 @@ export function registerManage(app: Hono<AppEnv>): void {
   });
 
   app.patch("/api/account", async (c) => {
-    const actor = await requireActor(c);
+    const actor = await requireSessionActor(c);
     assertMutationOrigin(c, actor);
     const body = await parseBody(c, accountPatchSchema);
     if (body.name) {
@@ -1270,7 +1273,7 @@ export function registerManage(app: Hono<AppEnv>): void {
   });
 
   app.post("/api/account/password", async (c) => {
-    const actor = await requireActor(c);
+    const actor = await requireSessionActor(c);
     assertMutationOrigin(c, actor);
     const body = await parseBody(c, passwordChangeSchema);
     const db = getDb(c.env.DB);
@@ -1293,7 +1296,7 @@ export function registerManage(app: Hono<AppEnv>): void {
   });
 
   app.post("/api/account/totp/setup", async (c) => {
-    const actor = await requireActor(c);
+    const actor = await requireSessionActor(c);
     assertMutationOrigin(c, actor);
     const raw = crypto.getRandomValues(new Uint8Array(20));
     const pending = await encryptString(
@@ -1313,7 +1316,7 @@ export function registerManage(app: Hono<AppEnv>): void {
   });
 
   app.post("/api/account/totp/confirm", async (c) => {
-    const actor = await requireActor(c);
+    const actor = await requireSessionActor(c);
     assertMutationOrigin(c, actor);
     const body = await parseBody(c, totpConfirmSchema);
     const db = getDb(c.env.DB);
@@ -1350,7 +1353,7 @@ export function registerManage(app: Hono<AppEnv>): void {
   });
 
   app.post("/api/account/totp/disable", async (c) => {
-    const actor = await requireActor(c);
+    const actor = await requireSessionActor(c);
     assertMutationOrigin(c, actor);
     const body = await parseBody(
       c,
@@ -1392,7 +1395,7 @@ export function registerManage(app: Hono<AppEnv>): void {
   });
 
   app.delete("/api/account/passkeys/:id", async (c) => {
-    const actor = await requireActor(c);
+    const actor = await requireSessionActor(c);
     assertMutationOrigin(c, actor);
     const db = getDb(c.env.DB);
     const key = await db
