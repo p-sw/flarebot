@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { formatDateTime, formatTime, t } from "@shared/copy";
-import { DAY_MS, fitBars, type HistoryBar } from "@shared/history";
+import { fitBars, type HistoryBar, HOUR_MS } from "@shared/history";
 import { useEffect, useState } from "react";
 import { cn } from "../lib/cn";
 import { responseText } from "./fields";
@@ -22,7 +22,9 @@ function useNarrow() {
 }
 
 function spanText(bar: HistoryBar): string {
-  const short = bar.end - bar.start <= DAY_MS;
+  // Only bars of the 24 hour range are short enough for a clock time alone.
+  // A day bar would read "00:00:00 to 00:00:00".
+  const short = bar.end - bar.start <= HOUR_MS;
   const from = short ? formatTime(bar.start) : formatDateTime(bar.start);
   const to = short ? formatTime(bar.end) : formatDateTime(bar.end);
   return t("status_bar_span", { from, to });

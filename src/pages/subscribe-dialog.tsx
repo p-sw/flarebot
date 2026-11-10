@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { t } from "@shared/copy";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { ApiClientError, api } from "../lib/api";
 import { useSubmitGuard } from "../lib/use-submit-guard";
 import { useMotionPrefs } from "../motion/page";
@@ -12,6 +12,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { PendingButton } from "../ui/pending-button";
 import { Switch } from "../ui/switch";
+import { TurnstileWidget } from "./turnstile";
 
 export type PublicSubscriptions = {
   email: boolean;
@@ -27,17 +28,6 @@ type SubscribeResult = {
   pending?: boolean;
   secret?: string;
 };
-
-declare global {
-  interface Window {
-    turnstile?: {
-      render: (
-        element: HTMLElement,
-        options: { sitekey: string; callback: (token: string) => void },
-      ) => string;
-    };
-  }
-}
 
 export function SubscribeEntry({
   slug,
@@ -97,7 +87,6 @@ function SubscribeDialog({
   const motionPrefs = useMotionPrefs();
   const submit = useSubmitGuard();
   const client = useQueryClient();
-  const widget = useRef<HTMLDivElement>(null);
   const initialKind = subscriptions.email ? "email" : "webhook";
   const [kind, setKind] = useState<"email" | "webhook">(initialKind);
   const [email, setEmail] = useState("");
@@ -109,34 +98,6 @@ function SubscribeDialog({
   const [notice, setNotice] = useState("");
   const [secret, setSecret] = useState("");
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!open || !subscriptions.turnstileSiteKey || !widget.current) return;
-    const siteKey = subscriptions.turnstileSiteKey;
-    const node = widget.current;
-    let widgetId = "";
-    function render() {
-      if (!window.turnstile || !node) return;
-      widgetId = window.turnstile.render(node, {
-        sitekey: siteKey,
-        callback: (token) => setTurnstileToken(token),
-      });
-    }
-    if (window.turnstile) {
-      render();
-      return;
-    }
-    const script = document.createElement("script");
-    script.src =
-      "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-    script.async = true;
-    script.onload = () => render();
-    document.body.appendChild(script);
-    return () => {
-      script.remove();
-      void widgetId;
-    };
-  }, [open, subscriptions.turnstileSiteKey]);
 
   function toggleMonitor(id: string, checked: boolean) {
     setMonitorIds((current) =>
@@ -323,7 +284,11 @@ function SubscribeDialog({
                     </fieldset>
                   )}
                   {subscriptions.turnstileSiteKey ? (
-                    <div ref={widget} className="min-h-16 min-w-0" />
+                    <TurnstileWidget
+                      siteKey={subscriptions.turnstileSiteKey}
+                      onToken={setTurnstileToken}
+                      className="min-h-16 min-w-0"
+                    />
                   ) : (
                     <p className="text-xs text-muted-foreground">
                       {t("subscribe_rate_note")}
