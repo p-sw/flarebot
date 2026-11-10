@@ -14,7 +14,7 @@ import {
 } from "../../shared/recurrence";
 import { maintenanceWriteSchema } from "../../shared/schemas";
 import { publishAnnouncement } from "../announce/publish";
-import { getDb } from "../db/client";
+import { chunked, getDb, selectByIds } from "../db/client";
 import {
   maintenanceChannels,
   maintenanceMonitors,
@@ -50,15 +50,17 @@ async function assertLinks(
 ): Promise<void> {
   const db = getDb(env.DB);
   const monitorsFound = monitorIds.length
-    ? await db
-        .select({ id: monitors.id })
-        .from(monitors)
-        .where(
-          and(
-            eq(monitors.organizationId, organizationId),
-            inArray(monitors.id, monitorIds),
+    ? await selectByIds(monitorIds, (part) =>
+        db
+          .select({ id: monitors.id })
+          .from(monitors)
+          .where(
+            and(
+              eq(monitors.organizationId, organizationId),
+              inArray(monitors.id, part),
+            ),
           ),
-        )
+      )
     : [];
   const pagesFound = pageIds.length
     ? await db
@@ -116,40 +118,53 @@ async function replaceLinks(
   channelIds: string[],
 ): Promise<void> {
   const db = getDb(env.DB);
-  await db
-    .delete(maintenanceMonitors)
-    .where(eq(maintenanceMonitors.maintenanceId, maintenanceId));
-  await db
-    .delete(maintenancePages)
-    .where(eq(maintenancePages.maintenanceId, maintenanceId));
-  await db
-    .delete(maintenanceChannels)
-    .where(eq(maintenanceChannels.maintenanceId, maintenanceId));
-  if (monitorIds.length) {
-    await db
-      .insert(maintenanceMonitors)
-      .values(monitorIds.map((monitorId) => ({ maintenanceId, monitorId })));
-  }
-  if (pageIds.length) {
-    await db
-      .insert(maintenancePages)
-      .values(pageIds.map((pageId) => ({ maintenanceId, pageId })));
-  }
-  if (channelIds.length) {
-    await db
-      .insert(maintenanceChannels)
-      .values(channelIds.map((channelId) => ({ maintenanceId, channelId })));
-  }
+  // One batch, so a failed insert cannot leave the window without links.
+  // Inserts are cut to stay under the 100 bound parameters D1 allows.
+  await db.batch([
+    db
+      .delete(maintenanceMonitors)
+      .where(eq(maintenanceMonitors.maintenanceId, maintenanceId)),
+    db
+      .delete(maintenancePages)
+      .where(eq(maintenancePages.maintenanceId, maintenanceId)),
+    db
+      .delete(maintenanceChannels)
+      .where(eq(maintenanceChannels.maintenanceId, maintenanceId)),
+    ...chunked(monitorIds, 45).map((ids) =>
+      db
+        .insert(maintenanceMonitors)
+        .values(ids.map((monitorId) => ({ maintenanceId, monitorId }))),
+    ),
+    ...chunked(pageIds, 45).map((ids) =>
+      db
+        .insert(maintenancePages)
+        .values(ids.map((pageId) => ({ maintenanceId, pageId }))),
+    ),
+    ...chunked(channelIds, 45).map((ids) =>
+      db
+        .insert(maintenanceChannels)
+        .values(ids.map((channelId) => ({ maintenanceId, channelId }))),
+    ),
+  ]);
 }
 
 async function hrefFor(env: Env, pageIds: string[], maintenanceId: string) {
   if (pageIds.length === 0) return null;
-  const page = await getDb(env.DB)
-    .select({ slug: statusPages.slug })
-    .from(statusPages)
-    .where(eq(statusPages.id, pageIds[0] ?? ""))
-    .get();
-  return announcementHref("maintenance", page?.slug ?? null, maintenanceId);
+  // The link goes to channels and subscribers, so it must point at a page
+  // they can open. A draft page would 404 and give away its slug.
+  const pages = await selectByIds(pageIds, (part) =>
+    getDb(env.DB)
+      .select({ id: statusPages.id, slug: statusPages.slug })
+      .from(statusPages)
+      .where(
+        and(inArray(statusPages.id, part), eq(statusPages.published, true)),
+      ),
+  );
+  const slug =
+    pageIds
+      .map((id) => pages.find((page) => page.id === id)?.slug)
+      .find((value) => value != null) ?? null;
+  return announcementHref("maintenance", slug, maintenanceId);
 }
 
 async function loadWindow(env: Env, organizationId: string, id: string) {

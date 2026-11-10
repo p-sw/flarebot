@@ -22,7 +22,7 @@ import {
   presentStatus,
 } from "../../shared/impact";
 import { statusItemLabel } from "../../shared/status-layout";
-import { getDb } from "../db/client";
+import { getDb, selectByIds } from "../db/client";
 import {
   monitorState,
   monitors,
@@ -135,59 +135,69 @@ export async function loadPublicStatus(
   const needsDaily = window.bucket !== "slot";
   const daily =
     ids.length && needsDaily
-      ? await db
-          .select()
-          .from(uptimeDaily)
-          .where(
-            and(
-              gte(uptimeDaily.dayStart, utcDayStart(window.start)),
-              inArray(uptimeDaily.monitorId, ids),
+      ? await selectByIds(ids, (part) =>
+          db
+            .select()
+            .from(uptimeDaily)
+            .where(
+              and(
+                gte(uptimeDaily.dayStart, utcDayStart(window.start)),
+                inArray(uptimeDaily.monitorId, part),
+              ),
             ),
-          )
+        )
       : [];
   const hourlySince =
     window.bucket === "day" ? utcDayStart(nowMs) : window.start - 3_600_000;
   const hourly = ids.length
-    ? await db
-        .select()
-        .from(uptimeHourly)
-        .where(
-          and(
-            gte(uptimeHourly.hourStart, hourlySince),
-            inArray(uptimeHourly.monitorId, ids),
+    ? await selectByIds(ids, (part) =>
+        db
+          .select()
+          .from(uptimeHourly)
+          .where(
+            and(
+              gte(uptimeHourly.hourStart, hourlySince),
+              inArray(uptimeHourly.monitorId, part),
+            ),
           ),
-        )
+      )
     : [];
   const slots =
     ids.length && window.bucket === "slot"
-      ? await db
-          .select()
-          .from(uptimeSlots)
-          .where(
-            and(
-              gte(uptimeSlots.slotStart, window.start),
-              inArray(uptimeSlots.monitorId, ids),
+      ? await selectByIds(ids, (part) =>
+          db
+            .select()
+            .from(uptimeSlots)
+            .where(
+              and(
+                gte(uptimeSlots.slotStart, window.start),
+                inArray(uptimeSlots.monitorId, part),
+              ),
             ),
-          )
+        )
       : [];
   const incidentRows = ids.length
-    ? await db
-        .select({
-          monitorId: outages.monitorId,
-          startedAt: outages.startedAt,
-          endedAt: outages.endedAt,
-        })
-        .from(outages)
-        .where(
-          and(
-            inArray(outages.monitorId, ids),
-            lt(outages.startedAt, windowEnd),
-            or(isNull(outages.endedAt), gte(outages.endedAt, window.start)),
+    ? await selectByIds(ids, (part) =>
+        db
+          .select({
+            monitorId: outages.monitorId,
+            startedAt: outages.startedAt,
+            endedAt: outages.endedAt,
+          })
+          .from(outages)
+          .where(
+            and(
+              inArray(outages.monitorId, part),
+              lt(outages.startedAt, windowEnd),
+              or(isNull(outages.endedAt), gte(outages.endedAt, window.start)),
+            ),
           ),
-        )
+      )
     : [];
   const owned = ids.length
-    ? await db.select().from(monitors).where(inArray(monitors.id, ids))
+    ? await selectByIds(ids, (part) =>
+        db.select().from(monitors).where(inArray(monitors.id, part)),
+      )
     : [];
   const live = new Map<string, CountRow>();
   const liveSlots = new Map<string, CountRow>();

@@ -24,6 +24,7 @@ import {
   maintenancePages,
   maintenanceWindows,
   monitors,
+  statusPageItems,
   statusPages,
 } from "../db/schema";
 import { scheduleFromRow } from "../maintenance";
@@ -250,7 +251,7 @@ export async function loadPublicIncident(
     )
     .get();
   if (!linked) return null;
-  const [links, updates, owned] = await Promise.all([
+  const [allLinks, updates, owned, items] = await Promise.all([
     db
       .select()
       .from(incidentMonitors)
@@ -263,7 +264,15 @@ export async function loadPublicIncident(
       .select()
       .from(monitors)
       .where(eq(monitors.organizationId, page.organizationId)),
+    db
+      .select({ monitorId: statusPageItems.monitorId })
+      .from(statusPageItems)
+      .where(eq(statusPageItems.pageId, page.id)),
   ]);
+  // Same rule as the list on the page: an incident may also cover monitors
+  // that this page does not show, and those stay private.
+  const onPage = new Set(items.map((item) => item.monitorId));
+  const links = allLinks.filter((link) => onPage.has(link.monitorId));
   const names = new Map(owned.map((row) => [row.id, row.name]));
   const ordered = [...updates].sort(
     (left, right) =>
