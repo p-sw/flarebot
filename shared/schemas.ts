@@ -14,8 +14,10 @@ export const JSON_PATH_SYNTAX_ISSUE = "Unsupported JSON path syntax.";
 export const checkRegionSchema = z.enum(CHECK_REGION_IDS);
 export const monitorRegionSchema = z.enum(MONITOR_REGION_CHOICES);
 
+// Anchored at both ends: a public name such as fcm.googleapis.com or
+// localhost.example.com must not match the private-range alternatives.
 const privateHost =
-  /^(localhost|.*\.local|.*\.internal|metadata\.google\.internal|0\.0\.0\.0|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+|\[?::1\]?|\[?f[cd][0-9a-f:]*\]?|\[?fe80:)/i;
+  /^((.*\.)?localhost|.*\.local|.*\.internal|0\.0\.0\.0|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+|::1|f[cd][0-9a-f]{0,2}:[0-9a-f:.]*|fe80:.*)\.?$/i;
 
 export function isBlockedHost(host: string): boolean {
   const normalized = host

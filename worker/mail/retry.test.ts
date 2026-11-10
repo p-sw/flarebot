@@ -23,4 +23,25 @@ describe("mail retry", () => {
     expect(inferSmtpStage("message rejected")).toBe("send");
     expect(nextRetryDelay(0)).toBeNull();
   });
+
+  it("reads the reply code, not later numbers in the reply", () => {
+    expect(
+      classifyMailError(
+        "Failed to send DATA: 451 4.7.500 Server busy. Please try again later",
+      ),
+    ).toBe("transient");
+    expect(
+      classifyMailError(
+        "450 4.2.0 Greylisted, please try again in 500 seconds",
+      ),
+    ).toBe("transient");
+    expect(
+      classifyMailError(
+        "Invalid RCPT TO: <a@example.com> 550 5.1.1 No such user",
+      ),
+    ).toBe("permanent");
+    expect(
+      classifyMailError("Failed send email body: 554-5.7.1 Rejected"),
+    ).toBe("permanent");
+  });
 });

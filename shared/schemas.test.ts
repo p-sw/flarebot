@@ -38,5 +38,30 @@ describe("isBlockedHost", () => {
     expect(isBlockedHost("metadata.google.internal")).toBe(true);
     expect(isBlockedHost("example.com")).toBe(false);
     expect(isBlockedHost("192.0.2.1")).toBe(false);
+    for (const host of [
+      "localhost",
+      "app.localhost",
+      "printer.local",
+      "db.internal",
+      "172.16.0.9",
+      "[::1]",
+      "[fd00::1]",
+      "fc00:1::2",
+      "[fe80::1]",
+    ]) {
+      expect(`${host} ${isBlockedHost(host)}`).toBe(`${host} true`);
+    }
+    for (const host of [
+      "fcm.googleapis.com",
+      "fd.io",
+      "fda.gov",
+      "localhost.example.com",
+      "www.localytics.com",
+      "api.internal-tools.com",
+      "172.160.1.1",
+      "10.example.com",
+    ]) {
+      expect(`${host} ${isBlockedHost(host)}`).toBe(`${host} false`);
+    }
   });
 });
