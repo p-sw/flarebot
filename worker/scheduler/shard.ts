@@ -521,11 +521,11 @@ export class SchedulerShard extends DurableObject<Env> {
           max: 0,
           samples: [],
         };
-    if (
-      rollup.hourStart !== hourStart &&
-      rollup.ok + rollup.fail + rollup.maint > 0
-    ) {
-      await mergeHourly(this.env.DB, id, rollup).catch(() => undefined);
+    // A flush leaves an empty bucket behind. It must still move to the hour of
+    // this sample, or every later sample is counted in the hour of the flush.
+    if (rollup.hourStart !== hourStart) {
+      if (rollup.ok + rollup.fail + rollup.maint > 0)
+        await mergeHourly(this.env.DB, id, rollup).catch(() => undefined);
       store.rollups[id] = {
         hourStart,
         ok: 0,
@@ -605,7 +605,9 @@ export class SchedulerShard extends DurableObject<Env> {
         monitorId: id,
         rollup,
         state: store.monitors[id]?.state ?? null,
-        markDirty: store.dirtyDays[id] !== day,
+        // The midnight recompute clears the dirty row of a closed day, so a
+        // late flush into that day has to mark it again.
+        markDirty: store.dirtyDays[id] !== day || day < utcDayStart(now),
         day,
       });
     }

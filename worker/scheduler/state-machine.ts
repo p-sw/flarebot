@@ -24,6 +24,14 @@ export type RuntimeState = {
    * monitor that blips through pending is not announced twice.
    */
   degradedNotified?: boolean;
+  /**
+   * An outage row is open and channels have not been told the monitor is
+   * back. It outlives down, so a monitor that leaves down through unknown
+   * (an internal check error) or a pause still closes the outage and sends
+   * the recovery on its next success. Absent on states stored before this
+   * field existed, where down alone means an open outage.
+   */
+  outageOpen?: boolean;
 };
 
 export type CheckOutcome = {
@@ -210,19 +218,21 @@ function applyHealth(
       nextDelayMs: null,
     };
   }
+  const hadOutage = state.outageOpen ?? state.status === "down";
+  next.outageOpen = hadOutage;
   if (outcome.ok) {
     next.consecutiveFailures = 0;
     next.consecutiveSuccesses = state.consecutiveSuccesses + 1;
     if (state.status === "down" || state.status === "pending") {
       if (next.consecutiveSuccesses >= policy.recoveryThreshold) {
-        const wasDown = state.status === "down";
         next.status = "up";
         next.statusSince = policy.now;
+        next.outageOpen = false;
         return {
           state: next,
           openedOutage: false,
-          closedOutage: wasDown,
-          alert: wasDown ? noteFlip(next, policy.now, "up") : null,
+          closedOutage: hadOutage,
+          alert: hadOutage ? noteFlip(next, policy.now, "up") : null,
           nextDelayMs: null,
         };
       }
@@ -236,11 +246,12 @@ function applyHealth(
     }
     if (state.status !== "up") next.statusSince = policy.now;
     next.status = "up";
+    next.outageOpen = false;
     return {
       state: next,
       openedOutage: false,
-      closedOutage: false,
-      alert: null,
+      closedOutage: hadOutage,
+      alert: hadOutage ? noteFlip(next, policy.now, "up") : null,
       nextDelayMs: null,
     };
   }
@@ -270,11 +281,14 @@ function applyHealth(
   }
   next.status = "down";
   next.statusSince = policy.now;
+  next.outageOpen = true;
+  // Back to down with the outage still open: the row and the down alert are
+  // already out, so neither is repeated.
   return {
     state: next,
-    openedOutage: true,
+    openedOutage: !hadOutage,
     closedOutage: false,
-    alert: noteFlip(next, policy.now, "down"),
+    alert: hadOutage ? null : noteFlip(next, policy.now, "down"),
     nextDelayMs: null,
   };
 }

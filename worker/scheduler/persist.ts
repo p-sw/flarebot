@@ -147,14 +147,10 @@ export async function closeOutage(
   monitorId: string,
   at: number,
 ): Promise<void> {
-  const db = getDb(database);
-  const open = await db
-    .select()
-    .from(outages)
-    .where(and(eq(outages.monitorId, monitorId), isNull(outages.endedAt)))
-    .get();
-  if (!open) return;
-  await db.update(outages).set({ endedAt: at }).where(eq(outages.id, open.id));
+  await getDb(database)
+    .update(outages)
+    .set({ endedAt: at })
+    .where(and(eq(outages.monitorId, monitorId), isNull(outages.endedAt)));
 }
 
 export async function mergeHourly(

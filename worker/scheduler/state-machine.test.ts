@@ -204,4 +204,58 @@ describe("applyOutcome", () => {
     expect(recovered.closedOutage).toBe(false);
     expect(recovered.alert).toBeNull();
   });
+
+  it("closes the outage and sends up after down passed through unknown", () => {
+    const policy = { retries: 1, recoveryThreshold: 1 };
+    const down = applyOutcome(initialState(0), fail(), { ...policy, now: 0 });
+    expect(down.openedOutage).toBe(true);
+    const unknown = applyOutcome(
+      down.state,
+      { ...ok, ok: false, internal: true, error: "lookup failed" },
+      { ...policy, now: 60_000 },
+    );
+    expect(unknown.state.status).toBe("unknown");
+    expect(unknown.closedOutage).toBe(false);
+    const up = applyOutcome(unknown.state, ok, { ...policy, now: 120_000 });
+    expect(up.state.status).toBe("up");
+    expect(up.closedOutage).toBe(true);
+    expect(up.alert).toBe("up");
+    const steady = applyOutcome(up.state, ok, { ...policy, now: 180_000 });
+    expect(steady.closedOutage).toBe(false);
+    expect(steady.alert).toBeNull();
+  });
+
+  it("closes the outage after a pause and resume, and does not open a second one", () => {
+    const policy = { retries: 1, recoveryThreshold: 1 };
+    const down = applyOutcome(initialState(0), fail(), { ...policy, now: 0 });
+    const resumed = runtimeForPause(
+      runtimeForPause(down.state, true, 1_000),
+      false,
+      2_000,
+    );
+    expect(resumed.status).toBe("pending");
+    const again = applyOutcome(resumed, fail(), { ...policy, now: 3_000 });
+    expect(again.state.status).toBe("down");
+    expect(again.openedOutage).toBe(false);
+    expect(again.alert).toBeNull();
+    const up = applyOutcome(
+      runtimeForPause(runtimeForPause(again.state, true, 4_000), false, 5_000),
+      ok,
+      { ...policy, now: 6_000 },
+    );
+    expect(up.state.status).toBe("up");
+    expect(up.closedOutage).toBe(true);
+    expect(up.alert).toBe("up");
+  });
+
+  it("treats a stored down state without the flag as an open outage", () => {
+    const legacy = { ...initialState(0), status: "down" as const };
+    const up = applyOutcome(legacy, ok, {
+      retries: 1,
+      recoveryThreshold: 1,
+      now: 1_000,
+    });
+    expect(up.closedOutage).toBe(true);
+    expect(up.alert).toBe("up");
+  });
 });
