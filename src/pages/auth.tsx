@@ -21,9 +21,11 @@ import { Input } from "@/ui/input";
 import { PendingButton } from "@/ui/pending-button";
 import { ApiClientError, api, errorText } from "../lib/api";
 import { refreshQueries } from "../lib/query-sync";
+import { sessionCacheKey } from "../lib/session-gate";
 import { useSubmitGuard } from "../lib/use-submit-guard";
 import type { SessionUser } from "../shell";
 import { Field } from "./fields";
+import { TurnstileWidget } from "./turnstile";
 
 type Meta = {
   setupRequired: boolean;
@@ -64,6 +66,8 @@ export function SetupPage() {
   });
   const [error, setError] = useState("");
   const [pushUrl, setPushUrl] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileAttempt, setTurnstileAttempt] = useState(0);
   const submit = useSubmitGuard();
 
   const setup = useMutation({
@@ -72,16 +76,18 @@ export function SetupPage() {
         method: "POST",
         body: JSON.stringify({
           ...form,
-          turnstileToken: (window as { turnstileToken?: string })
-            .turnstileToken,
+          turnstileToken: turnstileToken || undefined,
         }),
       }),
     onSuccess: async (data) => {
-      client.setQueryData(["session"], data);
+      client.setQueryData(sessionCacheKey(), data);
       await refreshQueries(client, [["meta"]]);
       setStep(1);
     },
-    onError: (cause) => setError(errorText(cause)),
+    onError: (cause) => {
+      setTurnstileAttempt((value) => value + 1);
+      setError(errorText(cause));
+    },
   });
 
   const saveMail = useMutation({
@@ -188,10 +194,10 @@ export function SetupPage() {
                 {t("setup_password_hint")}
               </p>
               {meta.data?.turnstileSiteKey ? (
-                <div
-                  className="cf-turnstile"
-                  data-sitekey={meta.data.turnstileSiteKey}
-                  data-callback="onTurnstile"
+                <TurnstileWidget
+                  siteKey={meta.data.turnstileSiteKey}
+                  onToken={setTurnstileToken}
+                  attempt={turnstileAttempt}
                 />
               ) : null}
               {error ? (
@@ -365,6 +371,9 @@ export function LoginPage() {
   const [form, setForm] = useState({ email: "", password: "", totp: "" });
   const [needTotp, setNeedTotp] = useState(false);
   const [error, setError] = useState("");
+  const meta = useMeta();
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileAttempt, setTurnstileAttempt] = useState(0);
   const submit = useSubmitGuard();
   const breakGlass = search["break-glass"] === 1;
   const hideLocal = sso.data?.hideLocalLogin === true && !breakGlass;
@@ -375,15 +384,21 @@ export function LoginPage() {
     mutationFn: () =>
       api<{ user: SessionUser }>("/api/auth/login", {
         method: "POST",
-        body: JSON.stringify({ ...form, totp: form.totp || undefined }),
+        body: JSON.stringify({
+          ...form,
+          totp: form.totp || undefined,
+          turnstileToken: turnstileToken || undefined,
+        }),
       }),
     onSuccess: async (data) => {
-      client.setQueryData(["session"], data);
+      client.setQueryData(sessionCacheKey(), data);
       await enterApp(navigate);
     },
     onError: (cause) => {
       if (cause instanceof ApiClientError && cause.code === "totp_required")
         setNeedTotp(true);
+      // The server spent the token on this attempt.
+      setTurnstileAttempt((value) => value + 1);
       setError(errorText(cause));
     },
   });
@@ -391,7 +406,7 @@ export function LoginPage() {
     mutationFn: () =>
       api<{ user: SessionUser }>("/api/auth/access", { method: "POST" }),
     onSuccess: async (data) => {
-      client.setQueryData(["session"], data);
+      client.setQueryData(sessionCacheKey(), data);
       await enterApp(navigate);
     },
     onError: (cause) => setError(errorText(cause)),
@@ -511,6 +526,13 @@ export function LoginPage() {
                   />
                 </Field>
               ) : null}
+              {meta.data?.turnstileSiteKey ? (
+                <TurnstileWidget
+                  siteKey={meta.data.turnstileSiteKey}
+                  onToken={setTurnstileToken}
+                  attempt={turnstileAttempt}
+                />
+              ) : null}
               {error ? (
                 <p className="text-sm text-destructive">{error}</p>
               ) : null}
@@ -537,7 +559,7 @@ export function LoginPage() {
                           body: JSON.stringify({ response }),
                         },
                       );
-                      client.setQueryData(["session"], session);
+                      client.setQueryData(sessionCacheKey(), session);
                       await enterApp(navigate);
                     } catch (cause) {
                       setError(errorText(cause));
@@ -709,7 +731,7 @@ export function InvitePage() {
                       }),
                     },
                   );
-                  client.setQueryData(["session"], session);
+                  client.setQueryData(sessionCacheKey(), session);
                   await enterApp(navigate);
                 } catch (cause) {
                   setError(errorText(cause));

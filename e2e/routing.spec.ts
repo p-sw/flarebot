@@ -125,3 +125,15 @@ async function clearRoots(page: Page): Promise<void> {
     });
   }
 }
+
+test("signing in from /login without a return path lands in the console", async ({
+  page,
+}) => {
+  await page.goto("/login");
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/console$/);
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+});

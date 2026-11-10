@@ -8,11 +8,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { incidentAlertVariant } from "@/ui/alert-variant";
 import { Badge } from "@/ui/badge";
-import { api } from "../lib/api";
+import { api, errorText } from "../lib/api";
 import { incidentStatusLabel } from "./announcement-fields";
 import { responseText, statusTone } from "./fields";
 import { Markdown } from "./markdown";
-import { StatusNotice, StatusNoticeBadge } from "./status-notice";
+import { ErrorAlert, StatusNotice, StatusNoticeBadge } from "./status-notice";
 import { type PublicSubscriptions, SubscribeEntry } from "./subscribe-dialog";
 import { UptimeBars } from "./uptime-bars";
 
@@ -156,6 +156,13 @@ export function PublicStatusPage() {
       api<PublicPage>(slug ? `/api/public/status/${slug}` : "/api/public/root"),
   });
   const data = page.data;
+  if (page.isError) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-10">
+        <ErrorAlert>{errorText(page.error)}</ErrorAlert>
+      </div>
+    );
+  }
   if (!data) return <p className="p-8">{t("loading")}</p>;
   return (
     <div className="mx-auto min-w-0 max-w-3xl px-4 py-10">
