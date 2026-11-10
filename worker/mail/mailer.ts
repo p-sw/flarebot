@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { DurableObject } from "cloudflare:workers";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { mailOutbox, mailSettings } from "../db/schema";
 import { deliverWith, resolveMail } from "./resolve";
@@ -42,6 +42,9 @@ export class Mailer extends DurableObject<Env> {
       .select()
       .from(mailOutbox)
       .where(eq(mailOutbox.status, "pending"))
+      // Earliest first. Without an order, 20 rows waiting on a backoff could
+      // hide a row that is due now.
+      .orderBy(asc(mailOutbox.nextAttemptAt))
       .limit(20);
     const next = due.find((row) => row.nextAttemptAt <= now);
     if (!next) {

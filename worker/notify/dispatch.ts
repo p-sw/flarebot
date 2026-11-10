@@ -183,11 +183,19 @@ export async function deliverPrepared(
           "error_google_chat_status",
         );
       case "matrix": {
-        const room = encodeURIComponent(String(channel.config.roomId ?? ""));
+        const homeserver = trimSlash(String(channel.config.homeserver ?? ""));
+        const resolved = await matrixRoomId(
+          fetchImpl,
+          homeserver,
+          String(channel.config.roomId ?? ""),
+          bearer(channel.config.accessToken),
+        );
+        if (!resolved.ok) return resolved;
+        const room = encodeURIComponent(resolved.roomId);
         const txn = crypto.randomUUID();
         return await postJson(
           fetchImpl,
-          `${trimSlash(String(channel.config.homeserver ?? ""))}/_matrix/client/v3/rooms/${room}/send/m.room.message/${txn}`,
+          `${homeserver}/_matrix/client/v3/rooms/${room}/send/m.room.message/${txn}`,
           {
             msgtype: "m.text",
             body: clip(`${text.subject}\n\n${text.body}`, 4000),
@@ -229,6 +237,36 @@ function bearer(token: unknown): Record<string, string> {
   const value = String(token ?? "").trim();
   if (!value) return {};
   return { authorization: `Bearer ${value}` };
+}
+
+/**
+ * The send endpoint takes a room id only. The form also accepts an alias
+ * (#ops:example.org), which the directory turns into the id first.
+ */
+async function matrixRoomId(
+  fetchImpl: typeof fetch,
+  homeserver: string,
+  room: string,
+  headers: Record<string, string>,
+): Promise<{ ok: true; roomId: string } | { ok: false; error: string }> {
+  if (!room.startsWith("#")) return { ok: true, roomId: room };
+  const url = `${homeserver}/_matrix/client/v3/directory/room/${encodeURIComponent(room)}`;
+  const problem = publicUrlProblem(url);
+  if (problem === "blocked")
+    return { ok: false, error: t("error_channel_blocked") };
+  if (problem) return { ok: false, error: t("error_delivery_failed") };
+  const response = await fetchImpl(url, { headers });
+  if (!response.ok)
+    return {
+      ok: false,
+      error: t("error_matrix_status", { status: response.status }),
+    };
+  const data = (await response.json().catch(() => null)) as {
+    room_id?: unknown;
+  } | null;
+  if (typeof data?.room_id !== "string" || !data.room_id)
+    return { ok: false, error: t("error_delivery_failed") };
+  return { ok: true, roomId: data.room_id };
 }
 
 async function postJson(
