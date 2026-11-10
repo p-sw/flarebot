@@ -57,19 +57,13 @@ body {
   box-sizing: border-box;
 }
 
-/* Filled alert surfaces. Text stays black in light mode and white in dark mode. */
-:root {
-  --alert-foreground: #000000;
-  --alert-default: oklch(0.86 0.015 95);
-  --alert-destructive: oklch(0.86 0.07 28);
-  --alert-warning: oklch(0.88 0.09 85);
-  --alert-maintenance: oklch(0.88 0.055 195);
-}
-
+/* Alert surfaces are a light tint of the status color over the card, so a
+   rebrand of the tokens carries through and body text keeps its contrast. */
+:root,
 .dark {
-  --alert-foreground: #ffffff;
-  --alert-default: oklch(0.38 0.02 220);
-  --alert-destructive: oklch(0.42 0.11 28);
-  --alert-warning: oklch(0.42 0.08 90);
-  --alert-maintenance: oklch(0.4 0.06 200);
+  --alert-foreground: var(--foreground);
+  --alert-default: var(--muted);
+  --alert-destructive: color-mix(in oklab, var(--status-down) 9%, var(--card));
+  --alert-warning: color-mix(in oklab, var(--status-pending) 12%, var(--card));
+  --alert-maintenance: color-mix(in oklab, var(--primary) 8%, var(--card));
 }

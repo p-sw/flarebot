@@ -4,7 +4,7 @@ import { createHeartbeat, signIn } from "./session";
 function monitorCard(page: Page, name: string) {
   return page
     .getByRole("link", { name })
-    .locator("xpath=ancestor::*[contains(@class,'rounded-lg')][1]");
+    .locator("xpath=ancestor::*[@data-slot='monitor-row'][1]");
 }
 
 test("pause and resume update every screen without a reload", async ({

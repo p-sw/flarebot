@@ -141,7 +141,7 @@ export function DashboardPage() {
           }
         />
       ) : (
-        <Stagger className="grid min-w-0 gap-3">
+        <Stagger className="min-w-0 divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
           {rows.map((row) => (
             <StaggerItem key={row.id} className="min-w-0">
               <DashboardRow

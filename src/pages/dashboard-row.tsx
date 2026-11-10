@@ -12,7 +12,6 @@ import { type MonitorListItem, sparkQuery } from "../lib/queries";
 import { useMotionPrefs } from "../motion/page";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Card, CardContent } from "../ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "../ui/chart";
 import {
   Collapsible,
@@ -37,8 +36,9 @@ function PauseControl({
   return (
     <Button
       type="button"
-      variant="outline"
+      variant="ghost"
       size="sm"
+      className="text-muted-foreground hover:text-foreground"
       disabled={disabled || pending}
       aria-busy={pending || undefined}
       onClick={onClick}
@@ -60,7 +60,7 @@ function SparkPanel({ id, type }: { id: string; type: string }) {
   const data = spark.data;
   const points = data?.points ?? [];
   return (
-    <div className="grid min-w-0 gap-3 border-t border-border pt-3">
+    <div className="grid min-w-0 gap-3 border-t border-border bg-muted/40 px-4 py-3">
       {spark.isPending ? (
         <p className="text-sm text-muted-foreground">{t("loading")}</p>
       ) : (
@@ -171,99 +171,93 @@ export function DashboardRow({
   const showRegion = row.region !== "inherit" || row.effectiveRegion !== "auto";
   const regionText = regionLabel(row.effectiveRegion);
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <Card className="min-w-0 overflow-hidden">
-        <CardContent className="grid min-w-0 gap-3 p-4">
-          <div className="flex min-w-0 items-center gap-2">
-            <CollapsibleTrigger asChild>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                aria-label={
-                  open
-                    ? t("dashboard_collapse", { name: row.name })
-                    : t("dashboard_expand", { name: row.name })
-                }
-              >
-                <ChevronDown
-                  className={cn(
-                    "h-4 w-4 transition-transform",
-                    open && "rotate-180",
-                  )}
-                  aria-hidden
-                />
-              </Button>
-            </CollapsibleTrigger>
-            <Link
-              to="/console/monitors/$id"
-              params={{ id: row.id }}
-              className="min-w-0 flex-1"
-              title={row.name}
+    <Collapsible open={open} onOpenChange={setOpen} data-slot="monitor-row">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-3 lg:flex lg:gap-x-4">
+        <Link
+          to="/console/monitors/$id"
+          params={{ id: row.id }}
+          className="order-1 min-w-0 lg:order-none lg:flex-1"
+          title={row.name}
+        >
+          <p className="truncate text-sm font-medium">{row.name}</p>
+          <p className="truncate text-xs text-muted-foreground" title={meta}>
+            {meta}
+          </p>
+        </Link>
+        <div className="order-3 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 lg:order-none lg:flex-nowrap">
+          {showRegion ? (
+            <Badge
+              className="max-w-full"
+              title={
+                row.region === "inherit"
+                  ? t("monitor_region_inherited")
+                  : t("monitor_region_override")
+              }
             >
-              <p className="truncate font-medium">{row.name}</p>
-              <p
-                className="truncate text-sm text-muted-foreground"
-                title={meta}
-              >
-                {meta}
-              </p>
-            </Link>
-          </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {showRegion ? (
-              <Badge
-                className="max-w-full"
-                title={
-                  row.region === "inherit"
-                    ? t("monitor_region_inherited")
-                    : t("monitor_region_override")
-                }
-              >
-                <span className="max-w-40 truncate">{regionText}</span>
-              </Badge>
-            ) : null}
-            <span
-              className="min-w-0 truncate text-sm tabular-nums"
-              title={uptime}
-            >
-              {uptime}
-            </span>
-            <span
-              className="min-w-0 truncate font-mono text-sm tabular-nums text-muted-foreground"
-              title={responseText(row.lastResponseMs)}
-            >
-              {responseText(row.lastResponseMs)}
-            </span>
+              <span className="max-w-40 truncate">{regionText}</span>
+            </Badge>
+          ) : null}
+          <span
+            className="min-w-0 truncate text-sm tabular-nums lg:w-14 lg:text-end"
+            title={uptime}
+          >
+            {uptime}
+          </span>
+          <span
+            className="min-w-0 truncate font-mono text-xs tabular-nums text-muted-foreground lg:w-16 lg:text-end"
+            title={responseText(row.lastResponseMs)}
+          >
+            {responseText(row.lastResponseMs)}
+          </span>
+          <span className="flex lg:min-w-24">
             <Badge tone={statusTone(row.status)}>
               {monitorStatusLabel(row.status)}
             </Badge>
-            <span className="ms-auto">
-              <PauseControl
-                paused={row.paused}
-                pending={pausePending}
-                disabled={pauseDisabled}
-                onClick={onPause}
-              />
-            </span>
-          </div>
-          <CollapsibleContent forceMount className="min-w-0 overflow-hidden">
-            <motion.div
-              initial={false}
-              animate={{
-                height: open ? "auto" : 0,
-                opacity: open ? 1 : 0,
-              }}
-              transition={
-                motionPrefs.still ? { duration: 0 } : motionPrefs.snappy
-              }
-              className="overflow-hidden"
-            >
-              {open ? <SparkPanel id={row.id} type={row.type} /> : null}
-            </motion.div>
-          </CollapsibleContent>
-        </CardContent>
-      </Card>
+          </span>
+        </div>
+        <span className="order-4 flex justify-end lg:order-none lg:min-w-26">
+          <PauseControl
+            paused={row.paused}
+            pending={pausePending}
+            disabled={pauseDisabled}
+            onClick={onPause}
+          />
+        </span>
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="order-2 h-8 w-8 justify-self-end text-muted-foreground lg:order-none"
+            aria-label={
+              open
+                ? t("dashboard_collapse", { name: row.name })
+                : t("dashboard_expand", { name: row.name })
+            }
+          >
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 transition-transform",
+                open && "rotate-180",
+              )}
+              aria-hidden
+            />
+          </Button>
+        </CollapsibleTrigger>
+      </div>
+      <CollapsibleContent forceMount className="min-w-0 overflow-hidden">
+        <motion.div
+          initial={false}
+          animate={{
+            height: open ? "auto" : 0,
+            opacity: open ? 1 : 0,
+          }}
+          transition={motionPrefs.still ? { duration: 0 } : motionPrefs.snappy}
+          className="overflow-hidden"
+        >
+          {open ? <SparkPanel id={row.id} type={row.type} /> : null}
+        </motion.div>
+      </CollapsibleContent>
     </Collapsible>
   );
 }
