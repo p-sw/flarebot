@@ -82,6 +82,50 @@ describe("scheduler shard", () => {
     expect(closed?.ended_at).not.toBeNull();
   });
 
+  it("counts each sample in its own hour after a flush emptied the bucket", async () => {
+    const id = crypto.randomUUID();
+    const shardId = `hours-${id}`;
+    await insertMonitor(id, shardId);
+    const stub = schedulerStub(env, shardId);
+    const hour = Math.floor(Date.now() / 3_600_000) * 3_600_000 + 3_600_000;
+    const first = hour + 57 * 60_000;
+    await stub.upsert({
+      id,
+      name: id,
+      type: "heartbeat",
+      intervalMs: 300_000,
+      timeoutMs: 10_000,
+      retries: 2,
+      recoveryThreshold: 1,
+      config: { graceSeconds: 30 },
+      paused: false,
+      nextCheckAt: first,
+      state: initialState(first),
+      lastPushAt: null,
+      regions: ["default"],
+    });
+    // A five-minute monitor is flushed after every sample, so its bucket is
+    // always empty when the next sample arrives.
+    for (let step = 0; step < 4; step += 1) {
+      const at = first + step * 300_000;
+      await stub.recordPush(id, at - 1_000);
+      expect((await stub.runDue(at)).ran).toBe(1);
+    }
+    await stub.recordPush(id, first + 20 * 60_000 - 1_000);
+    await stub.runDue(first + 20 * 60_000);
+    const rows = await env.DB.prepare(
+      "SELECT hour_start, ok_count + fail_count AS n FROM uptime_hourly WHERE monitor_id = ? ORDER BY hour_start",
+    )
+      .bind(id)
+      .all<{ hour_start: number; n: number }>();
+    expect(rows.results.map((row) => row.hour_start)).toEqual([
+      hour,
+      hour + 3_600_000,
+    ]);
+    expect(rows.results[0]?.n).toBe(1);
+    expect(rows.results[1]?.n).toBeGreaterThanOrEqual(3);
+  });
+
   it("opens a new shard once the current one is full", async () => {
     const capacity = shardCapacity(60, 10);
     const shardId = `full-${crypto.randomUUID()}`;
